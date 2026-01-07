@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { auth } from './utils/auth';
 
 // Searchable Dropdown Component
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
@@ -104,6 +106,8 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
 
@@ -157,7 +161,10 @@ export default function Home() {
       }
 
       if (result.success) {
-        showToast(result.message, 'success');
+        // ไม่แสดง Toast สำหรับ action โหลดข้อมูลพื้นฐาน เพื่อไม่ให้รกหน้าจอ
+        if (action !== 'get-account-info' && action !== 'list-zones') {
+          showToast(result.message, 'success');
+        }
         // Return full result instead of just data
         return result;
       } else {
@@ -183,9 +190,13 @@ export default function Home() {
     setLoading(false);
   };
 
-  // โหลด accounts อัตโนมัติเมื่อหน้าโหลด
+  // Check Auth & Load Accounts
   useEffect(() => {
-    loadAccounts();
+    const user = auth.requireAuth(router);
+    if (user) {
+      setCurrentUser(user);
+      loadAccounts();
+    }
   }, []);
 
   // Auto-select removed
@@ -322,6 +333,36 @@ export default function Home() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Auth Controls (Top Right) */}
+      <div className="fixed top-6 right-6 z-40 flex items-center gap-3">
+        {currentUser && (
+          <>
+            {currentUser.role === 'root' && (
+              <button
+                onClick={() => router.push('/admin/users')}
+                className="bg-blue-600/80 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium backdrop-blur-sm border border-blue-500/50 transition-all shadow-lg hover:shadow-blue-500/30 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Manage Users
+              </button>
+            )}
+            <div className="bg-gray-800/80 text-white px-4 py-2 rounded-lg font-medium backdrop-blur-sm border border-gray-600 flex items-center gap-2">
+              <span className="text-orange-400 text-sm uppercase font-bold">{currentUser.role}</span>
+              <span className="text-gray-400">|</span>
+              <span>{currentUser.ownerName || currentUser.username}</span>
+            </div>
+            <button
+              onClick={() => auth.logout()}
+              className="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium backdrop-blur-sm border border-red-500/50 transition-all shadow-lg hover:shadow-red-500/30"
+            >
+              Logout
+            </button>
+          </>
+        )}
       </div>
 
       {/* Background Pattern */}
