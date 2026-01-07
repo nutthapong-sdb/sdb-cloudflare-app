@@ -485,46 +485,6 @@ export default function Home() {
                   </div>
                 </div>
               )}
-
-              {/* แสดง Raw Discovery Data */}
-              {rawDiscoveryData && (
-                <div className="bg-gradient-to-br from-slate-900/50 to-gray-900/50 border-2 border-slate-600 rounded-2xl p-6 animate-slide-in mt-6">
-                  <div className="flex items-start gap-3">
-                    <svg className="w-6 h-6 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-slate-300 mb-3">Raw Discovery Data (Debug)</h4>
-
-                      <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
-                        {/* Summary Info */}
-                        <div className="bg-gray-900/50 px-4 py-3 border-b border-gray-700 grid grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-xs text-gray-500">Total Records</p>
-                            <p className="text-lg font-bold text-slate-300">{rawDiscoveryData.total || 0}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Discovery State</p>
-                            <p className="text-lg font-bold text-slate-300">{rawDiscoveryData.result_info?.discovery_state || '-'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Count</p>
-                            <p className="text-lg font-bold text-slate-300">{rawDiscoveryData.result_info?.count || 0}</p>
-                          </div>
-                        </div>
-
-                        {/* Sample Data */}
-                        <div className="p-4">
-                          <p className="text-sm text-gray-400 mb-2">First 2 Raw Items:</p>
-                          <pre className="bg-black/30 p-4 rounded text-xs text-green-400 overflow-x-auto font-mono border border-gray-700">
-                            {JSON.stringify(rawDiscoveryData.sample, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
