@@ -287,6 +287,39 @@ export default function Home() {
     subtitle: `${zone.status} - ${zone.plan}`
   }));
 
+  // ฟังก์ชันดาวน์โหลด CSV
+  const handleDownloadCSV = () => {
+    if (!discoveryData || discoveryData.length === 0) {
+      showToast('ไม่มีข้อมูลสำหรับดาวน์โหลด', 'error');
+      return;
+    }
+
+    // CSV Header
+    const headers = ['Hostname,Method,Source,State,Path'];
+
+    // CSV Rows
+    const rows = discoveryData.map(item => {
+      // Escape ข้อมูลที่มี comma ด้วย double quotes
+      const host = `"${(item.host || '').replace(/"/g, '""')}"`;
+      const method = `"${(item.method || '').replace(/"/g, '""')}"`;
+      const source = `"${(item.source || '').replace(/"/g, '""')}"`;
+      const state = `"${(item.state || '').replace(/"/g, '""')}"`;
+      const path = `"${(item.path || '').replace(/"/g, '""')}"`;
+
+      return `${host},${method},${source},${state},${path}`;
+    });
+
+    const csvContent = [headers, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `api_discovery_${selectedZone}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Toast Notifications */}
@@ -346,7 +379,7 @@ export default function Home() {
                 />
               </svg>
             </div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-clip-text text-transparent mb-4">
+            <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-200 mb-4 tracking-tight drop-shadow-sm">
               Cloudflare API Dashboard
             </h1>
             <p className="text-gray-400 text-lg font-medium">
@@ -465,6 +498,18 @@ export default function Home() {
                                 }}
                               />
                             </div>
+
+                            {/* Download CSV Button */}
+                            <button
+                              onClick={handleDownloadCSV}
+                              className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500"
+                              title="Download CSV"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              <span>CSV</span>
+                            </button>
                           </div>
                         )}
                       </div>
