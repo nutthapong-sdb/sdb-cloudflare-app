@@ -119,6 +119,12 @@ export default function Home() {
   const [rawDiscoveryData, setRawDiscoveryData] = useState(null);
   const [loadingDiscovery, setLoadingDiscovery] = useState(false);
 
+  // State for Filtering & Pagination
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
+
   // ฟังก์ชันแสดง toast
   const showToast = (message, type = 'success') => {
     const id = Date.now();
@@ -254,6 +260,9 @@ export default function Home() {
         console.log('✅ Setting discovery data:', result.data.length, 'items');
         setDiscoveryData(result.data);
         setRawDiscoveryData(result.raw || null);
+        setCurrentPage(1); // Reset page to 1
+        setSearchTerm(''); // Reset search
+        setFilterStatus('all'); // Reset status filter
       } else {
         setDiscoveryData([]);
         setRawDiscoveryData(null);
@@ -319,7 +328,7 @@ export default function Home() {
       </div>
 
       <div className="relative min-h-screen p-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12 animate-fade-in">
             <div className="inline-block p-4 bg-gradient-to-br from-orange-600 to-amber-700 rounded-2xl shadow-2xl mb-6 transform hover:scale-105 transition-transform duration-300 shadow-orange-500/50">
@@ -389,30 +398,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* แสดง Zone ที่เลือก */}
-              {selectedZone && (
-                <div className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 border-2 border-blue-600 rounded-2xl p-6 animate-slide-in">
-                  <div className="flex items-start gap-3">
-                    <svg className="w-6 h-6 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-blue-300 mb-2">Zone ที่เลือก</h4>
-                      <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                        {zones.find(z => z.id === selectedZone) && (
-                          <div className="space-y-2 text-sm">
-                            <p><strong className="text-blue-300">Domain:</strong> <span className="text-blue-400 font-mono">{zones.find(z => z.id === selectedZone).name}</span></p>
-                            <p><strong className="text-blue-300">Zone ID:</strong> <span className="text-blue-400 font-mono text-xs">{selectedZone}</span></p>
-                            <p><strong className="text-blue-300">Status:</strong> <span className={`font-semibold ${zones.find(z => z.id === selectedZone).status === 'active' ? 'text-emerald-400' : 'text-orange-400'}`}>{zones.find(z => z.id === selectedZone).status}</span></p>
-                            <p><strong className="text-blue-300">Plan:</strong> <span className="text-blue-400">{zones.find(z => z.id === selectedZone).plan}</span></p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* แสดง API Discovery Data */}
               {selectedZone && (
                 <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 border-2 border-purple-600 rounded-2xl p-6 animate-slide-in">
@@ -421,7 +406,68 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                     <div className="flex-1">
-                      <h4 className="font-bold text-purple-300 mb-2">API Discovery Data</h4>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-purple-300">API Discovery Data</h4>
+                          {discoveryData.length > 0 && (
+                            <span className="bg-purple-900/50 text-purple-200 text-xs px-2 py-0.5 rounded-full border border-purple-700/50">
+                              {discoveryData.length} items
+                            </span>
+                          )}
+                        </div>
+
+                        {discoveryData.length > 0 && (
+                          <div className="flex items-center gap-3 w-full sm:w-auto">
+                            {/* Page Size Selector */}
+                            <select
+                              value={pageSize}
+                              onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setCurrentPage(1);
+                              }}
+                              className="bg-gray-800 border border-gray-600 text-gray-300 text-xs rounded-lg p-2 focus:ring-purple-500 focus:border-purple-500"
+                            >
+                              <option value={20}>20 / page</option>
+                              <option value={50}>50 / page</option>
+                              <option value={100}>100 / page</option>
+                            </select>
+
+                            {/* Status Filter */}
+                            <select
+                              value={filterStatus}
+                              onChange={(e) => {
+                                setFilterStatus(e.target.value);
+                                setCurrentPage(1);
+                              }}
+                              className="bg-gray-800 border border-gray-600 text-gray-300 text-xs rounded-lg p-2 focus:ring-purple-500 focus:border-purple-500"
+                            >
+                              <option value="all">All Status</option>
+                              <option value="review">Review</option>
+                              <option value="saved">Saved</option>
+                              <option value="ignored">Ignored</option>
+                            </select>
+
+                            {/* Live Search */}
+                            <div className="relative flex-1 sm:w-64">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                              </div>
+                              <input
+                                type="text"
+                                className="bg-gray-800 border border-gray-600 text-gray-300 text-xs rounded-lg block w-full pl-10 p-2 focus:ring-purple-500 focus:border-purple-500"
+                                placeholder="Search path, host, method..."
+                                value={searchTerm}
+                                onChange={(e) => {
+                                  setSearchTerm(e.target.value);
+                                  setCurrentPage(1);
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       {loadingDiscovery ? (
                         <div className="flex items-center justify-center py-8">
@@ -442,42 +488,98 @@ export default function Home() {
                             <table className="w-full text-sm">
                               <thead className="bg-gray-900/50">
                                 <tr>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-5/12">Path</th>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/6">Method</th>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-5/12">Title</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/4">Hostname</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/12">Method</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/12">Source</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/12">State</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/2">Path</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-700">
-                                {discoveryData.map((item, index) => (
-                                  <tr key={index} className="hover:bg-gray-700/30 transition-colors">
-                                    <td className="px-4 py-3 text-purple-200 font-mono text-xs break-all">
-                                      {item.path}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <span className={`
+                                {discoveryData
+                                  .filter(item => {
+                                    // Status Filter
+                                    if (filterStatus !== 'all' && item.state !== filterStatus) return false;
+
+                                    // Search Filter
+                                    if (!searchTerm) return true;
+                                    const searchLower = searchTerm.toLowerCase();
+                                    return (
+                                      (item.path || '').toLowerCase().includes(searchLower) ||
+                                      (item.host || '').toLowerCase().includes(searchLower) ||
+                                      (item.method || '').toLowerCase().includes(searchLower)
+                                    );
+                                  })
+                                  .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                                  .map((item, index) => (
+                                    <tr key={index} className="hover:bg-gray-700/30 transition-colors">
+                                      <td className="px-4 py-3 text-gray-300 text-xs font-semibold">
+                                        {item.host || '-'}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <span className={`
                                         px-2 py-1 rounded font-mono text-xs font-bold
                                         ${item.method === 'GET' ? 'bg-green-600/30 text-green-300' :
-                                          item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
-                                            item.method === 'PUT' ? 'bg-yellow-600/30 text-yellow-300' :
-                                              item.method === 'DELETE' ? 'bg-red-600/30 text-red-300' :
-                                                'bg-gray-600/30 text-gray-300'}
+                                            item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
+                                              item.method === 'PUT' ? 'bg-yellow-600/30 text-yellow-300' :
+                                                item.method === 'DELETE' ? 'bg-red-600/30 text-red-300' :
+                                                  'bg-gray-600/30 text-gray-300'}
                                       `}>
-                                        {item.method}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-300 text-xs font-semibold">
-                                      {item.host || '-'}
-                                    </td>
-                                  </tr>
-                                ))}
+                                          {item.method}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-400 text-xs text-center">
+                                        {item.source || '-'}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <span className={`
+                                        px-2 py-1 rounded text-xs font-semibold
+                                        ${item.state === 'review' ? 'bg-orange-600/30 text-orange-300' :
+                                            item.state === 'saved' ? 'bg-green-600/30 text-green-300' :
+                                              item.state === 'ignored' ? 'bg-gray-600/30 text-gray-400' :
+                                                'bg-yellow-600/30 text-yellow-300'}
+                                      `}>
+                                          {item.state}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-purple-200 font-mono text-xs break-all">
+                                        {item.path}
+                                      </td>
+                                    </tr>
+                                  ))}
                               </tbody>
                             </table>
                           </div>
 
-                          <div className="bg-gray-900/50 px-4 py-3 border-t border-gray-700">
-                            <p className="text-sm text-gray-400">
-                              พบทั้งหมด <strong className="text-purple-300">{discoveryData.length}</strong> API endpoints
+                          {/* Pagination Footer */}
+                          <div className="bg-gray-900/50 px-4 py-3 border-t border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <p className="text-xs text-gray-400">
+                              แสดง <span className="text-white font-medium">{Math.min((currentPage - 1) * pageSize + 1, discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length)}</span> ถึง <span className="text-white font-medium">{Math.min(currentPage * pageSize, discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length)}</span> จากทั้งหมด <strong className="text-purple-300">{discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length}</strong> รายการ (Total: {discoveryData.length})
                             </p>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1 text-xs font-medium rounded bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                ก่อนหน้า
+                              </button>
+                              <span className="px-3 py-1 text-xs text-gray-300 flex items-center">
+                                หน้า {currentPage}
+                              </span>
+                              <button
+                                onClick={() => setCurrentPage(p => {
+                                  const filteredLen = discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length;
+                                  const maxPage = Math.ceil(filteredLen / pageSize);
+                                  return Math.min(maxPage, p + 1);
+                                })}
+                                disabled={currentPage >= Math.ceil(discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length / pageSize)}
+                                className="px-3 py-1 text-xs font-medium rounded bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                ถัดไป
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}

@@ -205,7 +205,8 @@ export async function POST(request) {
                                                             host: host,
                                                             method: method.toUpperCase(),
                                                             path: path,
-                                                            state: schema.state || 'review',
+                                                            state: schema.state || methodObj['x-cf-api-discovery-state'] || 'review',
+                                                            source: methodObj['x-cf-api-discovery-source']?.join(', ') || '-',
                                                             last_seen: schema.last_seen || schema.timestamp || '-',
                                                             features: methodObj.tags || [],
                                                         });
@@ -254,6 +255,7 @@ export async function POST(request) {
                                             method: method.toUpperCase(),
                                             path: path,
                                             state: schema.state || methodObj['x-cf-api-discovery-state'] || 'review',
+                                            source: methodObj['x-cf-api-discovery-source']?.join(', ') || '-', // Extract Source
                                             last_seen: schema.last_seen || schema.timestamp || '-',
                                         });
                                     }
