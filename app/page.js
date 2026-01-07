@@ -188,24 +188,8 @@ export default function Home() {
     loadAccounts();
   }, []);
 
-  // Auto-select 'SCG' account when accounts are loaded
-  useEffect(() => {
-    if (accounts.length > 0 && !selectedAccount) {
-      console.log('🔍 Trying to auto-select SCG Account...');
-      // ลองหาหลายแบบ: ชื่อเต็ม, ชื่อย่อหลัก, หรือที่มีคำว่า SCG
-      const scgAccount = accounts.find(acc =>
-        acc.name === 'Siam Cement Public Company Limited (SCG)' ||
-        acc.name.includes('Siam Cement')
-      );
+  // Auto-select removed
 
-      if (scgAccount) {
-        console.log('✅ Auto-selecting Account:', scgAccount.name);
-        handleAccountChange(scgAccount.id);
-      } else {
-        console.log('❌ SCG target account not found');
-      }
-    }
-  }, [accounts, selectedAccount]);
 
   // โหลด zones เมื่อเลือก account
   const handleAccountChange = async (accountId) => {
@@ -230,19 +214,7 @@ export default function Home() {
     setLoadingZones(false);
   };
 
-  // Auto-select 'scg.com' zone when zones are loaded
-  useEffect(() => {
-    if (zones.length > 0 && !selectedZone) {
-      console.log('🔍 Searching for scg.com zone in', zones.length, 'zones');
-      const scgZone = zones.find(zone => zone.name === 'scg.com');
-      if (scgZone) {
-        console.log('✅ Found scg.com Zone:', scgZone.id);
-        setSelectedZone(scgZone.id);
-      } else {
-        console.log('❌ scg.com Zone not found inside loaded zones');
-      }
-    }
-  }, [zones, selectedZone]);
+  // Auto-select Zone removed
 
   // โหลด discovery data เมื่อเลือก zone
   useEffect(() => {
