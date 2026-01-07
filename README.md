@@ -1,36 +1,172 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Cloudflare API Dashboard
 
-## Getting Started
+เครื่องมือจัดการ Cloudflare ผ่าน API Token (ไม่ต้องล็อกอินผ่าน Browser)
 
-First, run the development server:
+## 🎯 คุณสมบัติ
 
+- ✅ **API-based** - ใช้ Cloudflare API Token โดยตรง
+- ✅ **ไม่ต้องล็อกอิน** - ไม่ต้องจัดการ email/password/OTP
+- ✅ **ไม่มี CAPTCHA** - ข้ามปัญหา Turnstile ทั้งหมด
+- ✅ **รวดเร็ว** - ตอบสนองทันที ไม่ต้องรอ Browser
+- ✅ **Brown Theme UI** - ธีมสีน้ำตาลสวยงาม
+
+## 🚀 การติดตั้ง
+
+1. Clone โปรเจกต์นี้
+
+2. ติดตั้ง dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. ตั้งค่า Cloudflare API Token ในไฟล์ `.env.local`:
+```env
+# Cloudflare API Token
+# สร้างได้ที่: https://dash.cloudflare.com/profile/api-tokens
+CLOUDFLARE_API_TOKEN=your-api-token-here
+CLOUDFLARE_ACCOUNT_ID=your-account-id-here
+```
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### 📝 วิธีการสร้าง API Token:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. ไปที่ [Cloudflare Dashboard - API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. คลิก **"Create Token"**
+3. เลือก Template หรือสร้างแบบ Custom:
+   - **Read all resources** (สำหรับดูข้อมูล)
+   - หรือ **Edit** permissions ตามต้องการ
+4. คัดลอก Token (จะแสดงครั้งเดียว!)
+5. วางใน `.env.local`
 
-## Learn More
+**หา Account ID:**
+1. ไปที่ Cloudflare Dashboard
+2. เลือก Domain ใดก็ได้
+3. Account ID จะอยู่ทางขวามือในส่วน **Overview**
 
-To learn more about Next.js, take a look at the following resources:
+## 🎮 วิธีการใช้งาน
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. รันโปรเจกต์:
+```bash
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. เปิด browser ไปที่ [http://localhost:3000](http://localhost:3000)
 
-## Deploy on Vercel
+3. ใช้งานฟีเจอร์ต่างๆ:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 🔍 ทดสอบการเชื่อมต่อ
+คลิก **"ทดสอบ"** เพื่อตรวจสอบว่า API Token ใช้งานได้
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 🌐 ดึงรายชื่อ Domains
+คลิก **"ดึงข้อมูล"** ในส่วน Domains เพื่อดูรายชื่อ Zones ทั้งหมด
+
+ผลลัพธ์ที่ได้:
+- Zone ID
+- Domain name
+- Status (active/pending)
+- Plan type
+- Name servers
+
+### 👤 ดูข้อมูล Account
+คลิก **"ดูข้อมูล"** เพื่อดูรายละเอียดบัญชี Cloudflare
+
+## 🔧 API Endpoints
+
+```javascript
+POST /api/scrape
+```
+
+### Actions ที่รองรับ:
+
+#### 1. ทดสอบ API Token
+```json
+{
+  "action": "test"
+}
+```
+
+#### 2. ดึงรายชื่อ Zones
+```json
+{
+  "action": "list-zones"
+}
+```
+
+#### 3. ดึง DNS Records
+```json
+{
+  "action": "get-dns-records",
+  "zoneId": "your-zone-id",
+  "recordType": "A"  // optional: A, AAAA, CNAME, MX, TXT, etc.
+}
+```
+
+#### 4. ดูข้อมูล Account
+```json
+{
+  "action": "get-account-info"
+}
+```
+
+## 📦 โครงสร้างโปรเจกต์
+
+```
+sdb-cd-discovery-scraping/
+├── app/
+│   ├── api/
+│   │   └── scrape/
+│   │       └── route.js       # Cloudflare API handlers
+│   ├── page.js                # หน้าหลักของเว็บ
+│   └── globals.css            # Styles
+├── .env.local                 # API Token (ไม่ commit ลง Git)
+├── package.json
+└── README.md
+```
+
+## 🔐 ความปลอดภัย
+
+- ✅ ใช้ API Token แทน Global API Key (ปลอดภัยกว่า)
+- ✅ สามารถจำกัด permissions ของ Token ได้
+- ✅ สามารถตั้งค่า IP Whitelist ได้
+- ⚠️ **อย่า commit ไฟล์ .env.local** ลง Git
+
+## 🎨 ธีมสีน้ำตาล
+
+UI ออกแบบมาด้วยธีมสีน้ำตาลที่สวยงาม ประกอบด้วย:
+- Gradient สีน้ำตาล-ส้ม
+- Card ที่ดูทันสมัย
+- Animations ที่นุ่มนวล
+- JSON viewer สำหรับแสดงข้อมูล
+
+## 📊 ตัวอย่างการใช้งาน
+
+### ดึงรายชื่อ Domains
+```bash
+curl -X POST http://localhost:3000/api/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"action":"list-zones"}'
+```
+
+### ดึง DNS Records
+```bash
+curl -X POST http://localhost:3000/api/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"action":"get-dns-records","zoneId":"your-zone-id"}'
+```
+
+## ⚡ ข้อดีของการใช้ API
+
+1. **เร็วกว่า** - ไม่ต้องรอ Browser โหลด
+2. **เสถียรกว่า** - ไม่มีปัญหา CAPTCHA
+3. **ง่ายกว่า** - ไม่ต้องจัดการ login flow
+4. **ประหยัด** - ไม่ต้องใช้ 2Captcha
+5. **Scalable** - รองรับการเรียกหลายครั้งพร้อมกัน
+
+## 📝 หมายเหตุ
+
+- Cloudflare API มีขด จำกัดการเรียกใช้ (rate limit)
+- ควรตั้งค่า Token permissions ให้เหมาะสมกับการใช้งาน
+- สามารถเพิ่ม actions อื่นๆ ได้ตาม [Cloudflare API Documentation](https://developers.cloudflare.com/api/)
+
+---
+
+Made with ❤️ using Next.js & Cloudflare API
