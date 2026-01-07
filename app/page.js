@@ -114,6 +114,11 @@ export default function Home() {
   const [selectedZone, setSelectedZone] = useState('');
   const [loadingZones, setLoadingZones] = useState(false);
 
+  // State for discovery data
+  const [discoveryData, setDiscoveryData] = useState([]);
+  const [rawDiscoveryData, setRawDiscoveryData] = useState(null);
+  const [loadingDiscovery, setLoadingDiscovery] = useState(false);
+
   // ฟังก์ชันแสดง toast
   const showToast = (message, type = 'success') => {
     const id = Date.now();
@@ -139,9 +144,16 @@ export default function Home() {
 
       const result = await response.json();
 
+      // Log for debugging
+      if (action === 'get-api-discovery') {
+        console.log('📦 Full API Response:', result);
+        console.log('📊 Data sample:', result.data?.slice(0, 2));
+      }
+
       if (result.success) {
         showToast(result.message, 'success');
-        return result.data;
+        // Return full result instead of just data
+        return result;
       } else {
         showToast(result.message || 'เกิดข้อผิดพลาด', 'error');
         return null;
@@ -156,9 +168,11 @@ export default function Home() {
 
   const loadAccounts = async () => {
     setLoading(true);
-    const data = await callAPI('get-account-info');
-    if (data) {
-      setAccounts(data);
+    const result = await callAPI('get-account-info');
+    if (result && result.data) {
+      setAccounts(result.data);
+      setAccounts(result.data);
+      console.log('📋 Available Accounts:', result.data.map(a => a.name));
     }
     setLoading(false);
   };
@@ -168,21 +182,87 @@ export default function Home() {
     loadAccounts();
   }, []);
 
+  // Auto-select 'SCG' account when accounts are loaded
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccount) {
+      console.log('🔍 Trying to auto-select SCG Account...');
+      // ลองหาหลายแบบ: ชื่อเต็ม, ชื่อย่อหลัก, หรือที่มีคำว่า SCG
+      const scgAccount = accounts.find(acc =>
+        acc.name === 'Siam Cement Public Company Limited (SCG)' ||
+        acc.name.includes('Siam Cement')
+      );
+
+      if (scgAccount) {
+        console.log('✅ Auto-selecting Account:', scgAccount.name);
+        handleAccountChange(scgAccount.id);
+      } else {
+        console.log('❌ SCG target account not found');
+      }
+    }
+  }, [accounts, selectedAccount]);
+
   // โหลด zones เมื่อเลือก account
   const handleAccountChange = async (accountId) => {
     setSelectedAccount(accountId);
     setSelectedZone('');
     setZones([]);
+    setDiscoveryData([]);
 
     if (!accountId) return;
 
     setLoadingZones(true);
-    const data = await callAPI('list-zones', { accountId });
-    if (data) {
-      setZones(data);
+    console.log('🔄 Fetching zones for Account ID:', accountId);
+    const result = await callAPI('list-zones', { accountId });
+
+    if (result && result.data) {
+      console.log('✅ Loaded Zones:', result.data.length, 'zones');
+      setZones(result.data);
+    } else {
+      console.log('❌ No zones loaded or error occurred');
     }
+
     setLoadingZones(false);
   };
+
+  // Auto-select 'scg.com' zone when zones are loaded
+  useEffect(() => {
+    if (zones.length > 0 && !selectedZone) {
+      console.log('🔍 Searching for scg.com zone in', zones.length, 'zones');
+      const scgZone = zones.find(zone => zone.name === 'scg.com');
+      if (scgZone) {
+        console.log('✅ Found scg.com Zone:', scgZone.id);
+        setSelectedZone(scgZone.id);
+      } else {
+        console.log('❌ scg.com Zone not found inside loaded zones');
+      }
+    }
+  }, [zones, selectedZone]);
+
+  // โหลด discovery data เมื่อเลือก zone
+  useEffect(() => {
+    if (!selectedZone) {
+      setDiscoveryData([]);
+      return;
+    }
+
+    const loadDiscovery = async () => {
+      setLoadingDiscovery(true);
+      console.log('🔍 กำลังดึงข้อมูล Discovery สำหรับ Zone:', selectedZone);
+
+      const result = await callAPI('get-api-discovery', { zoneId: selectedZone });
+      if (result && result.data) {
+        console.log('✅ Setting discovery data:', result.data.length, 'items');
+        setDiscoveryData(result.data);
+        setRawDiscoveryData(result.raw || null);
+      } else {
+        setDiscoveryData([]);
+        setRawDiscoveryData(null);
+      }
+      setLoadingDiscovery(false);
+    };
+
+    loadDiscovery();
+  }, [selectedZone]);
 
   // Format account options for searchable dropdown
   const accountOptions = accounts.map(account => ({
@@ -332,10 +412,123 @@ export default function Home() {
                   </div>
                 </div>
               )}
+
+              {/* แสดง API Discovery Data */}
+              {selectedZone && (
+                <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 border-2 border-purple-600 rounded-2xl p-6 animate-slide-in">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-6 h-6 text-purple-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-purple-300 mb-2">API Discovery Data</h4>
+
+                      {loadingDiscovery ? (
+                        <div className="flex items-center justify-center py-8">
+                          <svg className="animate-spin h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span className="ml-3 text-purple-300">กำลังโหลดข้อมูล Discovery...</span>
+                        </div>
+                      ) : discoveryData.length === 0 ? (
+                        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700 text-center">
+                          <p className="text-gray-400">ไม่พบข้อมูล API Discovery</p>
+                          <p className="text-sm text-gray-500 mt-2">Zone นี้อาจจะยังไม่มี API endpoints ที่ถูก discover</p>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-900/50">
+                                <tr>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-5/12">Path</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/6">Method</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-5/12">Title</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-700">
+                                {discoveryData.map((item, index) => (
+                                  <tr key={index} className="hover:bg-gray-700/30 transition-colors">
+                                    <td className="px-4 py-3 text-purple-200 font-mono text-xs break-all">
+                                      {item.path}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <span className={`
+                                        px-2 py-1 rounded font-mono text-xs font-bold
+                                        ${item.method === 'GET' ? 'bg-green-600/30 text-green-300' :
+                                          item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
+                                            item.method === 'PUT' ? 'bg-yellow-600/30 text-yellow-300' :
+                                              item.method === 'DELETE' ? 'bg-red-600/30 text-red-300' :
+                                                'bg-gray-600/30 text-gray-300'}
+                                      `}>
+                                        {item.method}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-300 text-xs font-semibold">
+                                      {item.host || '-'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="bg-gray-900/50 px-4 py-3 border-t border-gray-700">
+                            <p className="text-sm text-gray-400">
+                              พบทั้งหมด <strong className="text-purple-300">{discoveryData.length}</strong> API endpoints
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* แสดง Raw Discovery Data */}
+              {rawDiscoveryData && (
+                <div className="bg-gradient-to-br from-slate-900/50 to-gray-900/50 border-2 border-slate-600 rounded-2xl p-6 animate-slide-in mt-6">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-6 h-6 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-slate-300 mb-3">Raw Discovery Data (Debug)</h4>
+
+                      <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
+                        {/* Summary Info */}
+                        <div className="bg-gray-900/50 px-4 py-3 border-b border-gray-700 grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500">Total Records</p>
+                            <p className="text-lg font-bold text-slate-300">{rawDiscoveryData.total || 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Discovery State</p>
+                            <p className="text-lg font-bold text-slate-300">{rawDiscoveryData.result_info?.discovery_state || '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Count</p>
+                            <p className="text-lg font-bold text-slate-300">{rawDiscoveryData.result_info?.count || 0}</p>
+                          </div>
+                        </div>
+
+                        {/* Sample Data */}
+                        <div className="p-4">
+                          <p className="text-sm text-gray-400 mb-2">First 2 Raw Items:</p>
+                          <pre className="bg-black/30 p-4 rounded text-xs text-green-400 overflow-x-auto font-mono border border-gray-700">
+                            {JSON.stringify(rawDiscoveryData.sample, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
