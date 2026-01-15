@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth } from '../../utils/auth';
+import { auth } from '@/app/utils/auth';
 
 export default function UserManagementPage() {
     const router = useRouter();
