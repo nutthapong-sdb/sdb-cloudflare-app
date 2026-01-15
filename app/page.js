@@ -84,16 +84,22 @@ export default function PortalPage() {
                         </div>
                     )}
 
-                    {/* Placeholder for New System */}
+                    {/* Card: GDCC System */}
                     <div
-                        className="group bg-gray-800/30 border border-gray-700/50 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-70 hover:opacity-100 hover:bg-gray-800/50 transition-all cursor-pointer"
-                        onClick={() => alert('New System Coming Soon!')}
+                        onClick={() => router.push('/systems/gdcc')}
+                        className="group bg-gray-800/50 hover:bg-gradient-to-br hover:from-cyan-900/40 hover:to-blue-900/40 border border-gray-700 hover:border-cyan-500/50 rounded-2xl p-6 cursor-pointer transition-all duration-300 relative overflow-hidden"
                     >
-                        <div className="bg-gray-700 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-gray-600 transition-colors">
-                            <svg className="w-6 h-6 text-gray-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+                            <svg className="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                         </div>
-                        <h3 className="text-lg font-bold text-gray-300 mb-1">Add New System</h3>
-                        <p className="text-gray-500 text-xs">Create a new application module</p>
+
+                        <div className="relative z-10">
+                            <div className="bg-cyan-600 w-12 h-12 rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">GDCC System</h3>
+                            <p className="text-gray-400 text-sm group-hover:text-gray-300">Government Data Center & Cloud</p>
+                        </div>
                     </div>
 
                 </div>

@@ -105,7 +105,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
   );
 }
 
-export default function Home() {
+export default function SDBPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
