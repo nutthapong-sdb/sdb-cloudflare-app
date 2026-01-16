@@ -10,10 +10,32 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key
+    Search, Bell, Menu, Download, Server, Key, List
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
+
+// --- CONSTANTS ---
+const CHART_COLORS = [
+    '#ef4444', // Red 500
+    '#3b82f6', // Blue 500
+    '#10b981', // Emerald 500
+    '#f59e0b', // Amber 500
+    '#8b5cf6', // Violet 500
+    '#ec4899', // Pink 500
+    '#06b6d4', // Cyan 500
+    '#f97316', // Orange 500
+    '#84cc16', // Lime 500
+    '#6366f1', // Indigo 500
+    '#eab308', // Yellow 500
+    '#d946ef', // Fuchsia 500
+    '#14b8a6', // Teal 500
+    '#f43f5e', // Rose 500
+    '#0ea5e9', // Sky 500
+    '#a855f7', // Purple 500
+    '#64748b', // Slate 500
+    '#a1a1aa', // Zinc 400
+];
 
 // --- COMPONENTS ---
 
@@ -162,7 +184,7 @@ export default function GDCCPage() {
     const DEFAULT_CONFIG = {
         accountName: "Softdebut POC",
         zoneName: "softdebut.online",
-        subDomain: "140.softdebut.online"
+        subDomain: "softdebut.online"
     };
 
     // Selector States
@@ -183,11 +205,19 @@ export default function GDCCPage() {
     const [rawData, setRawData] = useState([]);
     const [totalRequests, setTotalRequests] = useState(0);
     const [avgResponseTime, setAvgResponseTime] = useState(0);
+    const [blockedEvents, setBlockedEvents] = useState(0);
+    const [logEvents, setLogEvents] = useState(0);
+
     const [throughputData, setThroughputData] = useState([]);
+    const [attackSeriesData, setAttackSeriesData] = useState([]);
+    const [detailedAttackList, setDetailedAttackList] = useState([]); // Real-time list
+    const [httpStatusSeriesData, setHttpStatusSeriesData] = useState({ data: [], keys: [] });
+
     const [topUrls, setTopUrls] = useState([]);
     const [topIps, setTopIps] = useState([]);
     const [topCountries, setTopCountries] = useState([]);
     const [topUserAgents, setTopUserAgents] = useState([]);
+    const [topFirewallActions, setTopFirewallActions] = useState([]);
 
     // --- API ---
     const callAPI = async (action, params = {}) => {
@@ -216,7 +246,6 @@ export default function GDCCPage() {
             setAccounts(result.data);
             const defaultAcc = result.data.find(a => a.name.toLowerCase() === DEFAULT_CONFIG.accountName.toLowerCase());
             if (defaultAcc) {
-                console.log(`✅ Auto-Selecting Account: ${defaultAcc.name}`);
                 handleAccountChange(defaultAcc.id, true);
             }
         }
@@ -238,7 +267,6 @@ export default function GDCCPage() {
             if (isAuto) {
                 const defaultZone = result.data.find(z => z.name.toLowerCase() === DEFAULT_CONFIG.zoneName.toLowerCase());
                 if (defaultZone) {
-                    console.log(`✅ Auto-Selecting Zone: ${defaultZone.name}`);
                     setSelectedZone(defaultZone.id);
                 }
             }
@@ -247,8 +275,10 @@ export default function GDCCPage() {
     };
 
     const resetDashboardData = () => {
-        setRawData([]); setTotalRequests(0); setAvgResponseTime(0);
-        setThroughputData([]); setTopUrls([]); setTopIps([]); setTopCountries([]); setTopUserAgents([]);
+        setRawData([]); setTotalRequests(0); setAvgResponseTime(0); setBlockedEvents(0); setLogEvents(0);
+        setThroughputData([]); setAttackSeriesData([]); setDetailedAttackList([]);
+        setHttpStatusSeriesData({ data: [], keys: [] });
+        setTopUrls([]); setTopIps([]); setTopCountries([]); setTopUserAgents([]); setTopFirewallActions([]);
     };
 
     // 3. Zone Selected -> Load DNS
@@ -259,24 +289,15 @@ export default function GDCCPage() {
             setLoadingStats(true); setSelectedSubDomain(''); setSubDomains([]);
             const dnsRes = await callAPI('get-dns-records', { zoneId: selectedZone });
             const allHosts = new Set();
-
             if (dnsRes && dnsRes.data) {
-                dnsRes.data.forEach(rec => {
-                    if (['A', 'AAAA', 'CNAME'].includes(rec.type)) allHosts.add(rec.name);
-                });
+                dnsRes.data.forEach(rec => { if (['A', 'AAAA', 'CNAME'].includes(rec.type)) allHosts.add(rec.name); });
             }
-
             const hostOptions = Array.from(allHosts).sort().map(h => ({ value: h, label: h }));
             setSubDomains(hostOptions);
-
             const defaultSub = hostOptions.find(h => h.value.toLowerCase() === DEFAULT_CONFIG.subDomain.toLowerCase());
-            if (defaultSub) {
-                console.log(`✅ Auto-Selecting Subdomain: ${defaultSub.value}`);
-                setSelectedSubDomain(defaultSub.value);
-            }
+            if (defaultSub) setSelectedSubDomain(defaultSub.value);
             setLoadingStats(false);
         };
-
         loadDNS();
     }, [selectedZone]);
 
@@ -289,36 +310,98 @@ export default function GDCCPage() {
             console.log(`🔍 Fetching traffic for subdomain: ${selectedSubDomain} (Range: ${timeRange}m)`);
 
             const result = await callAPI('get-traffic-analytics', {
-                zoneId: selectedZone,
-                timeRange: timeRange,
-                subdomain: selectedSubDomain
+                zoneId: selectedZone, timeRange: timeRange, subdomain: selectedSubDomain
             });
 
             let filteredData = [];
             let totalReq = 0;
-            // let weightedAvgTime = 0; // Disabled as backend removed 'sum'
+            let weightedAvgTime = 0;
 
             if (result && result.data) {
                 filteredData = result.data;
-                console.log('✅ Received Filtered Groups:', filteredData.length);
+                const firewallGroups = result.firewallData || [];
 
-                filteredData.forEach(item => {
-                    totalReq += item.count;
+                // --- FIREWALL SUMMARY ---
+                const blockedCount = firewallGroups
+                    .filter(g => g.dimensions?.action !== 'log' && g.dimensions?.action !== 'skip')
+                    .reduce((acc, g) => acc + g.count, 0);
+
+                const logCount = firewallGroups
+                    .filter(g => g.dimensions?.action === 'log')
+                    .reduce((acc, g) => acc + g.count, 0);
+
+                setBlockedEvents(blockedCount);
+                setLogEvents(logCount);
+
+                // --- FIREWALL PIE ---
+                const actionCounts = {};
+                firewallGroups.forEach(g => {
+                    const act = g.dimensions?.action || 'Unknown';
+                    actionCounts[act] = (actionCounts[act] || 0) + g.count;
                 });
+                const topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+                setTopFirewallActions(topActions);
+
+                // --- AVG TTFB ---
+                let totalTimeSum = 0;
+                filteredData.forEach(item => {
+                    const count = item.count;
+                    const avgTime = item.avg?.edgeTimeToFirstByteMs || 0;
+                    totalReq += count;
+                    totalTimeSum += (avgTime * count);
+                });
+                if (totalReq > 0) weightedAvgTime = Math.round(totalTimeSum / totalReq);
+            } else {
+                setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
             }
 
             setRawData(filteredData);
             setTotalRequests(totalReq);
-            setAvgResponseTime(0); // Set to 0 for now as requested to revert
+            setAvgResponseTime(weightedAvgTime);
 
-            // Map charts data
+            // --- DATA PROCESSING FOR CHARTS ---
             const urlCounts = {}; const ipCounts = {}; const countryCounts = {}; const uaCounts = {};
-            const timeBuckets = Array(24).fill(0);
+            const statusTotals = {};
 
+            // 1. Time Buckets Generation (4 Hours for 24h view)
+            let bucketSizeMs = 60 * 60 * 1000;
+            if (timeRange <= 60) bucketSizeMs = 1 * 60 * 1000;
+            else if (timeRange <= 360) bucketSizeMs = 15 * 60 * 1000;
+            else if (timeRange <= 720) bucketSizeMs = 30 * 60 * 1000;
+            else if (timeRange <= 1440) bucketSizeMs = 240 * 60 * 1000; // 4 Hours for 24h
+
+            const now = new Date();
+            const startTime = new Date(now.getTime() - timeRange * 60 * 1000);
+
+            const alignedStart = new Date(Math.floor(startTime.getTime() / bucketSizeMs) * bucketSizeMs);
+            const alignedEnd = new Date(Math.ceil(now.getTime() / bucketSizeMs) * bucketSizeMs);
+
+            // Helpers
+            const createBuckets = () => {
+                const map = new Map();
+                let current = new Date(alignedStart);
+                while (current <= alignedEnd) {
+                    map.set(current.getTime(), { timestamp: new Date(current), count: 0, series: {} });
+                    current = new Date(current.getTime() + bucketSizeMs);
+                }
+                return map;
+            };
+
+            const throughputBuckets = createBuckets();
+            const attackBuckets = createBuckets();
+            const httpCodeBuckets = createBuckets();
+
+            // 2. FILL DATA
+
+            // Collect ALL unique status codes FIRST
+            const allCodes = new Set();
+
+            // HTTP DATA
             filteredData.forEach(item => {
                 const count = item.count;
                 const dims = item.dimensions;
 
+                // Top Lists
                 const path = dims.clientRequestPath || 'Unknown';
                 const ip = dims.clientIP || 'Unknown';
                 const country = dims.clientCountryName || 'Unknown';
@@ -329,22 +412,93 @@ export default function GDCCPage() {
                 countryCounts[country] = (countryCounts[country] || 0) + count;
                 uaCounts[ua] = (uaCounts[ua] || 0) + count;
 
-                if (dims.datetimeHour) {
-                    const h = new Date(dims.datetimeHour).getHours();
-                    timeBuckets[h] += count;
+                // Time Series
+                if (dims.datetimeMinute) {
+                    const itemTime = new Date(dims.datetimeMinute).getTime();
+                    const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
+
+                    if (throughputBuckets.has(bucketTime)) {
+                        throughputBuckets.get(bucketTime).count += count;
+                    }
+
+                    const status = dims.edgeResponseStatus;
+                    if (status && status !== 200 && httpCodeBuckets.has(bucketTime)) {
+                        const bucket = httpCodeBuckets.get(bucketTime);
+                        bucket.series[status] = (bucket.series[status] || 0) + count;
+                        statusTotals[status] = (statusTotals[status] || 0) + count;
+                        allCodes.add(status); // Collect here!
+                    }
                 }
             });
 
+            // FIREWALL DATA
+            const firewallGroups = result?.firewallData || [];
+            const realAttackEvents = [];
+
+            firewallGroups.forEach(g => {
+                const action = g.dimensions?.action;
+                const targetActions = new Set(['block', 'challenge', 'js_challenge', 'jschallenge', 'managed_challenge']);
+
+                if (targetActions.has(action)) {
+                    // Add to Chart buckets
+                    if (g.dimensions?.datetimeMinute) {
+                        const itemTime = new Date(g.dimensions.datetimeMinute).getTime();
+                        const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
+                        if (attackBuckets.has(bucketTime)) {
+                            attackBuckets.get(bucketTime).count += g.count;
+                        }
+
+                        // Add to Detailed List (Real time)
+                        realAttackEvents.push({
+                            time: new Date(g.dimensions.datetimeMinute),
+                            action: action,
+                            count: g.count
+                        });
+                    }
+                }
+            });
+
+            realAttackEvents.sort((a, b) => b.time - a.time);
+            setDetailedAttackList(realAttackEvents);
+
+
+            // 3. CONVERT TO ARRAY FOR CHARTS
+            const formatTime = (d) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
+            setThroughputData(Array.from(throughputBuckets.values()).map(b => ({
+                time: formatTime(b.timestamp),
+                requests: b.count
+            })));
+
+            setAttackSeriesData(Array.from(attackBuckets.values()).map(b => ({
+                time: formatTime(b.timestamp),
+                attacks: b.count
+            })));
+
+            // Extract unique status codes found
+            const httpStatusChartData = Array.from(httpCodeBuckets.values()).map(b => {
+                const entry = { time: formatTime(b.timestamp) };
+
+                // IMPORTANT: Ensure EVERY key is present, default to 0
+                allCodes.forEach(code => {
+                    entry[code] = b.series[code] || 0;
+                });
+
+                return entry;
+            });
+
+            // SORT KEYS BY TOTAL COUNT (DESC)
+            const sortedKeys = Array.from(allCodes).sort((a, b) => (statusTotals[b] || 0) - (statusTotals[a] || 0));
+            setHttpStatusSeriesData({ data: httpStatusChartData, keys: sortedKeys });
+
+
+            // 4. TOP LISTS
             const toArray = (obj, keyName) => Object.entries(obj).map(([name, count]) => ({ [keyName]: name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
 
             setTopUrls(toArray(urlCounts, 'path'));
             setTopIps(toArray(ipCounts, 'ip'));
             setTopCountries(toArray(countryCounts, 'name'));
             setTopUserAgents(toArray(uaCounts, 'agent'));
-
-            setThroughputData(timeBuckets.map((count, i) => ({
-                time: `${i}:00`, requests: count, blocked: Math.floor(count * 0.05)
-            })));
 
             setLoadingStats(false);
         };
@@ -402,7 +556,7 @@ export default function GDCCPage() {
                     <SearchableDropdown icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingStats && subDomains.length === 0} />
                 </div>
 
-                {/* TIME RANGE SELECTOR */}
+                {/* TIME RANGE */}
                 <div className="flex justify-end mb-4">
                     <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
                         {[{ label: '30m', val: 30 }, { label: '6h', val: 360 }, { label: '12h', val: 720 }, { label: '24h', val: 1440 }].map(t => (
@@ -411,29 +565,14 @@ export default function GDCCPage() {
                     </div>
                 </div>
 
-                {/* DASHBOARD CONTENT */}
+                {/* DASHBOARD */}
                 <div className={`space-y-4 transition-all duration-500 ${selectedSubDomain && !loadingStats ? 'opacity-100 filter-none' : 'opacity-40 grayscale blur-sm'}`}>
 
                     {/* STATS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card title="Total Requests">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-6xl font-bold text-blue-400">{totalRequests.toLocaleString()}</span>
-                                <span className="text-xl text-gray-500 font-thai">Req</span>
-                            </div>
-                        </Card>
-                        <Card title="Avg Response Time">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-6xl font-bold text-purple-400">{avgResponseTime}</span>
-                                <span className="text-xl text-gray-500">ms</span>
-                            </div>
-                        </Card>
-                        <Card title="Blocked Events (Mock)">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-6xl font-bold text-orange-400">{selectedSubDomain && totalRequests > 0 ? Math.floor(totalRequests * 0.05) : "0"}</span>
-                                <span className="text-xl text-gray-500 font-thai">Events</span>
-                            </div>
-                        </Card>
+                        <Card title="Total Requests"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-blue-400">{totalRequests.toLocaleString()}</span><span className="text-xl text-gray-500 font-thai">Req</span></div></Card>
+                        <Card title="Avg Response Time (TTFB)"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-purple-400">{avgResponseTime}</span><span className="text-xl text-gray-500">ms</span></div></Card>
+                        <Card title="Blocked Events"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-orange-400">{blockedEvents}</span><span className="text-xl text-gray-500 font-thai">Events</span></div></Card>
                     </div>
 
                     {/* CHARTS ROW 1 */}
@@ -443,6 +582,8 @@ export default function GDCCPage() {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={throughputData}>
                                         <defs><linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient></defs>
+                                        <XAxis dataKey="time" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                                        <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
                                         <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff' }} itemStyle={{ color: '#60a5fa' }} />
                                         <Area type="monotone" dataKey="requests" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRequests)" />
                                     </AreaChart>
@@ -450,44 +591,120 @@ export default function GDCCPage() {
                             </div>
                         </Card>
                         <Card title="Top URLs"><HorizontalBarList data={topUrls} labelKey="path" valueKey="count" /></Card>
-                        <Card title="Top User Agents"><HorizontalBarList data={topUserAgents} labelKey="agent" valueKey="count" color="bg-indigo-600" /></Card>
+                        <Card title="Top Firewall Actions">
+                            <div className="h-64 flex flex-col justify-between">
+                                {topFirewallActions.length === 0 ? (<div className="text-gray-500 text-xs italic flex-grow flex items-center justify-center">No firewall events</div>) : (
+                                    <>
+                                        <ResponsiveContainer width="100%" height="70%">
+                                            <PieChart>
+                                                <Pie data={topFirewallActions} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="count">
+                                                    {topFirewallActions.map((entry, index) => (<Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#eab308', '#3b82f6', '#8b5cf6'][index % 5]} />))}
+                                                </Pie>
+                                                <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff', fontSize: '12px' }} itemStyle={{ color: '#fff' }} />
+                                                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '10px', color: '#9ca3af' }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="flex justify-around text-xs border-t border-gray-800 pt-2 mt-1">
+                                            <div className="text-center"><div className="text-gray-500 uppercase">Log</div><div className="text-blue-400 font-bold">{logEvents.toLocaleString()}</div></div>
+                                            <div className="text-center"><div className="text-gray-500 uppercase">Block</div><div className="text-red-400 font-bold">{blockedEvents.toLocaleString()}</div></div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </Card>
                     </div>
 
-                    {/* CHARTS ROW 2 */}
+                    {/* CHARTS ROW 2 (Swapped IPs and User Agents) */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <Card title="Top Client IPs"><HorizontalBarList data={topIps} labelKey="ip" valueKey="count" color="bg-cyan-600" /></Card>
+                        <Card title="Top User Agents"><HorizontalBarList data={topUserAgents} labelKey="agent" valueKey="count" color="bg-indigo-600" /></Card>
                         <Card title="Top Countries"><HorizontalBarList data={topCountries} labelKey="name" valueKey="count" color="bg-blue-800" /></Card>
-                        <Card title="Status (Mock)"><div className="h-full flex items-center justify-center text-gray-500 text-xs italic">No status code data in current dataset</div></Card>
+                    </div>
+
+                    {/* CHARTS ROW 3: NEW SECURITY & HTTP CHARTS */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <Card title="Attack Prevention History (Block/Challenge)">
+                            <div className="h-64 flex flex-col">
+                                <div className="flex-grow">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={attackSeriesData}>
+                                            <defs><linearGradient id="colorAttacks" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} /><stop offset="95%" stopColor="#ef4444" stopOpacity={0} /></linearGradient></defs>
+                                            <XAxis dataKey="time" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                                            <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                                            <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff' }} itemStyle={{ color: '#ef4444' }} />
+                                            <Area type="monotone" dataKey="attacks" stroke="#ef4444" fillOpacity={1} fill="url(#colorAttacks)" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="h-20 overflow-y-auto mt-2 border-t border-gray-800 pt-2 bg-gray-950/50 rounded">
+                                    {detailedAttackList.length === 0 ? (
+                                        <div className="text-gray-500 text-[10px] text-center italic py-2">No attack events in this period</div>
+                                    ) : (
+                                        <table className="w-full text-xs text-gray-400">
+                                            <tbody>
+                                                {detailedAttackList.map((d, i) => (
+                                                    <tr key={i} className="border-b border-gray-900/50 hover:bg-gray-900">
+                                                        <td className="py-1 pl-2 text-gray-500 font-mono">
+                                                            {d.time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                                        </td>
+                                                        <td className="py-1 px-2 text-orange-400 uppercase text-[10px]">{d.action}</td>
+                                                        <td className="py-1 pr-2 text-right text-red-400 font-bold">{d.count}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card title="Non-200 HTTP Status Codes">
+                            <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={httpStatusSeriesData.data}>
+                                        <XAxis dataKey="time" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                                        <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                                        <Tooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff' }} />
+                                        <Legend wrapperStyle={{ fontSize: '10px' }} />
+                                        {httpStatusSeriesData.keys && httpStatusSeriesData.keys.map((code, index) => (
+                                            <Area
+                                                key={code}
+                                                type="monotone"
+                                                dataKey={code}
+                                                name={String(code)}
+                                                stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                                                fill={CHART_COLORS[index % CHART_COLORS.length]}
+                                                fillOpacity={0.6}
+                                            />
+                                        ))}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </Card>
                     </div>
 
                     {/* RAW DATA INSPECTOR */}
                     <div className="grid grid-cols-1 gap-4">
-                        <Card title={`Raw API Data for ${selectedSubDomain} (Last ${timeRange < 60 ? timeRange + 'm' : timeRange / 60 + 'h'})`}>
-                            <div className="overflow-x-auto max-h-96 overflow-y-auto font-mono text-xs text-gray-400 bg-gray-950 p-4 rounded border border-gray-800">
-                                <div className="grid grid-cols-7 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[800px]">
+                        <Card title={`Raw API Data for ${selectedSubDomain}`}>
+                            <div className="overflow-x-auto max-h-48 overflow-y-auto font-mono text-xs text-gray-400 bg-gray-950 p-4 rounded border border-gray-800">
+                                <div className="grid grid-cols-8 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[900px]">
+                                    <div className="col-span-1">Time</div>
                                     <div className="col-span-2">Host</div><div className="col-span-1">IP</div><div className="col-span-1">Country</div>
-                                    <div className="col-span-1">OS</div><div className="col-span-1">Device</div><div className="col-span-1 text-right">Count</div>
+                                    <div className="col-span-1">Status</div><div className="col-span-1">Device</div><div className="col-span-1 text-right">Count</div>
                                 </div>
-                                {rawData.length === 0 ? (<div className="text-gray-600 italic p-4 text-center">No data loaded.</div>) : (
-                                    rawData.map((item, i) => (
-                                        <div key={i} className="grid grid-cols-7 gap-2 hover:bg-gray-900 transition-colors py-1 border-b border-gray-900/50 min-w-[800px] items-center">
-                                            <div className="col-span-2 text-green-400 truncate pr-2" title={item.dimensions?.clientRequestHTTPHost}>{item.dimensions?.clientRequestHTTPHost}</div>
-                                            <div className="col-span-1 text-blue-400 truncate">{item.dimensions?.clientIP}</div>
-                                            <div className="col-span-1 text-gray-500 truncate">{item.dimensions?.clientCountryName}</div>
-                                            <div className="col-span-1 text-orange-400 truncate">{item.dimensions?.userAgentOS || '-'}</div>
-                                            <div className="col-span-1 text-purple-400 truncate">{item.dimensions?.clientDeviceType || '-'}</div>
-                                            <div className="col-span-1 text-white font-bold text-right">{item.count}</div>
+                                {rawData.map((item, i) => (
+                                    <div key={i} className="grid grid-cols-8 gap-2 hover:bg-gray-900 transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center">
+                                        <div className="col-span-1 text-gray-500">
+                                            {item.dimensions?.datetimeMinute ? new Date(item.dimensions.datetimeMinute).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                            <div className="mt-2 flex justify-end gap-4 items-center">
-                                <button onClick={async () => {
-                                    if (!selectedSubDomain) return; const res = await callAPI('debug-check-datasets', { zoneId: selectedZone, subdomain: selectedSubDomain, timeRange });
-                                    if (res && res.data) { console.log('Deep Debug:', res.data); alert(`Debug Result for ${selectedSubDomain} (Last ${timeRange} mins):\n` + `Adaptive: ${res.data.counts.adaptive_requests}\n` + `Hourly: ${res.data.counts.hourly_requests}\n` + `Firewall: ${res.data.counts.firewall_events}`); }
-                                }}
-                                    className="text-[10px] text-orange-500 hover:text-orange-400 underline">Deep Debug Counts (Adaptive vs Hourly)</button>
-                                <button onClick={() => console.log(rawData)} className="text-[10px] text-blue-500 hover:text-blue-400 underline">Log Full Object</button>
+                                        <div className="col-span-2 text-green-400 truncate pr-2">{item.dimensions?.clientRequestHTTPHost}</div>
+                                        <div className="col-span-1 text-blue-400 truncate">{item.dimensions?.clientIP}</div>
+                                        <div className="col-span-1 text-gray-500 truncate">{item.dimensions?.clientCountryName}</div>
+                                        <div className="col-span-1 text-yellow-400 truncate">{item.dimensions?.edgeResponseStatus}</div>
+                                        <div className="col-span-1 text-purple-400 truncate">{item.dimensions?.clientDeviceType}</div>
+                                        <div className="col-span-1 text-white font-bold text-right">{item.count}</div>
+                                    </div>
+                                ))}
                             </div>
                         </Card>
                     </div>
