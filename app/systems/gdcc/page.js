@@ -182,7 +182,7 @@ export default function GDCCPage() {
     // --- DYNAMIC DASHBOARD DATA STATES ---
     const [rawData, setRawData] = useState([]);
     const [totalRequests, setTotalRequests] = useState(0);
-    const [avgResponseTime, setAvgResponseTime] = useState(0); // Real Avg Time State
+    const [avgResponseTime, setAvgResponseTime] = useState(0);
     const [throughputData, setThroughputData] = useState([]);
     const [topUrls, setTopUrls] = useState([]);
     const [topIps, setTopIps] = useState([]);
@@ -296,30 +296,20 @@ export default function GDCCPage() {
 
             let filteredData = [];
             let totalReq = 0;
-            let weightedAvgTime = 0;
+            // let weightedAvgTime = 0; // Disabled as backend removed 'sum'
 
             if (result && result.data) {
                 filteredData = result.data;
                 console.log('✅ Received Filtered Groups:', filteredData.length);
 
-                let totalTimeSum = 0;
                 filteredData.forEach(item => {
-                    const count = item.count;
-                    // Note: Backend now returns 'sum' { edgeResponseDurationMs } for groups
-                    const durationSum = item.sum?.edgeResponseDurationMs || 0;
-
-                    totalReq += count;
-                    totalTimeSum += durationSum;
+                    totalReq += item.count;
                 });
-
-                if (totalReq > 0) {
-                    weightedAvgTime = Math.round(totalTimeSum / totalReq);
-                }
             }
 
             setRawData(filteredData);
             setTotalRequests(totalReq);
-            setAvgResponseTime(weightedAvgTime);
+            setAvgResponseTime(0); // Set to 0 for now as requested to revert
 
             // Map charts data
             const urlCounts = {}; const ipCounts = {}; const countryCounts = {}; const uaCounts = {};
