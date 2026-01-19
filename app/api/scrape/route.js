@@ -114,21 +114,53 @@ export async function POST(request) {
                        }
                      }
                      
-                     firewallEventsAdaptiveGroups(
+                     firewallActivity: firewallEventsAdaptiveGroups(
                         filter: {
                             datetime_geq: $since,
                             datetime_leq: $until
                             ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
                         }
-                        limit: 2000
-                        orderBy: [count_DESC]
+                        limit: 5000
+                        orderBy: [datetimeMinute_ASC]
                      ) {
                         count
                         dimensions {
                           action
                           datetimeMinute
+                        }
+                     }
+
+                     # RULES: Aggregated by Rule Name & ID (Total Count)
+                     firewallRules: firewallEventsAdaptiveGroups(
+                        filter: {
+                            datetime_geq: $since,
+                            datetime_leq: $until
+                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
+                        }
+                        limit: 500
+                        orderBy: [count_DESC]
+                     ) {
+                        count
+                        dimensions {
                           description
+                          ruleId
+                        }
+                     }
+
+                     firewallIPs: firewallEventsAdaptiveGroups(
+                        filter: {
+                            datetime_geq: $since,
+                            datetime_leq: $until
+                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
+                        }
+                        limit: 100
+                        orderBy: [count_DESC]
+                     ) {
+                        count
+                        dimensions {
+                          clientIP
                           clientCountryName
+                          action
                         }
                      }
                    }
@@ -162,14 +194,20 @@ export async function POST(request) {
 
                 const zoneData = response.data?.data?.viewer?.zones?.[0];
                 const httpGroups = zoneData?.httpRequestsAdaptiveGroups || [];
-                const firewallGroups = zoneData?.firewallEventsAdaptiveGroups || [];
 
-                console.log(`✅ GraphQL: ${httpGroups.length} HTTP groups, ${firewallGroups.length} Firewall groups`);
+                // Extract separate firewall groups
+                const firewallActivity = zoneData?.firewallActivity || [];
+                const firewallRules = zoneData?.firewallRules || [];
+                const firewallIPs = zoneData?.firewallIPs || [];
+
+                console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs`);
 
                 return NextResponse.json({
                     success: true,
                     data: httpGroups,
-                    firewallData: firewallGroups
+                    firewallActivity,
+                    firewallRules,
+                    firewallIPs
                 });
 
             } catch (gqlError) {

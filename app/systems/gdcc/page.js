@@ -150,7 +150,7 @@ const ReportModal = ({ isOpen, onClose, data }) => {
                         </div>
 
                         <ul className="list-disc pl-10 space-y-1">
-                            <li>IP ที่มีการเชื่อมต่อมากที่สุด 3 อันดับ</li>
+                            <li>IP ที่มีการเชื่อมต่อมากที่สุด 3 อันดับ (Top Connected IPs)</li>
                         </ul>
 
                         <div className="mt-2 pl-4 mb-4">
@@ -175,45 +175,24 @@ const ReportModal = ({ isOpen, onClose, data }) => {
                         <ul className="list-disc pl-10 space-y-1">
                             <li>อันดับของ User Agents ที่ถูกเรียกใช้ข้อมูลมากที่สุด “ <strong>{topUA.agent}</strong>” จำนวน <strong>{topUA.count.toLocaleString()}</strong> ครั้ง</li>
                             <li>ช่วงเวลาการป้องกันการโจมตี <strong>{data.peakAttack?.time || '-'}</strong> จำนวน <strong>{data.peakAttack?.count.toLocaleString() || 0}</strong> Requests</li>
-                            <li>ประเทศผู้ของผู้ใช้งานที่ Request เข้ามามากที่สุด 3 อันดับ</li>
-                        </ul>
-
-                        <div className="mt-2 pl-4 mb-4">
-                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
-                                <thead className="bg-gray-100">
-                                    <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>Country</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.topCountries.slice(0, 3).map((item, index) => (
-                                        <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.name}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <ul className="list-disc pl-10 space-y-1">
                             <li>สถานะการตอบกลับของ HTTP <strong>{data.peakHttpStatus?.time || '-'}</strong> จำนวน <strong>{data.peakHttpStatus?.count.toLocaleString() || 0}</strong> Requests</li>
-                            <li>Rule ที่ถูกเรียกใช้งานมากที่สุด 3 อันดับ</li>
                         </ul>
 
+                        <ul className="list-disc pl-10 space-y-1 mt-4">
+                            <li>อันดับ WAF Rules ที่ถูกใช้มากที่สุด 3 อันดับ</li>
+                        </ul>
                         <div className="mt-2 pl-4 mb-4">
                             <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
                                 <thead className="bg-gray-100">
                                     <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>ชื่อ Rule</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>Rule Name (ID)</th>
                                         <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {data.topRules.slice(0, 3).map((item, index) => (
                                         <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.rule}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs font-mono text-sm">{item.rule}</td>
                                             <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
                                         </tr>
                                     ))}
@@ -222,22 +201,25 @@ const ReportModal = ({ isOpen, onClose, data }) => {
                         </div>
 
                         <ul className="list-disc pl-10 space-y-1">
-                            <li>ตารางสรุป 5 ประเทศที่โจมตี 3 อันดับ</li>
+                            <li>5 อันดับ ผู้โจมตีสูงสุด (Top 5 Attackers)</li>
                         </ul>
-
                         <div className="mt-2 pl-4">
                             <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
                                 <thead className="bg-gray-100">
                                     <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>ชื่อ ประเทศ</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
+                                        <th style={{ border: '1px solid black', padding: '8px' }}>IP</th>
+                                        <th style={{ border: '1px solid black', padding: '8px' }}>ประเทศ (Country)</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>จำนวน (Count)</th>
+                                        <th style={{ border: '1px solid black', padding: '8px' }}>ประเภท (Type)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {data.topAttackCountries.slice(0, 5).map((item, index) => (
+                                    {data.topAttackers.slice(0, 5).map((item, index) => (
                                         <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.country}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px' }}>{item.ip}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px' }}>{item.country}</td>
                                             <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="text-xs">{item.type}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -448,7 +430,7 @@ export default function GDCCPage() {
 
     // New Data for Report
     const [topRules, setTopRules] = useState([]);
-    const [topAttackCountries, setTopAttackCountries] = useState([]);
+    const [topAttackers, setTopAttackers] = useState([]); // RENAMED/MODIFIED from topAttackCountries for clarity
 
     // --- API ---
     const callAPI = async (action, params = {}) => {
@@ -514,9 +496,10 @@ export default function GDCCPage() {
         setPeakAttack({ time: '-', count: 0 });
         setPeakHttpStatus({ time: '-', count: 0 });
         setTopRules([]);
-        setTopAttackCountries([]);
+        setTopAttackers([]);
     };
 
+    // 3. Zone Selected -> Load DNS
     // 3. Zone Selected -> Load DNS
     useEffect(() => {
         if (!selectedZone) { resetDashboardData(); setSubDomains([]); return; }
@@ -529,9 +512,17 @@ export default function GDCCPage() {
                 dnsRes.data.forEach(rec => { if (['A', 'AAAA', 'CNAME'].includes(rec.type)) allHosts.add(rec.name); });
             }
             const hostOptions = Array.from(allHosts).sort().map(h => ({ value: h, label: h }));
+
+            // Add "All Subdomains" option
+            hostOptions.unshift({ value: 'ALL_SUBDOMAINS', label: '--- All Subdomains (Zone Overview) ---' });
+
             setSubDomains(hostOptions);
+
             const defaultSub = hostOptions.find(h => h.value.toLowerCase() === DEFAULT_CONFIG.subDomain.toLowerCase());
+            // Default to 'ALL_SUBDOMAINS' if no config match, or keep the config match
             if (defaultSub) setSelectedSubDomain(defaultSub.value);
+            else setSelectedSubDomain('ALL_SUBDOMAINS');
+
             setLoadingStats(false);
         };
         loadDNS();
@@ -543,10 +534,13 @@ export default function GDCCPage() {
 
         const loadTrafficData = async () => {
             setLoadingStats(true);
-            console.log(`🔍 Fetching traffic for subdomain: ${selectedSubDomain} (Range: ${timeRange}m)`);
+            const isAllSubdomains = selectedSubDomain === 'ALL_SUBDOMAINS';
+            console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : selectedSubDomain} (Range: ${timeRange}m)`);
 
             const result = await callAPI('get-traffic-analytics', {
-                zoneId: selectedZone, timeRange: timeRange, subdomain: selectedSubDomain
+                zoneId: selectedZone,
+                timeRange: timeRange,
+                subdomain: isAllSubdomains ? null : selectedSubDomain
             });
 
             let filteredData = [];
@@ -555,46 +549,67 @@ export default function GDCCPage() {
 
             if (result && result.data) {
                 filteredData = result.data;
-                const firewallGroups = result.firewallData || [];
+                const firewallActivity = result.firewallActivity || [];
+                const firewallRulesData = result.firewallRules || [];
+                const firewallIPsData = result.firewallIPs || [];
 
-                // --- FIREWALL SUMMARY ---
-                const blockedCount = firewallGroups
-                    .filter(g => g.dimensions?.action !== 'log' && g.dimensions?.action !== 'skip')
+                // --- 1. FIREWALL SUMMARY (From Activity: Minute x Action) ---
+                const blockedCount = firewallActivity
+                    .filter(g => g.dimensions?.action !== 'log' && g.dimensions?.action !== 'skip' && g.dimensions?.action !== 'allow')
                     .reduce((acc, g) => acc + g.count, 0);
 
-                const logCount = firewallGroups
+                const logCount = firewallActivity
                     .filter(g => g.dimensions?.action === 'log')
                     .reduce((acc, g) => acc + g.count, 0);
 
                 setBlockedEvents(blockedCount);
                 setLogEvents(logCount);
 
-                // --- FIREWALL PIE ---
+                // --- Action Distribution (Pie Chart) ---
                 const actionCounts = {};
-                const ruleCounts = {}; // New: Rule counts
-                const attackCountryCounts = {}; // New: Attack Country counts
-
-                firewallGroups.forEach(g => {
+                firewallActivity.forEach(g => {
                     const act = g.dimensions?.action || 'Unknown';
-                    const rule = g.dimensions?.description || g.dimensions?.ruleId || 'Unknown Rule';
-                    const country = g.dimensions?.clientCountryName || 'Unknown';
-
                     actionCounts[act] = (actionCounts[act] || 0) + g.count;
-
-                    if (act !== 'log' && act !== 'skip') { // Only count real attacks (blocks/challenges) for Top Rules/Countries? Or all? User just said "Top WAF Rules". Normally implies all triggers. But typically attack rules clearly. Let's include all triggers for now as 'log' implies a WAF rule match too.
-                        ruleCounts[rule] = (ruleCounts[rule] || 0) + g.count;
-                        attackCountryCounts[country] = (attackCountryCounts[country] || 0) + g.count;
-                    }
                 });
-
                 const topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
                 setTopFirewallActions(topActions);
 
-                // TO ARRAY HELPERS
-                const toArray = (obj, keyName) => Object.entries(obj).map(([name, count]) => ({ [keyName]: name, count })).sort((a, b) => b.count - a.count);
 
-                setTopRules(toArray(ruleCounts, 'rule').slice(0, 5));
-                setTopAttackCountries(toArray(attackCountryCounts, 'country').slice(0, 5));
+                // --- 2. TOP RULES (From Rules: Desc x ID) ---
+                // Already aggregated correctly by API
+                const processedRules = firewallRulesData.map(g => ({
+                    rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
+                    count: g.count
+                }));
+                // Sort again just in case API order was affected by aliases (though it shouldn't be)
+                setTopRules(processedRules.sort((a, b) => b.count - a.count).slice(0, 5));
+
+
+                // --- 3. TOP ATTACKERS (From IPs: IP x Country) ---
+                // Filter only mitigation actions if desired.
+                const attackerMap = {};
+                firewallIPsData.forEach(g => {
+                    const act = g.dimensions?.action;
+                    const isAttack = act !== 'log' && act !== 'skip' && act !== 'allow';
+
+                    if (isAttack) {
+                        const ip = g.dimensions?.clientIP;
+                        if (!attackerMap[ip]) {
+                            attackerMap[ip] = {
+                                ip: ip,
+                                country: g.dimensions?.clientCountryName,
+                                count: 0,
+                                types: new Set()
+                            };
+                        }
+                        attackerMap[ip].count += g.count;
+                        attackerMap[ip].types.add(act);
+                    }
+                });
+                const sortedAttackers = Object.values(attackerMap)
+                    .sort((a, b) => b.count - a.count)
+                    .map(a => ({ ...a, type: Array.from(a.types).join(', ') }));
+                setTopAttackers(sortedAttackers);
 
 
                 // --- AVG TTFB ---
@@ -608,7 +623,7 @@ export default function GDCCPage() {
                 if (totalReq > 0) weightedAvgTime = Math.round(totalTimeSum / totalReq);
             } else {
                 setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
-                setTopRules([]); setTopAttackCountries([]);
+                setTopRules([]); setTopAttackers([]);
             }
 
             setRawData(filteredData);
@@ -844,9 +859,9 @@ export default function GDCCPage() {
         peakTime: peakTraffic.time,
         peakCount: peakTraffic.count,
         peakAttack: peakAttack,
-        peakHttpStatus: peakHttpStatus, // NEW
-        topRules: topRules, // NEW
-        topAttackCountries: topAttackCountries // NEW
+        peakHttpStatus: peakHttpStatus,
+        topRules: topRules,
+        topAttackers: topAttackers // NEW
     };
 
     return (
@@ -1015,6 +1030,43 @@ export default function GDCCPage() {
                         </Card>
                     </div>
 
+                    {/* NEW CHARTS ROW 4 (Security Details) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <Card title="Top WAF Rules">
+                            <div className="overflow-y-auto max-h-64">
+                                <HorizontalBarList data={topRules} labelKey="rule" valueKey="count" color="bg-orange-600" />
+                            </div>
+                        </Card>
+                        <Card title="Top 5 Attackers">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs text-left text-gray-400">
+                                    <thead className="text-gray-500 uppercase font-bold border-b border-gray-800">
+                                        <tr>
+                                            <th className="py-2 pl-2">IP</th>
+                                            <th className="py-2">Country</th>
+                                            <th className="py-2 text-right">Count</th>
+                                            <th className="py-2 pr-2 text-right">Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-800/50">
+                                        {topAttackers.length === 0 ? (
+                                            <tr><td colSpan="4" className="text-center py-4 italic">No attackers found</td></tr>
+                                        ) : (
+                                            topAttackers.slice(0, 5).map((attacker, i) => (
+                                                <tr key={i} className="hover:bg-gray-900/50 transition-colors">
+                                                    <td className="py-2 pl-2 font-mono text-blue-400">{attacker.ip}</td>
+                                                    <td className="py-2 text-gray-300">{attacker.country}</td>
+                                                    <td className="py-2 text-right text-red-500 font-bold">{attacker.count.toLocaleString()}</td>
+                                                    <td className="py-2 pr-2 text-right text-xs opacity-70">{attacker.type}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    </div>
+
                     {/* RAW DATA INSPECTOR */}
                     <div className="grid grid-cols-1 gap-4">
                         <Card title={`Raw API Data for ${selectedSubDomain}`}>
@@ -1041,6 +1093,12 @@ export default function GDCCPage() {
                         </Card>
                     </div>
 
+                </div>
+
+                {/* DEBUG INFO */}
+                <div className="mt-8 text-[10px] text-gray-700 font-mono text-center flex flex-col gap-1 opacity-50 hover:opacity-100 transition-opacity">
+                    <p>Debug: Range={timeRange}m | Subdomain={selectedSubDomain || 'All'} | ZoneID={selectedZone}</p>
+                    <p>Loaded At: {new Date().toLocaleTimeString()} | Total Req: {totalRequests.toLocaleString()}</p>
                 </div>
             </main>
         </div>
