@@ -127,6 +127,8 @@ export async function POST(request) {
                         dimensions {
                           action
                           datetimeMinute
+                          description
+                          clientCountryName
                         }
                      }
                    }

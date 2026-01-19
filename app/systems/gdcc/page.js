@@ -10,7 +10,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -38,6 +38,229 @@ const CHART_COLORS = [
 ];
 
 // --- COMPONENTS ---
+
+// 1. Report Modal Component
+const ReportModal = ({ isOpen, onClose, data }) => {
+    if (!isOpen) return null;
+    const reportContentRef = useRef(null);
+
+    // Helper for Thai Date
+    const formatThaiDate = (date) => {
+        return date.toLocaleString('th-TH', {
+            year: '2-digit', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        });
+    };
+
+    const startDate = new Date(Date.now() - data.timeRange * 60 * 1000);
+    const endDate = new Date();
+    const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
+    const avgTimeSec = (data.avgTime / 1000).toFixed(3);
+
+    // Calculate Firewall Percentages
+    const totalFirewall = (data.blockedEvents || 0) + (data.logEvents || 0);
+    const blockPct = totalFirewall > 0 ? ((data.blockedEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+    const logPct = totalFirewall > 0 ? ((data.logEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+
+    // Top User Agent
+    const topUA = data.topUserAgents && data.topUserAgents.length > 0 ? data.topUserAgents[0] : { agent: '-', count: 0 };
+
+    // --- COPY FUNCTION ---
+    const handleCopy = () => {
+        if (!reportContentRef.current) return;
+        const range = document.createRange();
+        range.selectNode(reportContentRef.current);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+        alert('Report copied to clipboard!');
+    };
+
+    // --- DOWNLOAD WORD FUNCTION ---
+    const handleDownloadWord = () => {
+        if (!reportContentRef.current) return;
+
+        const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+            "xmlns:w='urn:schemas-microsoft-com:office:word' " +
+            "xmlns='http://www.w3.org/TR/REC-html40'>" +
+            "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title></head><body>";
+        const footer = "</body></html>";
+        const sourceHTML = header + reportContentRef.current.innerHTML + footer;
+
+        const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+        const fileDownload = document.createElement("a");
+        document.body.appendChild(fileDownload);
+        fileDownload.href = source;
+        fileDownload.download = `report_${data.domain}.doc`;
+        fileDownload.click();
+        document.body.removeChild(fileDownload);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-500" />
+                        <h3 className="text-lg font-bold text-gray-100">สรุปรายงาน (Report Summary)</h3>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* CONTENT AREA (Scrollable) */}
+                <div className="flex-grow overflow-y-auto p-8 bg-white text-black font-serif shadow-inner" id="print-area">
+                    <div ref={reportContentRef} className="space-y-4 text-base leading-relaxed" style={{ fontFamily: 'Sarabun, sans-serif' }}>
+
+                        <p>
+                            จากภาพรายงานการใช้งานและความปลอดภัยของระบบ Web application Firewall โดยสรุปข้อมูลจาก Cloudflare
+                            ในช่วงเวลา <strong>{timeRangeStr}</strong> ของ URL <strong>{data.domain}</strong> รายละเอียดดังนี้
+                        </p>
+
+                        <ul className="list-disc pl-10 space-y-1">
+                            <li>การใช้งาน Request ทั้งหมด <strong>{data.totalRequests.toLocaleString()}</strong> request</li>
+                            <li>ช่วงเวลาตอบสนองเฉลี่ย <strong>{avgTimeSec}</strong> วินาที</li>
+                            <li>เหตุการณ์ที่ถูกจัดการโดยไฟร์วอลล์ Block <strong>{blockPct}%</strong> / Log <strong>{logPct}%</strong></li>
+                            <li>ปริมาณการเรียกใช้งานตามช่วงเวลามาก <strong>{data.peakTime}</strong> จำนวน <strong>{data.peakCount.toLocaleString()}</strong> Requests</li>
+                            <li>URL ที่มีการเรียกใช้งานมากที่สุด 3 อันดับ</li>
+                        </ul>
+
+                        <div className="mt-2 pl-4 mb-4">
+                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '10%', textAlign: 'center' }}>ลำดับ</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>รายการ (URL)</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '20%', textAlign: 'right' }}>จำนวน (Count)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.topUrls.slice(0, 3).map((item, index) => (
+                                        <tr key={index}>
+                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}>{index + 1}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.path}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <ul className="list-disc pl-10 space-y-1">
+                            <li>IP ที่มีการเชื่อมต่อมากที่สุด 3 อันดับ</li>
+                        </ul>
+
+                        <div className="mt-2 pl-4 mb-4">
+                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>Client IP</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.topIps.slice(0, 3).map((item, index) => (
+                                        <tr key={index}>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.ip}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <ul className="list-disc pl-10 space-y-1">
+                            <li>อันดับของ User Agents ที่ถูกเรียกใช้ข้อมูลมากที่สุด “ <strong>{topUA.agent}</strong>” จำนวน <strong>{topUA.count.toLocaleString()}</strong> ครั้ง</li>
+                            <li>ช่วงเวลาการป้องกันการโจมตี <strong>{data.peakAttack?.time || '-'}</strong> จำนวน <strong>{data.peakAttack?.count.toLocaleString() || 0}</strong> Requests</li>
+                            <li>ประเทศผู้ของผู้ใช้งานที่ Request เข้ามามากที่สุด 3 อันดับ</li>
+                        </ul>
+
+                        <div className="mt-2 pl-4 mb-4">
+                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>Country</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.topCountries.slice(0, 3).map((item, index) => (
+                                        <tr key={index}>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.name}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <ul className="list-disc pl-10 space-y-1">
+                            <li>สถานะการตอบกลับของ HTTP <strong>{data.peakHttpStatus?.time || '-'}</strong> จำนวน <strong>{data.peakHttpStatus?.count.toLocaleString() || 0}</strong> Requests</li>
+                            <li>Rule ที่ถูกเรียกใช้งานมากที่สุด 3 อันดับ</li>
+                        </ul>
+
+                        <div className="mt-2 pl-4 mb-4">
+                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>ชื่อ Rule</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.topRules.slice(0, 3).map((item, index) => (
+                                        <tr key={index}>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.rule}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <ul className="list-disc pl-10 space-y-1">
+                            <li>ตารางสรุป 5 ประเทศที่โจมตี 3 อันดับ</li>
+                        </ul>
+
+                        <div className="mt-2 pl-4">
+                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>ชื่อ ประเทศ</th>
+                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.topAttackCountries.slice(0, 5).map((item, index) => (
+                                        <tr key={index}>
+                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.country}</td>
+                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3 flex-shrink-0">
+                    <button onClick={handleCopy} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                        <Copy className="w-3 h-3" /> Copy All
+                    </button>
+                    <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                        <FileType className="w-3 h-3" /> Download Word (.doc)
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -178,6 +401,7 @@ export default function GDCCPage() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState(null);
     const [isExporting, setIsExporting] = useState(false);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // --- DEFAULT CONFIG ---
@@ -207,10 +431,13 @@ export default function GDCCPage() {
     const [avgResponseTime, setAvgResponseTime] = useState(0);
     const [blockedEvents, setBlockedEvents] = useState(0);
     const [logEvents, setLogEvents] = useState(0);
+    const [peakTraffic, setPeakTraffic] = useState({ time: '-', count: 0 }); // State for Peak Traffic
+    const [peakAttack, setPeakAttack] = useState({ time: '-', count: 0 }); // State for Peak Attack (NEW)
+    const [peakHttpStatus, setPeakHttpStatus] = useState({ time: '-', count: 0 }); // State for Peak HTTP Status
 
     const [throughputData, setThroughputData] = useState([]);
     const [attackSeriesData, setAttackSeriesData] = useState([]);
-    const [detailedAttackList, setDetailedAttackList] = useState([]); // Real-time list
+    const [detailedAttackList, setDetailedAttackList] = useState([]);
     const [httpStatusSeriesData, setHttpStatusSeriesData] = useState({ data: [], keys: [] });
 
     const [topUrls, setTopUrls] = useState([]);
@@ -218,6 +445,10 @@ export default function GDCCPage() {
     const [topCountries, setTopCountries] = useState([]);
     const [topUserAgents, setTopUserAgents] = useState([]);
     const [topFirewallActions, setTopFirewallActions] = useState([]);
+
+    // New Data for Report
+    const [topRules, setTopRules] = useState([]);
+    const [topAttackCountries, setTopAttackCountries] = useState([]);
 
     // --- API ---
     const callAPI = async (action, params = {}) => {
@@ -279,6 +510,11 @@ export default function GDCCPage() {
         setThroughputData([]); setAttackSeriesData([]); setDetailedAttackList([]);
         setHttpStatusSeriesData({ data: [], keys: [] });
         setTopUrls([]); setTopIps([]); setTopCountries([]); setTopUserAgents([]); setTopFirewallActions([]);
+        setPeakTraffic({ time: '-', count: 0 });
+        setPeakAttack({ time: '-', count: 0 });
+        setPeakHttpStatus({ time: '-', count: 0 });
+        setTopRules([]);
+        setTopAttackCountries([]);
     };
 
     // 3. Zone Selected -> Load DNS
@@ -335,12 +571,31 @@ export default function GDCCPage() {
 
                 // --- FIREWALL PIE ---
                 const actionCounts = {};
+                const ruleCounts = {}; // New: Rule counts
+                const attackCountryCounts = {}; // New: Attack Country counts
+
                 firewallGroups.forEach(g => {
                     const act = g.dimensions?.action || 'Unknown';
+                    const rule = g.dimensions?.description || g.dimensions?.ruleId || 'Unknown Rule';
+                    const country = g.dimensions?.clientCountryName || 'Unknown';
+
                     actionCounts[act] = (actionCounts[act] || 0) + g.count;
+
+                    if (act !== 'log' && act !== 'skip') { // Only count real attacks (blocks/challenges) for Top Rules/Countries? Or all? User just said "Top WAF Rules". Normally implies all triggers. But typically attack rules clearly. Let's include all triggers for now as 'log' implies a WAF rule match too.
+                        ruleCounts[rule] = (ruleCounts[rule] || 0) + g.count;
+                        attackCountryCounts[country] = (attackCountryCounts[country] || 0) + g.count;
+                    }
                 });
+
                 const topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
                 setTopFirewallActions(topActions);
+
+                // TO ARRAY HELPERS
+                const toArray = (obj, keyName) => Object.entries(obj).map(([name, count]) => ({ [keyName]: name, count })).sort((a, b) => b.count - a.count);
+
+                setTopRules(toArray(ruleCounts, 'rule').slice(0, 5));
+                setTopAttackCountries(toArray(attackCountryCounts, 'country').slice(0, 5));
+
 
                 // --- AVG TTFB ---
                 let totalTimeSum = 0;
@@ -353,6 +608,7 @@ export default function GDCCPage() {
                 if (totalReq > 0) weightedAvgTime = Math.round(totalTimeSum / totalReq);
             } else {
                 setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
+                setTopRules([]); setTopAttackCountries([]);
             }
 
             setRawData(filteredData);
@@ -391,17 +647,16 @@ export default function GDCCPage() {
             const attackBuckets = createBuckets();
             const httpCodeBuckets = createBuckets();
 
-            // 2. FILL DATA
-
-            // Collect ALL unique status codes FIRST
+            // 2. FILL DATA & CALC PEAK
             const allCodes = new Set();
+            let currentPeak = { count: 0, time: null };
 
             // HTTP DATA
             filteredData.forEach(item => {
                 const count = item.count;
                 const dims = item.dimensions;
 
-                // Top Lists
+                // Top Lists (Same as before)
                 const path = dims.clientRequestPath || 'Unknown';
                 const ip = dims.clientIP || 'Unknown';
                 const country = dims.clientCountryName || 'Unknown';
@@ -418,18 +673,53 @@ export default function GDCCPage() {
                     const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
 
                     if (throughputBuckets.has(bucketTime)) {
-                        throughputBuckets.get(bucketTime).count += count;
+                        const b = throughputBuckets.get(bucketTime);
+                        b.count += count;
                     }
 
                     const status = dims.edgeResponseStatus;
-                    if (status && status !== 200 && httpCodeBuckets.has(bucketTime)) {
+                    if (status) { // Always track status for chart
                         const bucket = httpCodeBuckets.get(bucketTime);
-                        bucket.series[status] = (bucket.series[status] || 0) + count;
-                        statusTotals[status] = (statusTotals[status] || 0) + count;
-                        allCodes.add(status); // Collect here!
+                        if (bucket) {
+                            bucket.series[status] = (bucket.series[status] || 0) + count;
+                            statusTotals[status] = (statusTotals[status] || 0) + count;
+                            allCodes.add(status);
+                        }
                     }
                 }
             });
+
+            // Find Peak Traffic from Bucket
+            for (let [_, b] of throughputBuckets) {
+                if (b.count > currentPeak.count) {
+                    currentPeak = { count: b.count, time: b.timestamp };
+                }
+            }
+            // Format Peak Time (Thai format)
+            const peakTimeStr = currentPeak.time ? currentPeak.time.toLocaleString('th-TH', {
+                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+            }) : '-';
+            setPeakTraffic({ time: peakTimeStr, count: currentPeak.count });
+
+
+            // Find Peak HTTP Status (Non-200) - NEW
+            let currentHttpPeak = { count: 0, time: null };
+            for (let [_, b] of httpCodeBuckets) {
+                // Sum all non-200 codes in this bucket
+                let non200Count = 0;
+                Object.entries(b.series).forEach(([code, count]) => {
+                    if (parseInt(code) !== 200) non200Count += count;
+                });
+
+                if (non200Count > currentHttpPeak.count) {
+                    currentHttpPeak = { count: non200Count, time: b.timestamp };
+                }
+            }
+            const peakHttpTimeStr = currentHttpPeak.time ? currentHttpPeak.time.toLocaleString('th-TH', {
+                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+            }).replace(':', '.') : '-';
+            setPeakHttpStatus({ time: peakHttpTimeStr, count: currentHttpPeak.count });
+
 
             // FIREWALL DATA
             const firewallGroups = result?.firewallData || [];
@@ -440,7 +730,6 @@ export default function GDCCPage() {
                 const targetActions = new Set(['block', 'challenge', 'js_challenge', 'jschallenge', 'managed_challenge']);
 
                 if (targetActions.has(action)) {
-                    // Add to Chart buckets
                     if (g.dimensions?.datetimeMinute) {
                         const itemTime = new Date(g.dimensions.datetimeMinute).getTime();
                         const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
@@ -448,7 +737,6 @@ export default function GDCCPage() {
                             attackBuckets.get(bucketTime).count += g.count;
                         }
 
-                        // Add to Detailed List (Real time)
                         realAttackEvents.push({
                             time: new Date(g.dimensions.datetimeMinute),
                             action: action,
@@ -460,6 +748,18 @@ export default function GDCCPage() {
 
             realAttackEvents.sort((a, b) => b.time - a.time);
             setDetailedAttackList(realAttackEvents);
+
+            // Find Peak Attack (NEW)
+            let currentAttackPeak = { count: 0, time: null };
+            for (let [_, b] of attackBuckets) {
+                if (b.count > currentAttackPeak.count) {
+                    currentAttackPeak = { count: b.count, time: b.timestamp };
+                }
+            }
+            const peakAttackTimeStr = currentAttackPeak.time ? currentAttackPeak.time.toLocaleString('th-TH', {
+                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+            }).replace(':', '.') : '-';
+            setPeakAttack({ time: peakAttackTimeStr, count: currentAttackPeak.count });
 
 
             // 3. CONVERT TO ARRAY FOR CHARTS
@@ -478,16 +778,12 @@ export default function GDCCPage() {
             // Extract unique status codes found
             const httpStatusChartData = Array.from(httpCodeBuckets.values()).map(b => {
                 const entry = { time: formatTime(b.timestamp) };
-
-                // IMPORTANT: Ensure EVERY key is present, default to 0
                 allCodes.forEach(code => {
                     entry[code] = b.series[code] || 0;
                 });
-
                 return entry;
             });
 
-            // SORT KEYS BY TOTAL COUNT (DESC)
             const sortedKeys = Array.from(allCodes).sort((a, b) => (statusTotals[b] || 0) - (statusTotals[a] || 0));
             setHttpStatusSeriesData({ data: httpStatusChartData, keys: sortedKeys });
 
@@ -518,25 +814,40 @@ export default function GDCCPage() {
             window.scrollTo(0, 0); await new Promise(resolve => setTimeout(resolve, 800));
             const element = dashboardRef.current;
 
-            // Standard capture with high quality
             const imgData = await htmlToImage.toJpeg(element, {
-                quality: 0.9,
-                backgroundColor: '#000000',
-                pixelRatio: 2 // Keep resolution high
+                quality: 0.9, backgroundColor: '#000000', pixelRatio: 2
             });
 
-            // Standard A4 Landscape
             const pdf = new jsPDF('l', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
 
-            // Fit image to full page (Stretch like original settings)
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
             pdf.save(`gdcc-report.pdf`);
         } catch (error) { console.error('Export Failed:', error); } finally { setIsExporting(false); }
     };
 
     if (!currentUser) return null;
+
+    // Data for Report Modal
+    const reportData = {
+        domain: selectedSubDomain || 'No Domain Selected',
+        timeRange: timeRange,
+        totalRequests: totalRequests,
+        blockedEvents: blockedEvents,
+        logEvents: logEvents,
+        avgTime: avgResponseTime,
+        topUrls: topUrls,
+        topIps: topIps,
+        topCountries: topCountries,
+        topUserAgents: topUserAgents,
+        peakTime: peakTraffic.time,
+        peakCount: peakTraffic.count,
+        peakAttack: peakAttack,
+        peakHttpStatus: peakHttpStatus, // NEW
+        topRules: topRules, // NEW
+        topAttackCountries: topAttackCountries // NEW
+    };
 
     return (
         <div className="min-h-screen bg-black font-sans text-white">
@@ -549,6 +860,9 @@ export default function GDCCPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
+                        <button onClick={() => setIsReportModalOpen(true)} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
+                            <Edit3 className="w-3 h-3" /> Write Report
+                        </button>
                         <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
                             {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Export PDF'}
                         </button>
@@ -558,6 +872,12 @@ export default function GDCCPage() {
                     </div>
                 </div>
             </nav>
+
+            <ReportModal
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                data={reportData}
+            />
 
             <main ref={dashboardRef} className="p-4 bg-black min-h-screen">
 
@@ -720,6 +1040,7 @@ export default function GDCCPage() {
                             </div>
                         </Card>
                     </div>
+
                 </div>
             </main>
         </div>
