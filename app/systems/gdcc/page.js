@@ -84,7 +84,12 @@ const ReportModal = ({ isOpen, onClose, data }) => {
         const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
             "xmlns='http://www.w3.org/TR/REC-html40'>" +
-            "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title></head><body>";
+            "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title>" +
+            "<style>" +
+            "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
+            "body, p, div, span, table, td, th, li { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif !important; font-size: 16pt; }" +
+            "</style>" +
+            "</head><body>";
         const footer = "</body></html>";
         const sourceHTML = header + reportContentRef.current.innerHTML + footer;
 
@@ -113,7 +118,7 @@ const ReportModal = ({ isOpen, onClose, data }) => {
 
                 {/* CONTENT AREA (Scrollable) */}
                 <div className="flex-grow overflow-y-auto p-8 bg-white text-black font-serif shadow-inner" id="print-area">
-                    <div ref={reportContentRef} className="space-y-4 text-base leading-relaxed" style={{ fontFamily: 'Sarabun, sans-serif' }}>
+                    <div ref={reportContentRef} className="space-y-4 text-base leading-relaxed" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
                         <p>
                             จากภาพรายงานการใช้งานและความปลอดภัยของระบบ Web application Firewall โดยสรุปข้อมูลจาก Cloudflare
