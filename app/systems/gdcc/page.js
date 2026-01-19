@@ -117,7 +117,7 @@ const ReportModal = ({ isOpen, onClose, data }) => {
 
                         <p>
                             จากภาพรายงานการใช้งานและความปลอดภัยของระบบ Web application Firewall โดยสรุปข้อมูลจาก Cloudflare
-                            ในช่วงเวลา <strong>{timeRangeStr}</strong> ของ URL <strong>{data.domain}</strong> รายละเอียดดังนี้
+                            ในช่วงเวลา <strong>{timeRangeStr}</strong> ของ URL <strong>{data.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${data.zoneName || '...'}` : data.domain}</strong> รายละเอียดดังนี้
                         </p>
 
                         <ul className="list-disc pl-10 space-y-1">
@@ -891,7 +891,10 @@ export default function GDCCPage() {
             <ReportModal
                 isOpen={isReportModalOpen}
                 onClose={() => setIsReportModalOpen(false)}
-                data={reportData}
+                data={{
+                    ...reportData,
+                    zoneName: zones.find(z => z.id === selectedZone)?.name
+                }}
             />
 
             <main ref={dashboardRef} className="p-4 bg-black min-h-screen">
@@ -1093,12 +1096,6 @@ export default function GDCCPage() {
                         </Card>
                     </div>
 
-                </div>
-
-                {/* DEBUG INFO */}
-                <div className="mt-8 text-[10px] text-gray-700 font-mono text-center flex flex-col gap-1 opacity-50 hover:opacity-100 transition-opacity">
-                    <p>Debug: Range={timeRange}m | Subdomain={selectedSubDomain || 'All'} | ZoneID={selectedZone}</p>
-                    <p>Loaded At: {new Date().toLocaleTimeString()} | Total Req: {totalRequests.toLocaleString()}</p>
                 </div>
             </main>
         </div>
