@@ -683,31 +683,6 @@ export default function GDCCPage() {
                         </Card>
                     </div>
 
-                    {/* RAW DATA INSPECTOR */}
-                    <div className="grid grid-cols-1 gap-4">
-                        <Card title={`Raw API Data for ${selectedSubDomain}`}>
-                            <div className="overflow-x-auto max-h-48 overflow-y-auto font-mono text-xs text-gray-400 bg-gray-950 p-4 rounded border border-gray-800">
-                                <div className="grid grid-cols-8 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[900px]">
-                                    <div className="col-span-1">Time</div>
-                                    <div className="col-span-2">Host</div><div className="col-span-1">IP</div><div className="col-span-1">Country</div>
-                                    <div className="col-span-1">Status</div><div className="col-span-1">Device</div><div className="col-span-1 text-right">Count</div>
-                                </div>
-                                {rawData.map((item, i) => (
-                                    <div key={i} className="grid grid-cols-8 gap-2 hover:bg-gray-900 transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center">
-                                        <div className="col-span-1 text-gray-500">
-                                            {item.dimensions?.datetimeMinute ? new Date(item.dimensions.datetimeMinute).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
-                                        </div>
-                                        <div className="col-span-2 text-green-400 truncate pr-2">{item.dimensions?.clientRequestHTTPHost}</div>
-                                        <div className="col-span-1 text-blue-400 truncate">{item.dimensions?.clientIP}</div>
-                                        <div className="col-span-1 text-gray-500 truncate">{item.dimensions?.clientCountryName}</div>
-                                        <div className="col-span-1 text-yellow-400 truncate">{item.dimensions?.edgeResponseStatus}</div>
-                                        <div className="col-span-1 text-purple-400 truncate">{item.dimensions?.clientDeviceType}</div>
-                                        <div className="col-span-1 text-white font-bold text-right">{item.count}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </Card>
-                    </div>
                 </div>
             </main>
         </div>
