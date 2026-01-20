@@ -838,12 +838,20 @@ export default function GDCCPage() {
                 quality: 0.9, backgroundColor: '#000000', pixelRatio: 2
             });
 
-            const pdf = new jsPDF('l', 'mm', 'a4');
+            // Force Portrait - standard arguments
+            const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
 
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`gdcc-report.pdf`);
+            // Calculate height to maintain aspect ratio based on the captured element's dimensions
+            const contentWidth = element.scrollWidth;
+            const contentHeight = element.scrollHeight;
+            const ratio = contentHeight / contentWidth;
+            const calculatedHeight = pdfWidth * ratio;
+
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, calculatedHeight);
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            pdf.save(`gdcc-report-portrait-${timestamp}.pdf`);
         } catch (error) { console.error('Export Failed:', error); } finally { setIsExporting(false); }
     };
 
