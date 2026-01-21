@@ -40,7 +40,7 @@ const CHART_COLORS = [
 // --- COMPONENTS ---
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage }) => {
     if (!isOpen) return null;
     const reportContentRef = useRef(null);
 
@@ -87,11 +87,28 @@ const ReportModal = ({ isOpen, onClose, data }) => {
             "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title>" +
             "<style>" +
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
-            "body, p, div, span, table, td, th, li { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif !important; font-size: 16pt; }" +
+            "/* Define Page Size and Margins (Standard) */" +
+            "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "div.Section1 { page: Section1; }" +
+            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
+            "/* Force Image to Fixed Pixel Width */" +
+            "table { width: 100%; border-collapse: collapse; }" +
+            "td, th { border: 1px solid #000; padding: 5px; }" +
             "</style>" +
-            "</head><body>";
-        const footer = "</body></html>";
-        const sourceHTML = header + reportContentRef.current.innerHTML + footer;
+            "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
+            "</head><body><div class='Section1'>";
+
+        const footer = "</div></body></html>";
+
+        // Remove inline width/max-width from the image in the HTML string to let CSS take control
+        let cleanHTML = reportContentRef.current.innerHTML;
+        // Optional: you can use regex to strip specific inline styles if needed, but the CSS 'width: 100%' should override if specific enough.
+        // But to be safe, let's trust the CSS cascade.
+        // Actually, inline styles (style="...") have higher specificity than head styles. 
+        // We should replace the specific style on the img tag if it exists.
+        cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
+
+        const sourceHTML = header + cleanHTML + footer;
 
         const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
         const fileDownload = document.createElement("a");
@@ -119,6 +136,18 @@ const ReportModal = ({ isOpen, onClose, data }) => {
                 {/* CONTENT AREA (Scrollable) */}
                 <div className="flex-grow overflow-y-auto p-8 bg-white text-black font-serif shadow-inner" id="print-area">
                     <div ref={reportContentRef} className="space-y-4 text-base leading-relaxed" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
+
+                        {dashboardImage && (
+                            <div className="mb-6 flex justify-center">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={dashboardImage}
+                                    alt="Dashboard Snapshot"
+                                    width={600}
+                                    style={{ height: 'auto', display: 'block', margin: '0 auto' }}
+                                />
+                            </div>
+                        )}
 
                         <p>
                             จากภาพรายงานการใช้งานและความปลอดภัยของระบบ Web application Firewall โดยสรุปข้อมูลจาก Cloudflare
@@ -389,6 +418,8 @@ export default function GDCCPage() {
     const [currentUser, setCurrentUser] = useState(null);
     const [isExporting, setIsExporting] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [dashboardImage, setDashboardImage] = useState(null);
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const dashboardRef = useRef(null);
 
     // --- DEFAULT CONFIG ---
@@ -827,6 +858,21 @@ export default function GDCCPage() {
         if (user) { setCurrentUser(user); loadAccounts(); }
     }, []);
 
+    const handleOpenReportWithImage = async () => {
+        if (!dashboardRef.current) return;
+        setIsGeneratingReport(true);
+        try {
+            window.scrollTo(0, 0); await new Promise(resolve => setTimeout(resolve, 800));
+            const element = dashboardRef.current;
+            const imgData = await htmlToImage.toJpeg(element, {
+                quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
+            });
+            setDashboardImage(imgData);
+            setIsReportModalOpen(true);
+        } catch (error) { console.error('Report Gen Failed:', error); }
+        finally { setIsGeneratingReport(false); }
+    };
+
     const handleExportPDF = async () => {
         if (!dashboardRef.current) return;
         setIsExporting(true);
@@ -841,6 +887,11 @@ export default function GDCCPage() {
             // Force Portrait - standard arguments
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+
+            // 1. Fill PDF Background with Black (matches App Theme)
+            pdf.setFillColor(0, 0, 0);
+            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
 
             // Calculate height to maintain aspect ratio based on the captured element's dimensions
             const contentWidth = element.scrollWidth;
@@ -888,8 +939,8 @@ export default function GDCCPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setIsReportModalOpen(true)} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
-                            <Edit3 className="w-3 h-3" /> Write Report
+                        <button onClick={handleOpenReportWithImage} disabled={isGeneratingReport} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
+                            {isGeneratingReport ? <Activity className="w-3 h-3 animate-spin" /> : <Edit3 className="w-3 h-3" />} {isGeneratingReport ? 'Capturing...' : 'Write Report'}
                         </button>
                         <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
                             {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Export PDF'}
@@ -908,6 +959,7 @@ export default function GDCCPage() {
                     ...reportData,
                     zoneName: zones.find(z => z.id === selectedZone)?.name
                 }}
+                dashboardImage={dashboardImage}
             />
 
             <main ref={dashboardRef} className="p-4 bg-black min-h-screen">
