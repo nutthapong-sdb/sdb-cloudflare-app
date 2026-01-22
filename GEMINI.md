@@ -4,6 +4,14 @@ This is a Next.js application that provides a dashboard for interacting with the
 
 The frontend is built with React and Tailwind CSS, and the backend is powered by Next.js API Routes and Server Actions. It uses `axios` to communicate with the Cloudflare API and `sqlite` for the user database.
 
+# Features
+
+*   **Zone & DNS Management:** View and manage Cloudflare zones and DNS records.
+*   **Traffic Analytics:** Real-time visualization of traffic volume, top URLs, client IPs, and countries using Recharts.
+*   **Security Monitoring:** Track WAF events, blocked attacks, and HTTP status code distributions.
+*   **API Discovery:** Discover and manage API endpoints associated with your zones.
+*   **Batch Reporting:** Automatically generate comprehensive reports for multiple sub-domains. This feature captures dashboard snapshots and aggregates data into a single downloadable Word document.
+
 # Building and Running
 
 1.  **Install dependencies:**
@@ -44,6 +52,8 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 # Key Files
 
 *   `app/page.js`: The main portal page with links to different systems.
+*   `app/systems/gdcc/page.js`: The GDCC Analytics dashboard, featuring traffic visualization and the batch reporting engine.
+*   `app/systems/sdb/page.js`: The SDB Cloudflare API dashboard for zone and API discovery management.
 *   `app/api/scrape/route.js`: The core of the backend, handling all interactions with the Cloudflare API.
 *   `app/utils/auth.js`: Handles user authentication and session management.
 *   `app/actions/authActions.js`: Contains the Next.js Server Actions for authentication and user management.

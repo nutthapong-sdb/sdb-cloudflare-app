@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
+import Swal from 'sweetalert2';
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
@@ -311,7 +312,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         window.getSelection().addRange(range);
         document.execCommand('copy');
         window.getSelection().removeAllRanges();
-        alert('Report copied to clipboard!');
+        window.getSelection().removeAllRanges();
+        Swal.fire({
+            title: 'Copied!',
+            text: 'Report copied to clipboard!',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false,
+            background: '#111827',
+            color: '#fff',
+            iconColor: '#3b82f6'
+        });
     };
 
     // --- DOWNLOAD WORD FUNCTION ---
@@ -430,8 +441,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 Reset
                             </button>
                             <button onClick={() => setIsEditing(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
-                                    Cancel
-                                </button>
+                                Cancel
+                            </button>
                             <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
                                 <FileType className="w-3 h-3" /> Download Word
                             </button>
@@ -458,90 +469,90 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 // Batch Report Modal Component
 const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
-  const [selected, setSelected] = useState(new Set());
+    const [selected, setSelected] = useState(new Set());
 
-  useEffect(() => {
-    if (isOpen) {
-      setSelected(new Set()); // Reset on open
-    }
-  }, [isOpen]);
+    useEffect(() => {
+        if (isOpen) {
+            setSelected(new Set()); // Reset on open
+        }
+    }, [isOpen]);
 
-  const toggleAll = () => {
-    if (selected.size === hosts.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(hosts));
-    }
-  };
+    const toggleAll = () => {
+        if (selected.size === hosts.length) {
+            setSelected(new Set());
+        } else {
+            setSelected(new Set(hosts));
+        }
+    };
 
-  const toggleOne = (host) => {
-    const newSet = new Set(selected);
-    if (newSet.has(host)) newSet.delete(host);
-    else newSet.add(host);
-    setSelected(newSet);
-  };
+    const toggleOne = (host) => {
+        const newSet = new Set(selected);
+        if (newSet.has(host)) newSet.delete(host);
+        else newSet.add(host);
+        setSelected(newSet);
+    };
 
-  if (!isOpen) return null;
+    if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-800 bg-gray-950/50 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <List className="w-5 h-5 text-purple-400" />
-            Batch Report Selection
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+                {/* Header */}
+                <div className="p-4 border-b border-gray-800 bg-gray-950/50 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <List className="w-5 h-5 text-purple-400" />
+                        Batch Report Selection
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
 
-        {/* Body */}
-        <div className="p-4 overflow-y-auto flex-1">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
-            <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
-              {selected.size === hosts.length && hosts.length > 0 ? 'Deselect All' : 'Select All'}
-            </button>
-          </div>
-          {hosts.length === 0 ? (
-            <div className="text-center text-gray-500 py-8 text-sm italic">No sub-domains available.</div>
-          ) : (
-            <div className="space-y-2">
-              {hosts.map(host => (
-                <label key={host} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700 group">
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? 'bg-blue-600 border-blue-600' : 'border-gray-600 group-hover:border-gray-500'}`}>
-                    {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={selected.has(host)}
-                    onChange={() => toggleOne(host)}
-                    className="hidden"
-                  />
-                  <span className={`text-sm ${selected.has(host) ? 'text-white font-medium' : 'text-gray-400'}`}>{host}</span>
-                </label>
-              ))}
+                {/* Body */}
+                <div className="p-4 overflow-y-auto flex-1">
+                    <div className="flex items-center justify-between mb-4">
+                        <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
+                        <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
+                            {selected.size === hosts.length && hosts.length > 0 ? 'Deselect All' : 'Select All'}
+                        </button>
+                    </div>
+                    {hosts.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8 text-sm italic">No sub-domains available.</div>
+                    ) : (
+                        <div className="space-y-2">
+                            {hosts.map(host => (
+                                <label key={host} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700 group">
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? 'bg-blue-600 border-blue-600' : 'border-gray-600 group-hover:border-gray-500'}`}>
+                                        {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={selected.has(host)}
+                                        onChange={() => toggleOne(host)}
+                                        className="hidden"
+                                    />
+                                    <span className={`text-sm ${selected.has(host) ? 'text-white font-medium' : 'text-gray-400'}`}>{host}</span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
+                    <button
+                        onClick={() => onConfirm(Array.from(selected))}
+                        disabled={selected.size === 0}
+                        className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
+                    >
+                        <FileText className="w-3 h-3" />
+                        Generate {selected.size > 0 ? `(${selected.size})` : ''} Reports
+                    </button>
+                </div>
             </div>
-          )}
         </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
-          <button
-            onClick={() => onConfirm(Array.from(selected))}
-            disabled={selected.size === 0}
-            className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
-          >
-            <FileText className="w-3 h-3" />
-            Generate {selected.size > 0 ? `(${selected.size})` : ''} Reports
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 
@@ -727,6 +738,12 @@ export default function GDCCPage() {
         let totalReq = 0;
         let weightedAvgTime = 0;
 
+        let blockedCount = 0;
+        let logCount = 0;
+        let topActions = [];
+        let processedRules = [];
+        let sortedAttackers = [];
+
         if (result && result.data) {
             filteredData = result.data;
             const firewallActivity = result.firewallActivity || [];
@@ -734,11 +751,11 @@ export default function GDCCPage() {
             const firewallIPsData = result.firewallIPs || [];
 
             // --- 1. FIREWALL SUMMARY (From Activity: Minute x Action) ---
-            const blockedCount = firewallActivity
+            blockedCount = firewallActivity
                 .filter(g => g.dimensions?.action !== 'log' && g.dimensions?.action !== 'skip' && g.dimensions?.action !== 'allow')
                 .reduce((acc, g) => acc + g.count, 0);
 
-            const logCount = firewallActivity
+            logCount = firewallActivity
                 .filter(g => g.dimensions?.action === 'log')
                 .reduce((acc, g) => acc + g.count, 0);
 
@@ -751,18 +768,17 @@ export default function GDCCPage() {
                 const act = g.dimensions?.action || 'Unknown';
                 actionCounts[act] = (actionCounts[act] || 0) + g.count;
             });
-            const topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+            topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
             setTopFirewallActions(topActions);
 
 
             // --- 2. TOP RULES (From Rules: Desc x ID) ---
             // Already aggregated correctly by API
-            const processedRules = firewallRulesData.map(g => ({
+            processedRules = firewallRulesData.map(g => ({
                 rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
                 count: g.count
-            }));
-            // Sort again just in case API order was affected by aliases (though it shouldn't be)
-            setTopRules(processedRules.sort((a, b) => b.count - a.count).slice(0, 5));
+            })).sort((a, b) => b.count - a.count).slice(0, 5);
+            setTopRules(processedRules);
 
 
             // --- 3. TOP ATTACKERS (From IPs: IP x Country) ---
@@ -786,7 +802,7 @@ export default function GDCCPage() {
                     attackerMap[ip].types.add(act);
                 }
             });
-            const sortedAttackers = Object.values(attackerMap)
+            sortedAttackers = Object.values(attackerMap)
                 .sort((a, b) => b.count - a.count)
                 .map(a => ({ ...a, type: Array.from(a.types).join(', ') }));
             setTopAttackers(sortedAttackers);
@@ -991,7 +1007,27 @@ export default function GDCCPage() {
         setTopCountries(toArray(countryCounts, 'name'));
         setTopUserAgents(toArray(uaCounts, 'agent'));
 
+        const stats = {
+            filteredData,
+            totalRequests: totalReq,
+            avgResponseTime: weightedAvgTime,
+            blockedEvents: blockedCount,
+            logEvents: logCount,
+            topFirewallActions: topActions,
+            topRules: processedRules, // already sorted slice(0,5)
+            topAttackers: sortedAttackers,
+            peakTraffic: { time: peakTimeStr, count: currentPeak.count },
+            peakAttack: { time: peakAttackTimeStr, count: currentAttackPeak.count },
+            peakHttpStatus: { time: peakHttpTimeStr, count: currentHttpPeak.count },
+            topUrls: toArray(urlCounts, 'path'),
+            topIps: toArray(ipCounts, 'ip'),
+            topCountries: toArray(countryCounts, 'name'),
+            topUserAgents: toArray(uaCounts, 'agent'),
+            // raw: result // optional
+        };
+
         setLoadingStats(false);
+        return stats;
     };
 
     // Handle Batch Report Logic
@@ -1008,7 +1044,6 @@ export default function GDCCPage() {
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
-            "img { width: 550px; height: auto; display: block; margin: 0 auto 20px auto; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +
@@ -1022,14 +1057,14 @@ export default function GDCCPage() {
             for (let i = 0; i < selectedHosts.length; i++) {
                 const host = selectedHosts[i];
                 console.log(`Processing report ${i + 1}/${selectedHosts.length}: ${host}`);
-                
+
                 // 1. Switch Domain and Fetch Data
                 setSelectedSubDomain(host);
-                await fetchAndApplyTrafficData(host, selectedZone, timeRange);
-                
+                const stats = await fetchAndApplyTrafficData(host, selectedZone, timeRange);
+
                 // 2. Wait for animations and rendering
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                
+
                 // 3. Capture Screenshot
                 let imgData = null;
                 if (dashboardRef.current) {
@@ -1039,32 +1074,33 @@ export default function GDCCPage() {
                 }
 
                 // 4. Prepare Data for Template
+                // 4. Prepare Data for Template
                 const currentReportData = {
                     domain: host,
                     timeRange: timeRange,
-                    totalRequests: totalRequests,
-                    blockedEvents: blockedEvents,
-                    logEvents: logEvents,
-                    avgTime: avgResponseTime,
-                    topUrls: topUrls,
-                    topIps: topIps,
-                    topCountries: topCountries,
-                    topUserAgents: topUserAgents,
-                    peakTime: peakTraffic.time,
-                    peakCount: peakTraffic.count,
-                    peakAttack: peakAttack,
-                    peakHttpStatus: peakHttpStatus,
-                    topRules: topRules,
-                    topAttackers: topAttackers,
+                    totalRequests: stats.totalRequests,
+                    blockedEvents: stats.blockedEvents,
+                    logEvents: stats.logEvents,
+                    avgTime: stats.avgResponseTime,
+                    topUrls: stats.topUrls,
+                    topIps: stats.topIps, // Fixed: Using stats.topIps instead of state
+                    topCountries: stats.topCountries,
+                    topUserAgents: stats.topUserAgents,
+                    peakTime: stats.peakTraffic.time,
+                    peakCount: stats.peakTraffic.count,
+                    peakAttack: stats.peakAttack,
+                    peakHttpStatus: stats.peakHttpStatus,
+                    topRules: stats.topRules,
+                    topAttackers: stats.topAttackers,
                     zoneName: zones.find(z => z.id === selectedZone)?.name
                 };
 
                 // 5. Generate HTML
                 let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
-                
+
                 // Insert Image at the top if captured
                 if (imgData) {
-                    reportHtml = `<img src="${imgData}" />` + reportHtml;
+                    reportHtml = `<img src="${imgData}" width="600" style="width: 500px; height: auto; display: block; margin: 0 auto 20px auto;" />` + reportHtml;
                 }
 
                 // Add to combined HTML with page break
@@ -1081,10 +1117,26 @@ export default function GDCCPage() {
             fileDownload.click();
             document.body.removeChild(fileDownload);
 
-            alert(`Successfully generated report for ${selectedHosts.length} domains.`);
+
+
+            Swal.fire({
+                title: 'Success!',
+                text: `Successfully generated report for ${selectedHosts.length} domains.`,
+                icon: 'success',
+                confirmButtonColor: '#9333ea', // Purple to match the button
+                background: '#111827',
+                color: '#fff'
+            });
         } catch (error) {
             console.error('Batch Report Failed:', error);
-            alert('Batch report generation failed. Check console for details.');
+            Swal.fire({
+                title: 'Error',
+                text: 'Batch report generation failed. Check console for details.',
+                icon: 'error',
+                confirmButtonColor: '#ef4444',
+                background: '#111827',
+                color: '#fff'
+            });
         } finally {
             setIsGeneratingReport(false);
         }
