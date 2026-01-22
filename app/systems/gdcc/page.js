@@ -160,8 +160,6 @@ const generateHtmlTable = (headers, rows, styles = {}) => {
 
 // 1. Report Modal Component
 const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, mode = 'report' }) => {
-    if (!isOpen) return null;
-
     // mode: 'report' | 'static-template'
 
     // If no template passed, use default (fallback)
@@ -183,6 +181,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             setIsEditing(false);
         }
     }, [isOpen]);
+
+    if (!isOpen) return null;
 
     // Helper for Thai Date
     const formatThaiDate = (date) => {
@@ -441,6 +441,95 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 };
 
 
+// Batch Report Modal Component
+const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
+  const [selected, setSelected] = useState(new Set());
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelected(new Set()); // Reset on open
+    }
+  }, [isOpen]);
+
+  const toggleAll = () => {
+    if (selected.size === hosts.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(hosts));
+    }
+  };
+
+  const toggleOne = (host) => {
+    const newSet = new Set(selected);
+    if (newSet.has(host)) newSet.delete(host);
+    else newSet.add(host);
+    setSelected(newSet);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-800 bg-gray-950/50 flex justify-between items-center">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <List className="w-5 h-5 text-purple-400" />
+            Batch Report Selection
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
+            <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
+              {selected.size === hosts.length && hosts.length > 0 ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          {hosts.length === 0 ? (
+            <div className="text-center text-gray-500 py-8 text-sm italic">No sub-domains available.</div>
+          ) : (
+            <div className="space-y-2">
+              {hosts.map(host => (
+                <label key={host} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700 group">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? 'bg-blue-600 border-blue-600' : 'border-gray-600 group-hover:border-gray-500'}`}>
+                    {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(host)}
+                    onChange={() => toggleOne(host)}
+                    className="hidden"
+                  />
+                  <span className={`text-sm ${selected.has(host) ? 'text-white font-medium' : 'text-gray-400'}`}>{host}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
+          <button
+            onClick={() => onConfirm(Array.from(selected))}
+            disabled={selected.size === 0}
+            className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
+          >
+            <FileText className="w-3 h-3" />
+            Generate {selected.size > 0 ? `(${selected.size})` : ''} Reports
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -587,6 +676,7 @@ export default function GDCCPage() {
     const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
     const [staticReportTemplate, setStaticReportTemplate] = useState(DEFAULT_STATIC_TEMPLATE);
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
+    const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
     const dashboardRef = useRef(null);
 
     // --- DEFAULT CONFIG ---
@@ -606,6 +696,21 @@ export default function GDCCPage() {
     const [selectedZone, setSelectedZone] = useState('');
     const [selectedSubDomain, setSelectedSubDomain] = useState('');
     const [timeRange, setTimeRange] = useState(1440); // Default 24h
+
+    // Handle Batch Report Logic
+    const handleBatchReport = (selectedHosts) => {
+        console.log('Batch Report Selected:', selectedHosts);
+        alert(`Generating batch report for ${selectedHosts.length} domains... (Feature pending implementation)`);
+        setIsBatchModalOpen(false);
+        // TODO: Implement actual batch report generation loop here
+    };
+
+    // Helper to get unique hosts for Batch Modal (filter out the "ALL_SUBDOMAINS" option if needed, or keep it)
+    const getBatchHosts = () => {
+        return subDomains
+            .filter(opt => opt.value !== 'ALL_SUBDOMAINS')
+            .map(opt => opt.value);
+    };
 
     const [loadingZones, setLoadingZones] = useState(false);
     const [loadingStats, setLoadingStats] = useState(false);
@@ -1139,6 +1244,9 @@ export default function GDCCPage() {
                         <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
                             {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Export PDF'}
                         </button>
+                        <button onClick={() => setIsBatchModalOpen(true)} disabled={subDomains.length <= 1} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <List className="w-3 h-3" /> Batch Report
+                        </button>
                         <div className="bg-orange-600/20 text-orange-500 w-8 h-8 rounded flex items-center justify-center">
                             <span className="font-bold text-xs">{currentUser.ownerName?.charAt(0) || 'U'}</span>
                         </div>
@@ -1157,6 +1265,13 @@ export default function GDCCPage() {
                 template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}
                 onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : handleSaveTemplate}
                 mode={reportModalMode}
+            />
+
+            <BatchReportModal
+                isOpen={isBatchModalOpen}
+                onClose={() => setIsBatchModalOpen(false)}
+                hosts={getBatchHosts()}
+                onConfirm={handleBatchReport}
             />
 
             <main ref={dashboardRef} className="p-4 bg-black min-h-screen">
