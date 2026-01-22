@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
+import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate } from '@/app/utils/templateApi';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
@@ -15,6 +16,7 @@ import {
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 
+// --- CONSTANTS ---
 // --- CONSTANTS ---
 const CHART_COLORS = [
     '#ef4444', // Red 500
@@ -37,12 +39,150 @@ const CHART_COLORS = [
     '#a1a1aa', // Zinc 400
 ];
 
+const DEFAULT_TEMPLATE = `
+<h2 style="font-size: 22pt; font-weight: bold; color: #1a56db; margin-bottom: 0.5em;">สรุปรายงาน WAF (Executive Summary)</h2>
+
+<p style="text-align: justify; text-indent: 1.5cm;">
+    จากภาพรายงานการใช้งานและความปลอดภัยของระบบ <em>Web Application Firewall</em> โดยสรุปข้อมูลจาก <span style="color: #f97316; font-weight: bold;">Cloudflare</span>
+    ในช่วงเวลา <strong>@TIME_RANGE</strong> ของ URL <span style="background-color: #ffff00;">@DOMAIN</span> รายละเอียดดังนี้
+</p>
+
+<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">1. ภาพรวมการใช้งาน (Traffic Overview)</h3>
+
+<ul class="list-disc pl-10 space-y-1">
+    <li>การใช้งาน Request ทั้งหมด <strong>@TOTAL_REQ</strong> request</li>
+    <li>ช่วงเวลาตอบสนองเฉลี่ย (Average Response Time): <u>@AVG_TIME วินาที</u></li>
+    <li>เหตุการณ์ที่ถูกจัดการโดยไฟร์วอลล์:
+        <span style="color: #dc2626;">Block <strong>@BLOCK_PCT%</strong></span> / 
+        <span style="color: #16a34a;">Log <strong>@LOG_PCT%</strong></span>
+    </li>
+    <li>ปริมาณการเรียกใช้งานสูงสุด (Peak Traffic) เมื่อเวลา <strong>@PEAK_TIME</strong> จำนวน <strong>@PEAK_COUNT</strong> Requests</li>
+</ul>
+
+<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">2. ข้อมูลเชิงลึก (Detailed Statistics)</h3>
+
+<h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px;">2.1 URL ที่มีการเรียกใช้งานมากที่สุด 3 อันดับ</h4>
+@TOP_URLS_LIST
+
+<h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px;">2.2 IP ที่มีการเชื่อมต่อมากที่สุด 3 อันดับ</h4>
+@TOP_IPS_LIST
+
+<div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin-top: 20px;">
+    <strong>ข้อมูลผู้ใช้งาน (Client Info):</strong>
+    <ul class="list-disc pl-10 space-y-1 mt-2">
+        <li>User Agent ที่พบบ่อยที่สุด: <span style="font-family: monospace;">@TOP_UA_AGENT</span> (<strong>@TOP_UA_COUNT</strong> ครั้ง)</li>
+        <li>ช่วงเวลาที่มีการโจมตีสูงสุด: <span style="color: #dc2626; font-weight: bold;">@PEAK_ATTACK_TIME</span> (<strong>@PEAK_ATTACK_COUNT</strong> Requests)</li>
+        <li>ช่วงเวลาที่มีการตอบกลับ HTTP สูงสุด: <strong>@PEAK_HTTP_TIME</strong> (<strong>@PEAK_HTTP_COUNT</strong> Requests)</li>
+    </ul>
+</div>
+
+<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">3. ข้อมูลความปลอดภัย (Security Threats)</h3>
+
+<p><strong>อันดับ WAF Rules ที่ถูกใช้มากที่สุด 3 อันดับ:</strong></p>
+@TOP_RULES_LIST
+
+<p><strong>5 อันดับ ผู้โจมตีสูงสุด (Top 5 Attackers):</strong></p>
+@TOP_ATTACKERS_LIST
+`;
+
+const DEFAULT_STATIC_TEMPLATE = `
+<h1 style="text-align: center; font-size: 24pt; font-weight: bold;">รายงานสรุปผลการดำเนินงาน (Standard Report Form)</h1>
+<h2 style="text-align: center; font-size: 18pt;">ประจำเดือน .............................. พ.ศ. ...........</h2>
+<br>
+<p><strong>เรียน:</strong> ผู้บริหาร / คณะกรรมการ</p>
+<p><strong>เรื่อง:</strong> รายงานสรุปสถานะความมั่นคงปลอดภัยไซเบอร์ (Web Application Firewall)</p>
+<br>
+<p><strong>1. บทสรุปผู้บริหาร (Executive Summary)</strong></p>
+<p style="text-indent: 1cm;">[ใส่เนื้อหาบทสรุปที่นี่...]</p>
+<br>
+<p><strong>2. สถิติการใช้งานและการโจมตี (Statistics & Attacks)</strong></p>
+<table style="width: 100%; border-collapse: collapse; border: 1px solid black;">
+  <tr>
+    <th style="border: 1px solid black; padding: 5px; background-color: #eee; width: 30%;">รายการ (Item)</th>
+    <th style="border: 1px solid black; padding: 5px; background-color: #eee; width: 20%;">สถานะ (Status)</th>
+    <th style="border: 1px solid black; padding: 5px; background-color: #eee; width: 50%;">รายละเอียด (Details)</th>
+  </tr>
+  <tr>
+    <td style="border: 1px solid black; padding: 5px;">Total Requests</td>
+    <td style="border: 1px solid black; padding: 5px;"></td>
+    <td style="border: 1px solid black; padding: 5px;"></td>
+  </tr>
+   <tr>
+    <td style="border: 1px solid black; padding: 5px;">Attacks Blocked</td>
+    <td style="border: 1px solid black; padding: 5px;"></td>
+    <td style="border: 1px solid black; padding: 5px;"></td>
+  </tr>
+</table>
+<br>
+<p><strong>3. ข้อเสนอแนะ (Recommendation)</strong></p>
+<ul style="list-style-type: square; margin-left: 20px;">
+  <li>ตรวจสอบการโจมตีที่เกิดขึ้นบ่อย</li>
+  <li>ปรับปรุง Rule WAF ให้เหมาะสม</li>
+</ul>
+<br>
+<div style="margin-top: 50px; text-align: right;">
+    <p>ลงชื่อ ....................................................... ผู้จัดทำรายงาน</p>
+    <p>(.......................................................)</p>
+    <p>ตำแหน่ง .......................................................</p>
+    <p>วันที่ ......../......../............</p>
+</div>
+`;
+
+// Helper to generate HTML tables for lists
+const generateHtmlTable = (headers, rows, styles = {}) => {
+    const thStyle = "border: 1px solid black; padding: 8px; background-color: #f3f4f6; font-weight: bold;";
+    const tdStyle = "border: 1px solid black; padding: 8px;";
+
+    let html = `<div class="mt-2 pl-4 mb-4" style="${styles.div || ''}">
+    <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; ${styles.table || ''}">
+        <thead><tr>`;
+
+    headers.forEach(h => {
+        html += `<th style="${thStyle} width: ${h.width || 'auto'}; text-align: ${h.align || 'left'};">${h.label}</th>`;
+    });
+
+    html += `</tr></thead><tbody>`;
+
+    rows.forEach(row => {
+        html += `<tr>`;
+        row.forEach((cell, idx) => {
+            const align = headers[idx]?.align || 'left';
+            html += `<td style="${tdStyle} text-align: ${align};">${cell}</td>`;
+        });
+        html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    return html;
+};
+
 // --- COMPONENTS ---
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, mode = 'report' }) => {
     if (!isOpen) return null;
+
+    // mode: 'report' | 'static-template'
+
+    // If no template passed, use default (fallback)
+    const currentTemplate = template || DEFAULT_TEMPLATE;
+
+    // Default to editing in static mode, preview in report mode
+    const [isEditing, setIsEditing] = useState(false);
+    const [localTemplate, setLocalTemplate] = useState(currentTemplate);
     const reportContentRef = useRef(null);
+
+    // Sync local template when prop changes
+    useEffect(() => {
+        setLocalTemplate(template || DEFAULT_TEMPLATE);
+    }, [template, isOpen]);
+
+    // Sync mode when opening
+    useEffect(() => {
+        if (isOpen) {
+            setIsEditing(false);
+        }
+    }, [isOpen]);
 
     // Helper for Thai Date
     const formatThaiDate = (date) => {
@@ -52,18 +192,100 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage }) => {
         });
     };
 
-    const startDate = new Date(Date.now() - data.timeRange * 60 * 1000);
+    // --- DATA PREPARATION ---
+    // Safely handle missing data for static mode or initial load
+    const safeData = data || {
+        domain: '-', timeRange: 0, totalRequests: 0, avgTime: 0,
+        blockedEvents: 0, logEvents: 0, topUrls: [], topIps: [],
+        topRules: [], topAttackers: []
+    };
+
+    const startDate = new Date(Date.now() - (safeData.timeRange || 1440) * 60 * 1000);
     const endDate = new Date();
     const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
-    const avgTimeSec = (data.avgTime / 1000).toFixed(3);
+    const avgTimeSec = safeData.avgTime ? (safeData.avgTime / 1000).toFixed(3) : "0.000";
+    const totalFirewall = (safeData.blockedEvents || 0) + (safeData.logEvents || 0);
+    const blockPct = totalFirewall > 0 ? ((safeData.blockedEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+    const logPct = totalFirewall > 0 ? ((safeData.logEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+    const topUA = safeData.topUserAgents && safeData.topUserAgents.length > 0 ? safeData.topUserAgents[0] : { agent: '-', count: 0 };
+    const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
-    // Calculate Firewall Percentages
-    const totalFirewall = (data.blockedEvents || 0) + (data.logEvents || 0);
-    const blockPct = totalFirewall > 0 ? ((data.blockedEvents / totalFirewall) * 100).toFixed(2) : "0.00";
-    const logPct = totalFirewall > 0 ? ((data.logEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+    // --- TEMPLATE PROCESSING ---
+    const processTemplate = (tmpl) => {
+        // If static template mode, return raw HTML (no replacement)
+        if (mode === 'static-template') return tmpl;
 
-    // Top User Agent
-    const topUA = data.topUserAgents && data.topUserAgents.length > 0 ? data.topUserAgents[0] : { agent: '-', count: 0 };
+        let html = tmpl;
+
+        // 1. Simple Replacements
+        const replacements = {
+            '@TIME_RANGE': timeRangeStr,
+            '@DOMAIN': domainDisplay,
+            '@TOTAL_REQ': (safeData.totalRequests || 0).toLocaleString(),
+            '@AVG_TIME': avgTimeSec,
+            '@BLOCK_PCT': blockPct,
+            '@LOG_PCT': logPct,
+            '@PEAK_TIME': safeData.peakTime || '-',
+            '@PEAK_COUNT': (safeData.peakCount || 0).toLocaleString(),
+            '@TOP_UA_AGENT': topUA.agent,
+            '@TOP_UA_COUNT': topUA.count.toLocaleString(),
+            '@PEAK_ATTACK_TIME': safeData.peakAttack?.time || '-',
+            '@PEAK_ATTACK_COUNT': (safeData.peakAttack?.count || 0).toLocaleString(),
+            '@PEAK_HTTP_TIME': safeData.peakHttpStatus?.time || '-',
+            '@PEAK_HTTP_COUNT': (safeData.peakHttpStatus?.count || 0).toLocaleString(),
+        };
+
+        for (const [key, val] of Object.entries(replacements)) {
+            html = html.split(key).join(val);
+        }
+
+        // 2. Table Generators
+
+        // Top URLs Table
+        const topUrlsHtml = generateHtmlTable(
+            [
+                { label: 'ลำดับ', width: '10%', align: 'center' },
+                { label: 'รายการ (URL)', width: '70%' },
+                { label: 'จำนวน (Count)', width: '20%', align: 'right' }
+            ],
+            (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, item.count.toLocaleString()])
+        );
+        html = html.replace('@TOP_URLS_LIST', topUrlsHtml);
+
+        // Top IPs Table
+        const topIpsHtml = generateHtmlTable(
+            [
+                { label: 'Client IP', width: '70%' },
+                { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+            ],
+            (safeData.topIps || []).slice(0, 3).map(item => [item.ip, item.count.toLocaleString()])
+        );
+        html = html.replace('@TOP_IPS_LIST', topIpsHtml);
+
+        // Top Rules Table
+        const topRulesHtml = generateHtmlTable(
+            [
+                { label: 'Rule Name (ID)', width: '70%' },
+                { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+            ],
+            (safeData.topRules || []).slice(0, 3).map(item => [item.rule, item.count.toLocaleString()])
+        );
+        html = html.replace('@TOP_RULES_LIST', topRulesHtml);
+
+        // Top Attackers Table
+        const topAttackersHtml = generateHtmlTable(
+            [
+                { label: 'IP' },
+                { label: 'ประเทศ (Country)' },
+                { label: 'จำนวน (Count)', align: 'right' },
+                { label: 'ประเภท (Type)' }
+            ],
+            (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, item.country, item.count.toLocaleString(), item.type])
+        );
+        html = html.replace('@TOP_ATTACKERS_LIST', topAttackersHtml);
+
+        return html;
+    };
 
     // --- COPY FUNCTION ---
     const handleCopy = () => {
@@ -84,39 +306,44 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage }) => {
         const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
             "xmlns='http://www.w3.org/TR/REC-html40'>" +
-            "<head><meta charset='utf-8'><title>Export HTML to Word Document with JavaScript</title>" +
+            "<head><meta charset='utf-8'><title>Export HTML to Word Document</title>" +
             "<style>" +
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
             "/* Define Page Size and Margins (Standard) */" +
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
-            "/* Force Image to Fixed Pixel Width */" +
+            "img { width: 500px; height: auto; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             "</style>" +
             "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
             "</head><body><div class='Section1'>";
-
         const footer = "</div></body></html>";
 
-        // Remove inline width/max-width from the image in the HTML string to let CSS take control
         let cleanHTML = reportContentRef.current.innerHTML;
-        // Optional: you can use regex to strip specific inline styles if needed, but the CSS 'width: 100%' should override if specific enough.
-        // But to be safe, let's trust the CSS cascade.
-        // Actually, inline styles (style="...") have higher specificity than head styles. 
-        // We should replace the specific style on the img tag if it exists.
-        cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
+
+        // If editing, cleanHTML is the TEXTAREA html. We don't want that.
+        // We want the RAW template text if in edit mode (as user requested to download the 'template').
+        if (isEditing) {
+            cleanHTML = localTemplate;
+        } else {
+            cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
+        }
 
         const sourceHTML = header + cleanHTML + footer;
-
         const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
         const fileDownload = document.createElement("a");
         document.body.appendChild(fileDownload);
         fileDownload.href = source;
-        fileDownload.download = `report_${data.domain}.doc`;
+        fileDownload.download = mode === 'static-template' ? `template.doc` : `report_${safeData.domain || 'report'}.doc`;
         fileDownload.click();
         document.body.removeChild(fileDownload);
+    };
+
+    const handleSave = () => {
+        if (onSaveTemplate) onSaveTemplate(localTemplate);
+        setIsEditing(false);
     };
 
     return (
@@ -126,18 +353,28 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage }) => {
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 flex-shrink-0">
                     <div className="flex items-center gap-2">
                         <FileText className="w-5 h-5 text-blue-500" />
-                        <h3 className="text-lg font-bold text-gray-100">สรุปรายงาน (Report Summary)</h3>
+                        <h3 className="text-lg font-bold text-gray-100">
+                            {mode === 'static-template' ? 'แบบฟอร์มรายงาน (Report Template Source)' : (isEditing ? 'แก้ไข Template (Edit Template)' : 'สรุปรายงาน (Report Summary)')}
+                        </h3>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {!isEditing && (
+                            <button onClick={() => setIsEditing(true)} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded border border-gray-700 transition-colors">
+                                Edit Template
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* CONTENT AREA (Scrollable) */}
                 <div className="flex-grow overflow-y-auto p-8 bg-white text-black font-serif shadow-inner" id="print-area">
                     <div ref={reportContentRef} className="space-y-4 text-base leading-relaxed" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
-                        {dashboardImage && (
+                        {/* Image only in Preview (Report Mode) */}
+                        {mode === 'report' && !isEditing && dashboardImage && (
                             <div className="mb-6 flex justify-center">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
@@ -149,133 +386,60 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage }) => {
                             </div>
                         )}
 
-                        <p>
-                            จากภาพรายงานการใช้งานและความปลอดภัยของระบบ Web application Firewall โดยสรุปข้อมูลจาก Cloudflare
-                            ในช่วงเวลา <strong>{timeRangeStr}</strong> ของ URL <strong>{data.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${data.zoneName || '...'}` : data.domain}</strong> รายละเอียดดังนี้
-                        </p>
-
-                        <ul className="list-disc pl-10 space-y-1">
-                            <li>การใช้งาน Request ทั้งหมด <strong>{data.totalRequests.toLocaleString()}</strong> request</li>
-                            <li>ช่วงเวลาตอบสนองเฉลี่ย <strong>{avgTimeSec}</strong> วินาที</li>
-                            <li>เหตุการณ์ที่ถูกจัดการโดยไฟร์วอลล์ Block <strong>{blockPct}%</strong> / Log <strong>{logPct}%</strong></li>
-                            <li>ปริมาณการเรียกใช้งานตามช่วงเวลามาก <strong>{data.peakTime}</strong> จำนวน <strong>{data.peakCount.toLocaleString()}</strong> Requests</li>
-                            <li>URL ที่มีการเรียกใช้งานมากที่สุด 3 อันดับ</li>
-                        </ul>
-
-                        <div className="mt-2 pl-4 mb-4">
-                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
-                                <thead className="bg-gray-100">
-                                    <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '10%', textAlign: 'center' }}>ลำดับ</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>รายการ (URL)</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '20%', textAlign: 'right' }}>จำนวน (Count)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.topUrls.slice(0, 3).map((item, index) => (
-                                        <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}>{index + 1}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.path}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <ul className="list-disc pl-10 space-y-1">
-                            <li>IP ที่มีการเชื่อมต่อมากที่สุด 3 อันดับ (Top Connected IPs)</li>
-                        </ul>
-
-                        <div className="mt-2 pl-4 mb-4">
-                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
-                                <thead className="bg-gray-100">
-                                    <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>Client IP</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.topIps.slice(0, 3).map((item, index) => (
-                                        <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs">{item.ip}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <ul className="list-disc pl-10 space-y-1">
-                            <li>อันดับของ User Agents ที่ถูกเรียกใช้ข้อมูลมากที่สุด “ <strong>{topUA.agent}</strong>” จำนวน <strong>{topUA.count.toLocaleString()}</strong> ครั้ง</li>
-                            <li>ช่วงเวลาการป้องกันการโจมตี <strong>{data.peakAttack?.time || '-'}</strong> จำนวน <strong>{data.peakAttack?.count.toLocaleString() || 0}</strong> Requests</li>
-                            <li>สถานะการตอบกลับของ HTTP <strong>{data.peakHttpStatus?.time || '-'}</strong> จำนวน <strong>{data.peakHttpStatus?.count.toLocaleString() || 0}</strong> Requests</li>
-                        </ul>
-
-                        <ul className="list-disc pl-10 space-y-1 mt-4">
-                            <li>อันดับ WAF Rules ที่ถูกใช้มากที่สุด 3 อันดับ</li>
-                        </ul>
-                        <div className="mt-2 pl-4 mb-4">
-                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
-                                <thead className="bg-gray-100">
-                                    <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '70%' }}>Rule Name (ID)</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', width: '30%', textAlign: 'right' }}>จำนวน (Count)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.topRules.slice(0, 3).map((item, index) => (
-                                        <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="truncate max-w-xs font-mono text-sm">{item.rule}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <ul className="list-disc pl-10 space-y-1">
-                            <li>5 อันดับ ผู้โจมตีสูงสุด (Top 5 Attackers)</li>
-                        </ul>
-                        <div className="mt-2 pl-4">
-                            <table className="w-full text-left border-collapse" style={{ width: '100%', border: '1px solid #ddd' }}>
-                                <thead className="bg-gray-100">
-                                    <tr>
-                                        <th style={{ border: '1px solid black', padding: '8px' }}>IP</th>
-                                        <th style={{ border: '1px solid black', padding: '8px' }}>ประเทศ (Country)</th>
-                                        <th style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>จำนวน (Count)</th>
-                                        <th style={{ border: '1px solid black', padding: '8px' }}>ประเภท (Type)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.topAttackers.slice(0, 5).map((item, index) => (
-                                        <tr key={index}>
-                                            <td style={{ border: '1px solid black', padding: '8px' }}>{item.ip}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px' }}>{item.country}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px', textAlign: 'right' }}>{item.count.toLocaleString()}</td>
-                                            <td style={{ border: '1px solid black', padding: '8px' }} className="text-xs">{item.type}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        {isEditing ? (
+                            <div className="flex flex-col h-full">
+                                <div className="mb-2 text-xs text-gray-500 bg-yellow-50 p-2 rounded border border-yellow-200">
+                                    <strong>Template Editor:</strong> HTML Tags supported.
+                                    {mode === 'report' && " Use variables like @TIME_RANGE, @DOMAIN."}
+                                </div>
+                                <textarea
+                                    className="w-full h-[500px] p-4 text-sm font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 mb-4"
+                                    value={localTemplate}
+                                    onChange={(e) => setLocalTemplate(e.target.value)}
+                                    placeholder="Enter your HTML template here..."
+                                />
+                            </div>
+                        ) : (
+                            <div dangerouslySetInnerHTML={{ __html: processTemplate(localTemplate) }} />
+                        )}
 
                     </div>
                 </div>
 
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3 flex-shrink-0">
-                    <button onClick={handleCopy} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                        <Copy className="w-3 h-3" /> Copy All
-                    </button>
-                    <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                        <FileType className="w-3 h-3" /> Download Word (.doc)
-                    </button>
+                    {/* In Edit Mode (Default for Static) */}
+                    {isEditing ? (
+                        <>
+                            <button onClick={() => setLocalTemplate(template || DEFAULT_TEMPLATE)} className="px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-200 text-xs font-bold rounded">
+                                Reset
+                            </button>
+                            <button onClick={() => setIsEditing(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+                                    Cancel
+                                </button>
+                            <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                <FileType className="w-3 h-3" /> Download Word
+                            </button>
+                            <button onClick={handleSave} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded flex items-center gap-2">
+                                <Edit3 className="w-3 h-3" /> {mode === 'static-template' ? 'Save Template' : 'Save & Preview'}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={handleCopy} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                <Copy className="w-3 h-3" /> Copy All
+                            </button>
+                            <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                <FileType className="w-3 h-3" /> Download Word
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
+
 
 
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
@@ -420,6 +584,9 @@ export default function GDCCPage() {
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+    const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
+    const [staticReportTemplate, setStaticReportTemplate] = useState(DEFAULT_STATIC_TEMPLATE);
+    const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
     const dashboardRef = useRef(null);
 
     // --- DEFAULT CONFIG ---
@@ -856,7 +1023,25 @@ export default function GDCCPage() {
     useEffect(() => {
         const user = auth.requireAuth(router);
         if (user) { setCurrentUser(user); loadAccounts(); }
+
+        // Load Templates
+        loadTemplate().then(tmpl => {
+            if (tmpl) setReportTemplate(tmpl);
+        });
+        loadStaticTemplate().then(tmpl => {
+            if (tmpl) setStaticReportTemplate(tmpl);
+        });
     }, []);
+
+    const handleSaveTemplate = async (newTemplate) => {
+        setReportTemplate(newTemplate);
+        await saveTemplate(newTemplate);
+    };
+
+    const handleSaveStaticTemplate = async (newTemplate) => {
+        setStaticReportTemplate(newTemplate);
+        await saveStaticTemplate(newTemplate);
+    };
 
     const handleOpenReportWithImage = async () => {
         if (!dashboardRef.current) return;
@@ -868,9 +1053,15 @@ export default function GDCCPage() {
                 quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
             });
             setDashboardImage(imgData);
+            setReportModalMode('report');
             setIsReportModalOpen(true);
         } catch (error) { console.error('Report Gen Failed:', error); }
         finally { setIsGeneratingReport(false); }
+    };
+
+    const handleOpenTemplateManager = () => {
+        setReportModalMode('static-template');
+        setIsReportModalOpen(true);
     };
 
     const handleExportPDF = async () => {
@@ -939,6 +1130,9 @@ export default function GDCCPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
+                        <button onClick={handleOpenTemplateManager} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
+                            <FileText className="w-3 h-3" /> Report Template
+                        </button>
                         <button onClick={handleOpenReportWithImage} disabled={isGeneratingReport} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
                             {isGeneratingReport ? <Activity className="w-3 h-3 animate-spin" /> : <Edit3 className="w-3 h-3" />} {isGeneratingReport ? 'Capturing...' : 'Write Report'}
                         </button>
@@ -960,6 +1154,9 @@ export default function GDCCPage() {
                     zoneName: zones.find(z => z.id === selectedZone)?.name
                 }}
                 dashboardImage={dashboardImage}
+                template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}
+                onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : handleSaveTemplate}
+                mode={reportModalMode}
             />
 
             <main ref={dashboardRef} className="p-4 bg-black min-h-screen">

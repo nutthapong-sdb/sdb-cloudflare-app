@@ -221,62 +221,6 @@ export async function POST(request) {
 
         }
 
-        // 7. Debug Check Datasets
-        else if (action === 'debug-check-datasets') {
-            // ... (Keep existing debug logic)
-            // Simplified for brevity in this overwrite as main logic isn't changing
-            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
-            const targetHost = body.subdomain || 'softdebut.online';
-            const now = new Date();
-            const since = new Date(now.getTime() - (body.timeRange || 1440) * 60 * 1000);
-
-            const query = `
-                query CompareDatasets($zoneTag: string, $since: String, $until: String) {
-                  viewer {
-                    zones(filter: { zoneTag: $zoneTag }) {
-                      adaptive: httpRequestsAdaptiveGroups(
-                        filter: { datetime_geq: $since, datetime_leq: $until }
-                        limit: 50
-                      ) {
-                        count
-                        sum { edgeResponseDurationMs }
-                        dimensions { clientRequestHTTPHost }
-                      }
-                      hourly: httpRequests1hGroups(
-                        filter: { datetime_geq: $since, datetime_leq: $until }
-                        limit: 50
-                      ) {
-                        sum { requests edgeResponseDurationMs }
-                        dimensions { clientRequestHTTPHost }
-                      }
-                    }
-                  }
-                }
-              `;
-
-            try {
-                const response = await axios({
-                    method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`,
-                    headers: { 'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` },
-                    data: { query, variables: { zoneTag: zoneId, since: since.toISOString(), until: now.toISOString() } }
-                });
-
-                const adaptive = response.data?.data?.viewer?.zones?.[0]?.adaptive || [];
-                const hourly = response.data?.data?.viewer?.zones?.[0]?.hourly || [];
-
-                return NextResponse.json({
-                    success: true,
-                    data: {
-                        adaptive: { count: adaptive.length }, // Mock return for quick debug
-                        hourly: { count: hourly.length },
-                    }
-                });
-
-            } catch (err) {
-                return NextResponse.json({ success: true, data: { error: err.message, adaptive: { count: 0 }, hourly: { count: 0 } } });
-            }
-        }
-
         else {
             return NextResponse.json({ success: false, message: 'Invalid action' }, { status: 400 });
         }
