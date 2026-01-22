@@ -156,7 +156,101 @@ const generateHtmlTable = (headers, rows, styles = {}) => {
     return html;
 };
 
-// --- COMPONENTS ---
+
+
+// Helper for Thai Date
+const formatThaiDate = (date) => {
+    return date.toLocaleString('th-TH', {
+        year: '2-digit', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+};
+
+// --- TEMPLATE PROCESSING ---
+const processTemplate = (tmpl, safeData, now = new Date()) => {
+    // If static template mode, return raw HTML (no replacement)
+    // Mode check removed here as we pass safeData specifically for processing
+    let html = tmpl;
+
+    const startDate = new Date(now.getTime() - (safeData.timeRange || 1440) * 60 * 1000);
+    const endDate = now;
+    const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
+    const avgTimeSec = safeData.avgTime ? (safeData.avgTime / 1000).toFixed(3) : "0.000";
+    const totalFirewall = (safeData.blockedEvents || 0) + (safeData.logEvents || 0);
+    const blockPct = totalFirewall > 0 ? ((safeData.blockedEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+    const logPct = totalFirewall > 0 ? ((safeData.logEvents / totalFirewall) * 100).toFixed(2) : "0.00";
+    const topUA = safeData.topUserAgents && safeData.topUserAgents.length > 0 ? safeData.topUserAgents[0] : { agent: '-', count: 0 };
+    const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
+
+    // 1. Simple Replacements
+    const replacements = {
+        '@TIME_RANGE': timeRangeStr,
+        '@DOMAIN': domainDisplay,
+        '@TOTAL_REQ': (safeData.totalRequests || 0).toLocaleString(),
+        '@AVG_TIME': avgTimeSec,
+        '@BLOCK_PCT': blockPct,
+        '@LOG_PCT': logPct,
+        '@PEAK_TIME': safeData.peakTime || '-',
+        '@PEAK_COUNT': (safeData.peakCount || 0).toLocaleString(),
+        '@TOP_UA_AGENT': topUA.agent,
+        '@TOP_UA_COUNT': topUA.count.toLocaleString(),
+        '@PEAK_ATTACK_TIME': safeData.peakAttack?.time || '-',
+        '@PEAK_ATTACK_COUNT': (safeData.peakAttack?.count || 0).toLocaleString(),
+        '@PEAK_HTTP_TIME': safeData.peakHttpStatus?.time || '-',
+        '@PEAK_HTTP_COUNT': (safeData.peakHttpStatus?.count || 0).toLocaleString(),
+    };
+
+    for (const [key, val] of Object.entries(replacements)) {
+        html = html.split(key).join(val);
+    }
+
+    // 2. Table Generators
+
+    // Top URLs Table
+    const topUrlsHtml = generateHtmlTable(
+        [
+            { label: 'ลำดับ', width: '10%', align: 'center' },
+            { label: 'รายการ (URL)', width: '70%' },
+            { label: 'จำนวน (Count)', width: '20%', align: 'right' }
+        ],
+        (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, item.count.toLocaleString()])
+    );
+    html = html.replace('@TOP_URLS_LIST', topUrlsHtml);
+
+    // Top IPs Table
+    const topIpsHtml = generateHtmlTable(
+        [
+            { label: 'Client IP', width: '70%' },
+            { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+        ],
+        (safeData.topIps || []).slice(0, 3).map(item => [item.ip, item.count.toLocaleString()])
+    );
+    html = html.replace('@TOP_IPS_LIST', topIpsHtml);
+
+    // Top Rules Table
+    const topRulesHtml = generateHtmlTable(
+        [
+            { label: 'Rule Name (ID)', width: '70%' },
+            { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+        ],
+        (safeData.topRules || []).slice(0, 3).map(item => [item.rule, item.count.toLocaleString()])
+    );
+    html = html.replace('@TOP_RULES_LIST', topRulesHtml);
+
+    // Top Attackers Table
+    const topAttackersHtml = generateHtmlTable(
+        [
+            { label: 'IP' },
+            { label: 'ประเทศ (Country)' },
+            { label: 'จำนวน (Count)', align: 'right' },
+            { label: 'ประเภท (Type)' }
+        ],
+        (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, item.country, item.count.toLocaleString(), item.type])
+    );
+    html = html.replace('@TOP_ATTACKERS_LIST', topAttackersHtml);
+
+    return html;
+};
 
 // 1. Report Modal Component
 const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, mode = 'report' }) => {
@@ -184,14 +278,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     if (!isOpen) return null;
 
-    // Helper for Thai Date
-    const formatThaiDate = (date) => {
-        return date.toLocaleString('th-TH', {
-            year: '2-digit', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', hour12: false
-        });
-    };
-
     // --- DATA PREPARATION ---
     // Safely handle missing data for static mode or initial load
     const safeData = data || {
@@ -211,80 +297,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
     // --- TEMPLATE PROCESSING ---
-    const processTemplate = (tmpl) => {
-        // If static template mode, return raw HTML (no replacement)
-        if (mode === 'static-template') return tmpl;
-
-        let html = tmpl;
-
-        // 1. Simple Replacements
-        const replacements = {
-            '@TIME_RANGE': timeRangeStr,
-            '@DOMAIN': domainDisplay,
-            '@TOTAL_REQ': (safeData.totalRequests || 0).toLocaleString(),
-            '@AVG_TIME': avgTimeSec,
-            '@BLOCK_PCT': blockPct,
-            '@LOG_PCT': logPct,
-            '@PEAK_TIME': safeData.peakTime || '-',
-            '@PEAK_COUNT': (safeData.peakCount || 0).toLocaleString(),
-            '@TOP_UA_AGENT': topUA.agent,
-            '@TOP_UA_COUNT': topUA.count.toLocaleString(),
-            '@PEAK_ATTACK_TIME': safeData.peakAttack?.time || '-',
-            '@PEAK_ATTACK_COUNT': (safeData.peakAttack?.count || 0).toLocaleString(),
-            '@PEAK_HTTP_TIME': safeData.peakHttpStatus?.time || '-',
-            '@PEAK_HTTP_COUNT': (safeData.peakHttpStatus?.count || 0).toLocaleString(),
-        };
-
-        for (const [key, val] of Object.entries(replacements)) {
-            html = html.split(key).join(val);
-        }
-
-        // 2. Table Generators
-
-        // Top URLs Table
-        const topUrlsHtml = generateHtmlTable(
-            [
-                { label: 'ลำดับ', width: '10%', align: 'center' },
-                { label: 'รายการ (URL)', width: '70%' },
-                { label: 'จำนวน (Count)', width: '20%', align: 'right' }
-            ],
-            (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, item.count.toLocaleString()])
-        );
-        html = html.replace('@TOP_URLS_LIST', topUrlsHtml);
-
-        // Top IPs Table
-        const topIpsHtml = generateHtmlTable(
-            [
-                { label: 'Client IP', width: '70%' },
-                { label: 'จำนวน (Count)', width: '30%', align: 'right' }
-            ],
-            (safeData.topIps || []).slice(0, 3).map(item => [item.ip, item.count.toLocaleString()])
-        );
-        html = html.replace('@TOP_IPS_LIST', topIpsHtml);
-
-        // Top Rules Table
-        const topRulesHtml = generateHtmlTable(
-            [
-                { label: 'Rule Name (ID)', width: '70%' },
-                { label: 'จำนวน (Count)', width: '30%', align: 'right' }
-            ],
-            (safeData.topRules || []).slice(0, 3).map(item => [item.rule, item.count.toLocaleString()])
-        );
-        html = html.replace('@TOP_RULES_LIST', topRulesHtml);
-
-        // Top Attackers Table
-        const topAttackersHtml = generateHtmlTable(
-            [
-                { label: 'IP' },
-                { label: 'ประเทศ (Country)' },
-                { label: 'จำนวน (Count)', align: 'right' },
-                { label: 'ประเภท (Type)' }
-            ],
-            (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, item.country, item.count.toLocaleString(), item.type])
-        );
-        html = html.replace('@TOP_ATTACKERS_LIST', topAttackersHtml);
-
-        return html;
+    const getProcessedHtml = () => {
+        if (mode === 'static-template') return localTemplate;
+        return processTemplate(localTemplate, safeData, new Date());
     };
 
     // --- COPY FUNCTION ---
@@ -400,7 +415,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 />
                             </div>
                         ) : (
-                            <div dangerouslySetInnerHTML={{ __html: processTemplate(localTemplate) }} />
+                            <div dangerouslySetInnerHTML={{ __html: getProcessedHtml() }} />
                         )}
 
                     </div>
@@ -697,12 +712,382 @@ export default function GDCCPage() {
     const [selectedSubDomain, setSelectedSubDomain] = useState('');
     const [timeRange, setTimeRange] = useState(1440); // Default 24h
 
+    const fetchAndApplyTrafficData = async (subdomain, zoneId, timeRange) => {
+        setLoadingStats(true);
+        const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
+        console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (Range: ${timeRange}m)`);
+
+        const result = await callAPI('get-traffic-analytics', {
+            zoneId: zoneId,
+            timeRange: timeRange,
+            subdomain: isAllSubdomains ? null : subdomain
+        });
+
+        let filteredData = [];
+        let totalReq = 0;
+        let weightedAvgTime = 0;
+
+        if (result && result.data) {
+            filteredData = result.data;
+            const firewallActivity = result.firewallActivity || [];
+            const firewallRulesData = result.firewallRules || [];
+            const firewallIPsData = result.firewallIPs || [];
+
+            // --- 1. FIREWALL SUMMARY (From Activity: Minute x Action) ---
+            const blockedCount = firewallActivity
+                .filter(g => g.dimensions?.action !== 'log' && g.dimensions?.action !== 'skip' && g.dimensions?.action !== 'allow')
+                .reduce((acc, g) => acc + g.count, 0);
+
+            const logCount = firewallActivity
+                .filter(g => g.dimensions?.action === 'log')
+                .reduce((acc, g) => acc + g.count, 0);
+
+            setBlockedEvents(blockedCount);
+            setLogEvents(logCount);
+
+            // --- Action Distribution (Pie Chart) ---
+            const actionCounts = {};
+            firewallActivity.forEach(g => {
+                const act = g.dimensions?.action || 'Unknown';
+                actionCounts[act] = (actionCounts[act] || 0) + g.count;
+            });
+            const topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+            setTopFirewallActions(topActions);
+
+
+            // --- 2. TOP RULES (From Rules: Desc x ID) ---
+            // Already aggregated correctly by API
+            const processedRules = firewallRulesData.map(g => ({
+                rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
+                count: g.count
+            }));
+            // Sort again just in case API order was affected by aliases (though it shouldn't be)
+            setTopRules(processedRules.sort((a, b) => b.count - a.count).slice(0, 5));
+
+
+            // --- 3. TOP ATTACKERS (From IPs: IP x Country) ---
+            // Filter only mitigation actions if desired.
+            const attackerMap = {};
+            firewallIPsData.forEach(g => {
+                const act = g.dimensions?.action;
+                const isAttack = act !== 'log' && act !== 'skip' && act !== 'allow';
+
+                if (isAttack) {
+                    const ip = g.dimensions?.clientIP;
+                    if (!attackerMap[ip]) {
+                        attackerMap[ip] = {
+                            ip: ip,
+                            country: g.dimensions?.clientCountryName,
+                            count: 0,
+                            types: new Set()
+                        };
+                    }
+                    attackerMap[ip].count += g.count;
+                    attackerMap[ip].types.add(act);
+                }
+            });
+            const sortedAttackers = Object.values(attackerMap)
+                .sort((a, b) => b.count - a.count)
+                .map(a => ({ ...a, type: Array.from(a.types).join(', ') }));
+            setTopAttackers(sortedAttackers);
+
+
+            // --- AVG TTFB ---
+            let totalTimeSum = 0;
+            filteredData.forEach(item => {
+                const count = item.count;
+                const avgTime = item.avg?.edgeTimeToFirstByteMs || 0;
+                totalReq += count;
+                totalTimeSum += (avgTime * count);
+            });
+            if (totalReq > 0) weightedAvgTime = Math.round(totalTimeSum / totalReq);
+        } else {
+            setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
+            setTopRules([]); setTopAttackers([]);
+        }
+
+        setRawData(filteredData);
+        setTotalRequests(totalReq);
+        setAvgResponseTime(weightedAvgTime);
+
+        // --- DATA PROCESSING FOR CHARTS ---
+        const urlCounts = {}; const ipCounts = {}; const countryCounts = {}; const uaCounts = {};
+        const statusTotals = {};
+
+        // 1. Time Buckets Generation (4 Hours for 24h view)
+        let bucketSizeMs = 60 * 60 * 1000;
+        if (timeRange <= 60) bucketSizeMs = 1 * 60 * 1000;
+        else if (timeRange <= 360) bucketSizeMs = 15 * 60 * 1000;
+        else if (timeRange <= 720) bucketSizeMs = 30 * 60 * 1000;
+        else if (timeRange <= 1440) bucketSizeMs = 240 * 60 * 1000; // 4 Hours for 24h
+
+        const now = new Date();
+        const startTime = new Date(now.getTime() - timeRange * 60 * 1000);
+
+        const alignedStart = new Date(Math.floor(startTime.getTime() / bucketSizeMs) * bucketSizeMs);
+        const alignedEnd = new Date(Math.ceil(now.getTime() / bucketSizeMs) * bucketSizeMs);
+
+        // Helpers
+        const createBuckets = () => {
+            const map = new Map();
+            let current = new Date(alignedStart);
+            while (current <= alignedEnd) {
+                map.set(current.getTime(), { timestamp: new Date(current), count: 0, series: {} });
+                current = new Date(current.getTime() + bucketSizeMs);
+            }
+            return map;
+        };
+
+        const throughputBuckets = createBuckets();
+        const attackBuckets = createBuckets();
+        const httpCodeBuckets = createBuckets();
+
+        // 2. FILL DATA & CALC PEAK
+        const allCodes = new Set();
+        let currentPeak = { count: 0, time: null };
+
+        // HTTP DATA
+        filteredData.forEach(item => {
+            const count = item.count;
+            const dims = item.dimensions;
+
+            // Top Lists (Same as before)
+            const path = dims.clientRequestPath || 'Unknown';
+            const ip = dims.clientIP || 'Unknown';
+            const country = dims.clientCountryName || 'Unknown';
+            const ua = dims.userAgent || 'Unknown';
+
+            urlCounts[path] = (urlCounts[path] || 0) + count;
+            ipCounts[ip] = (ipCounts[ip] || 0) + count;
+            countryCounts[country] = (countryCounts[country] || 0) + count;
+            uaCounts[ua] = (uaCounts[ua] || 0) + count;
+
+            // Time Series
+            if (dims.datetimeMinute) {
+                const itemTime = new Date(dims.datetimeMinute).getTime();
+                const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
+
+                if (throughputBuckets.has(bucketTime)) {
+                    const b = throughputBuckets.get(bucketTime);
+                    b.count += count;
+                }
+
+                const status = dims.edgeResponseStatus;
+                if (status) { // Always track status for chart
+                    const bucket = httpCodeBuckets.get(bucketTime);
+                    if (bucket) {
+                        bucket.series[status] = (bucket.series[status] || 0) + count;
+                        statusTotals[status] = (statusTotals[status] || 0) + count;
+                        allCodes.add(status);
+                    }
+                }
+            }
+        });
+
+        // Find Peak Traffic from Bucket
+        for (let [_, b] of throughputBuckets) {
+            if (b.count > currentPeak.count) {
+                currentPeak = { count: b.count, time: b.timestamp };
+            }
+        }
+        // Format Peak Time (Thai format)
+        const peakTimeStr = currentPeak.time ? currentPeak.time.toLocaleString('th-TH', {
+            year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+        }) : '-';
+        setPeakTraffic({ time: peakTimeStr, count: currentPeak.count });
+
+
+        // Find Peak HTTP Status (Non-200) - NEW
+        let currentHttpPeak = { count: 0, time: null };
+        for (let [_, b] of httpCodeBuckets) {
+            // Sum all non-200 codes in this bucket
+            let non200Count = 0;
+            Object.entries(b.series).forEach(([code, count]) => {
+                if (parseInt(code) !== 200) non200Count += count;
+            });
+
+            if (non200Count > currentHttpPeak.count) {
+                currentHttpPeak = { count: non200Count, time: b.timestamp };
+            }
+        }
+        const peakHttpTimeStr = currentHttpPeak.time ? currentHttpPeak.time.toLocaleString('th-TH', {
+            year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(':', '.') : '-';
+        setPeakHttpStatus({ time: peakHttpTimeStr, count: currentHttpPeak.count });
+
+
+        // FIREWALL DATA
+        const firewallGroups = result?.firewallData || [];
+        const realAttackEvents = [];
+
+        firewallGroups.forEach(g => {
+            const action = g.dimensions?.action;
+            const targetActions = new Set(['block', 'challenge', 'js_challenge', 'jschallenge', 'managed_challenge']);
+
+            if (targetActions.has(action)) {
+                if (g.dimensions?.datetimeMinute) {
+                    const itemTime = new Date(g.dimensions.datetimeMinute).getTime();
+                    const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
+                    if (attackBuckets.has(bucketTime)) {
+                        attackBuckets.get(bucketTime).count += g.count;
+                    }
+
+                    realAttackEvents.push({
+                        time: new Date(g.dimensions.datetimeMinute),
+                        action: action,
+                        count: g.count
+                    });
+                }
+            }
+        });
+
+        realAttackEvents.sort((a, b) => b.time - a.time);
+        setDetailedAttackList(realAttackEvents);
+
+        // Find Peak Attack (NEW)
+        let currentAttackPeak = { count: 0, time: null };
+        for (let [_, b] of attackBuckets) {
+            if (b.count > currentAttackPeak.count) {
+                currentAttackPeak = { count: b.count, time: b.timestamp };
+            }
+        }
+        const peakAttackTimeStr = currentAttackPeak.time ? currentAttackPeak.time.toLocaleString('th-TH', {
+            year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(':', '.') : '-';
+        setPeakAttack({ time: peakAttackTimeStr, count: currentAttackPeak.count });
+
+
+        // 3. CONVERT TO ARRAY FOR CHARTS
+        const formatTime = (d) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
+        setThroughputData(Array.from(throughputBuckets.values()).map(b => ({
+            time: formatTime(b.timestamp),
+            requests: b.count
+        })));
+
+        setAttackSeriesData(Array.from(attackBuckets.values()).map(b => ({
+            time: formatTime(b.timestamp),
+            attacks: b.count
+        })));
+
+        // Extract unique status codes found
+        const httpStatusChartData = Array.from(httpCodeBuckets.values()).map(b => {
+            const entry = { time: formatTime(b.timestamp) };
+            allCodes.forEach(code => {
+                entry[code] = b.series[code] || 0;
+            });
+            return entry;
+        });
+
+        const sortedKeys = Array.from(allCodes).sort((a, b) => (statusTotals[b] || 0) - (statusTotals[a] || 0));
+        setHttpStatusSeriesData({ data: httpStatusChartData, keys: sortedKeys });
+
+
+        // 4. TOP LISTS
+        const toArray = (obj, keyName) => Object.entries(obj).map(([name, count]) => ({ [keyName]: name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+
+        setTopUrls(toArray(urlCounts, 'path'));
+        setTopIps(toArray(ipCounts, 'ip'));
+        setTopCountries(toArray(countryCounts, 'name'));
+        setTopUserAgents(toArray(uaCounts, 'agent'));
+
+        setLoadingStats(false);
+    };
+
     // Handle Batch Report Logic
-    const handleBatchReport = (selectedHosts) => {
-        console.log('Batch Report Selected:', selectedHosts);
-        alert(`Generating batch report for ${selectedHosts.length} domains... (Feature pending implementation)`);
+    const handleBatchReport = async (selectedHosts) => {
+        setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
-        // TODO: Implement actual batch report generation loop here
+
+        const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+            "xmlns:w='urn:schemas-microsoft-com:office:word' " +
+            "xmlns='http://www.w3.org/TR/REC-html40'>" +
+            "<head><meta charset='utf-8'><title>Batch Report</title>" +
+            "<style>" +
+            "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
+            "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "div.Section1 { page: Section1; }" +
+            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
+            "img { width: 550px; height: auto; display: block; margin: 0 auto 20px auto; }" +
+            "table { width: 100%; border-collapse: collapse; }" +
+            "td, th { border: 1px solid #000; padding: 5px; }" +
+            ".page-break { page-break-after: always; }" +
+            "</style>" +
+            "</head><body><div class='Section1'>";
+        const footer = "</div></body></html>";
+
+        let combinedHtml = "";
+
+        try {
+            for (let i = 0; i < selectedHosts.length; i++) {
+                const host = selectedHosts[i];
+                console.log(`Processing report ${i + 1}/${selectedHosts.length}: ${host}`);
+                
+                // 1. Switch Domain and Fetch Data
+                setSelectedSubDomain(host);
+                await fetchAndApplyTrafficData(host, selectedZone, timeRange);
+                
+                // 2. Wait for animations and rendering
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // 3. Capture Screenshot
+                let imgData = null;
+                if (dashboardRef.current) {
+                    imgData = await htmlToImage.toJpeg(dashboardRef.current, {
+                        quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
+                    });
+                }
+
+                // 4. Prepare Data for Template
+                const currentReportData = {
+                    domain: host,
+                    timeRange: timeRange,
+                    totalRequests: totalRequests,
+                    blockedEvents: blockedEvents,
+                    logEvents: logEvents,
+                    avgTime: avgResponseTime,
+                    topUrls: topUrls,
+                    topIps: topIps,
+                    topCountries: topCountries,
+                    topUserAgents: topUserAgents,
+                    peakTime: peakTraffic.time,
+                    peakCount: peakTraffic.count,
+                    peakAttack: peakAttack,
+                    peakHttpStatus: peakHttpStatus,
+                    topRules: topRules,
+                    topAttackers: topAttackers,
+                    zoneName: zones.find(z => z.id === selectedZone)?.name
+                };
+
+                // 5. Generate HTML
+                let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
+                
+                // Insert Image at the top if captured
+                if (imgData) {
+                    reportHtml = `<img src="${imgData}" />` + reportHtml;
+                }
+
+                // Add to combined HTML with page break
+                combinedHtml += `<div class="${i === selectedHosts.length - 1 ? '' : 'page-break'}">${reportHtml}</div>`;
+            }
+
+            // 6. Download the final Word document
+            const sourceHTML = header + combinedHtml + footer;
+            const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+            const fileDownload = document.createElement("a");
+            document.body.appendChild(fileDownload);
+            fileDownload.href = source;
+            fileDownload.download = `batch_report_${new Date().getTime()}.doc`;
+            fileDownload.click();
+            document.body.removeChild(fileDownload);
+
+            alert(`Successfully generated report for ${selectedHosts.length} domains.`);
+        } catch (error) {
+            console.error('Batch Report Failed:', error);
+            alert('Batch report generation failed. Check console for details.');
+        } finally {
+            setIsGeneratingReport(false);
+        }
     };
 
     // Helper to get unique hosts for Batch Modal (filter out the "ALL_SUBDOMAINS" option if needed, or keep it)
@@ -808,7 +1193,6 @@ export default function GDCCPage() {
     };
 
     // 3. Zone Selected -> Load DNS
-    // 3. Zone Selected -> Load DNS
     useEffect(() => {
         if (!selectedZone) { resetDashboardData(); setSubDomains([]); return; }
 
@@ -836,293 +1220,12 @@ export default function GDCCPage() {
         loadDNS();
     }, [selectedZone]);
 
+
+
     // 4. Subdomain Selected -> Fetch Traffic
     useEffect(() => {
         if (!selectedSubDomain) { resetDashboardData(); return; }
-
-        const loadTrafficData = async () => {
-            setLoadingStats(true);
-            const isAllSubdomains = selectedSubDomain === 'ALL_SUBDOMAINS';
-            console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : selectedSubDomain} (Range: ${timeRange}m)`);
-
-            const result = await callAPI('get-traffic-analytics', {
-                zoneId: selectedZone,
-                timeRange: timeRange,
-                subdomain: isAllSubdomains ? null : selectedSubDomain
-            });
-
-            let filteredData = [];
-            let totalReq = 0;
-            let weightedAvgTime = 0;
-
-            if (result && result.data) {
-                filteredData = result.data;
-                const firewallActivity = result.firewallActivity || [];
-                const firewallRulesData = result.firewallRules || [];
-                const firewallIPsData = result.firewallIPs || [];
-
-                // --- 1. FIREWALL SUMMARY (From Activity: Minute x Action) ---
-                const blockedCount = firewallActivity
-                    .filter(g => g.dimensions?.action !== 'log' && g.dimensions?.action !== 'skip' && g.dimensions?.action !== 'allow')
-                    .reduce((acc, g) => acc + g.count, 0);
-
-                const logCount = firewallActivity
-                    .filter(g => g.dimensions?.action === 'log')
-                    .reduce((acc, g) => acc + g.count, 0);
-
-                setBlockedEvents(blockedCount);
-                setLogEvents(logCount);
-
-                // --- Action Distribution (Pie Chart) ---
-                const actionCounts = {};
-                firewallActivity.forEach(g => {
-                    const act = g.dimensions?.action || 'Unknown';
-                    actionCounts[act] = (actionCounts[act] || 0) + g.count;
-                });
-                const topActions = Object.entries(actionCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
-                setTopFirewallActions(topActions);
-
-
-                // --- 2. TOP RULES (From Rules: Desc x ID) ---
-                // Already aggregated correctly by API
-                const processedRules = firewallRulesData.map(g => ({
-                    rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
-                    count: g.count
-                }));
-                // Sort again just in case API order was affected by aliases (though it shouldn't be)
-                setTopRules(processedRules.sort((a, b) => b.count - a.count).slice(0, 5));
-
-
-                // --- 3. TOP ATTACKERS (From IPs: IP x Country) ---
-                // Filter only mitigation actions if desired.
-                const attackerMap = {};
-                firewallIPsData.forEach(g => {
-                    const act = g.dimensions?.action;
-                    const isAttack = act !== 'log' && act !== 'skip' && act !== 'allow';
-
-                    if (isAttack) {
-                        const ip = g.dimensions?.clientIP;
-                        if (!attackerMap[ip]) {
-                            attackerMap[ip] = {
-                                ip: ip,
-                                country: g.dimensions?.clientCountryName,
-                                count: 0,
-                                types: new Set()
-                            };
-                        }
-                        attackerMap[ip].count += g.count;
-                        attackerMap[ip].types.add(act);
-                    }
-                });
-                const sortedAttackers = Object.values(attackerMap)
-                    .sort((a, b) => b.count - a.count)
-                    .map(a => ({ ...a, type: Array.from(a.types).join(', ') }));
-                setTopAttackers(sortedAttackers);
-
-
-                // --- AVG TTFB ---
-                let totalTimeSum = 0;
-                filteredData.forEach(item => {
-                    const count = item.count;
-                    const avgTime = item.avg?.edgeTimeToFirstByteMs || 0;
-                    totalReq += count;
-                    totalTimeSum += (avgTime * count);
-                });
-                if (totalReq > 0) weightedAvgTime = Math.round(totalTimeSum / totalReq);
-            } else {
-                setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
-                setTopRules([]); setTopAttackers([]);
-            }
-
-            setRawData(filteredData);
-            setTotalRequests(totalReq);
-            setAvgResponseTime(weightedAvgTime);
-
-            // --- DATA PROCESSING FOR CHARTS ---
-            const urlCounts = {}; const ipCounts = {}; const countryCounts = {}; const uaCounts = {};
-            const statusTotals = {};
-
-            // 1. Time Buckets Generation (4 Hours for 24h view)
-            let bucketSizeMs = 60 * 60 * 1000;
-            if (timeRange <= 60) bucketSizeMs = 1 * 60 * 1000;
-            else if (timeRange <= 360) bucketSizeMs = 15 * 60 * 1000;
-            else if (timeRange <= 720) bucketSizeMs = 30 * 60 * 1000;
-            else if (timeRange <= 1440) bucketSizeMs = 240 * 60 * 1000; // 4 Hours for 24h
-
-            const now = new Date();
-            const startTime = new Date(now.getTime() - timeRange * 60 * 1000);
-
-            const alignedStart = new Date(Math.floor(startTime.getTime() / bucketSizeMs) * bucketSizeMs);
-            const alignedEnd = new Date(Math.ceil(now.getTime() / bucketSizeMs) * bucketSizeMs);
-
-            // Helpers
-            const createBuckets = () => {
-                const map = new Map();
-                let current = new Date(alignedStart);
-                while (current <= alignedEnd) {
-                    map.set(current.getTime(), { timestamp: new Date(current), count: 0, series: {} });
-                    current = new Date(current.getTime() + bucketSizeMs);
-                }
-                return map;
-            };
-
-            const throughputBuckets = createBuckets();
-            const attackBuckets = createBuckets();
-            const httpCodeBuckets = createBuckets();
-
-            // 2. FILL DATA & CALC PEAK
-            const allCodes = new Set();
-            let currentPeak = { count: 0, time: null };
-
-            // HTTP DATA
-            filteredData.forEach(item => {
-                const count = item.count;
-                const dims = item.dimensions;
-
-                // Top Lists (Same as before)
-                const path = dims.clientRequestPath || 'Unknown';
-                const ip = dims.clientIP || 'Unknown';
-                const country = dims.clientCountryName || 'Unknown';
-                const ua = dims.userAgent || 'Unknown';
-
-                urlCounts[path] = (urlCounts[path] || 0) + count;
-                ipCounts[ip] = (ipCounts[ip] || 0) + count;
-                countryCounts[country] = (countryCounts[country] || 0) + count;
-                uaCounts[ua] = (uaCounts[ua] || 0) + count;
-
-                // Time Series
-                if (dims.datetimeMinute) {
-                    const itemTime = new Date(dims.datetimeMinute).getTime();
-                    const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
-
-                    if (throughputBuckets.has(bucketTime)) {
-                        const b = throughputBuckets.get(bucketTime);
-                        b.count += count;
-                    }
-
-                    const status = dims.edgeResponseStatus;
-                    if (status) { // Always track status for chart
-                        const bucket = httpCodeBuckets.get(bucketTime);
-                        if (bucket) {
-                            bucket.series[status] = (bucket.series[status] || 0) + count;
-                            statusTotals[status] = (statusTotals[status] || 0) + count;
-                            allCodes.add(status);
-                        }
-                    }
-                }
-            });
-
-            // Find Peak Traffic from Bucket
-            for (let [_, b] of throughputBuckets) {
-                if (b.count > currentPeak.count) {
-                    currentPeak = { count: b.count, time: b.timestamp };
-                }
-            }
-            // Format Peak Time (Thai format)
-            const peakTimeStr = currentPeak.time ? currentPeak.time.toLocaleString('th-TH', {
-                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
-            }) : '-';
-            setPeakTraffic({ time: peakTimeStr, count: currentPeak.count });
-
-
-            // Find Peak HTTP Status (Non-200) - NEW
-            let currentHttpPeak = { count: 0, time: null };
-            for (let [_, b] of httpCodeBuckets) {
-                // Sum all non-200 codes in this bucket
-                let non200Count = 0;
-                Object.entries(b.series).forEach(([code, count]) => {
-                    if (parseInt(code) !== 200) non200Count += count;
-                });
-
-                if (non200Count > currentHttpPeak.count) {
-                    currentHttpPeak = { count: non200Count, time: b.timestamp };
-                }
-            }
-            const peakHttpTimeStr = currentHttpPeak.time ? currentHttpPeak.time.toLocaleString('th-TH', {
-                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
-            }).replace(':', '.') : '-';
-            setPeakHttpStatus({ time: peakHttpTimeStr, count: currentHttpPeak.count });
-
-
-            // FIREWALL DATA
-            const firewallGroups = result?.firewallData || [];
-            const realAttackEvents = [];
-
-            firewallGroups.forEach(g => {
-                const action = g.dimensions?.action;
-                const targetActions = new Set(['block', 'challenge', 'js_challenge', 'jschallenge', 'managed_challenge']);
-
-                if (targetActions.has(action)) {
-                    if (g.dimensions?.datetimeMinute) {
-                        const itemTime = new Date(g.dimensions.datetimeMinute).getTime();
-                        const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
-                        if (attackBuckets.has(bucketTime)) {
-                            attackBuckets.get(bucketTime).count += g.count;
-                        }
-
-                        realAttackEvents.push({
-                            time: new Date(g.dimensions.datetimeMinute),
-                            action: action,
-                            count: g.count
-                        });
-                    }
-                }
-            });
-
-            realAttackEvents.sort((a, b) => b.time - a.time);
-            setDetailedAttackList(realAttackEvents);
-
-            // Find Peak Attack (NEW)
-            let currentAttackPeak = { count: 0, time: null };
-            for (let [_, b] of attackBuckets) {
-                if (b.count > currentAttackPeak.count) {
-                    currentAttackPeak = { count: b.count, time: b.timestamp };
-                }
-            }
-            const peakAttackTimeStr = currentAttackPeak.time ? currentAttackPeak.time.toLocaleString('th-TH', {
-                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
-            }).replace(':', '.') : '-';
-            setPeakAttack({ time: peakAttackTimeStr, count: currentAttackPeak.count });
-
-
-            // 3. CONVERT TO ARRAY FOR CHARTS
-            const formatTime = (d) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-
-            setThroughputData(Array.from(throughputBuckets.values()).map(b => ({
-                time: formatTime(b.timestamp),
-                requests: b.count
-            })));
-
-            setAttackSeriesData(Array.from(attackBuckets.values()).map(b => ({
-                time: formatTime(b.timestamp),
-                attacks: b.count
-            })));
-
-            // Extract unique status codes found
-            const httpStatusChartData = Array.from(httpCodeBuckets.values()).map(b => {
-                const entry = { time: formatTime(b.timestamp) };
-                allCodes.forEach(code => {
-                    entry[code] = b.series[code] || 0;
-                });
-                return entry;
-            });
-
-            const sortedKeys = Array.from(allCodes).sort((a, b) => (statusTotals[b] || 0) - (statusTotals[a] || 0));
-            setHttpStatusSeriesData({ data: httpStatusChartData, keys: sortedKeys });
-
-
-            // 4. TOP LISTS
-            const toArray = (obj, keyName) => Object.entries(obj).map(([name, count]) => ({ [keyName]: name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
-
-            setTopUrls(toArray(urlCounts, 'path'));
-            setTopIps(toArray(ipCounts, 'ip'));
-            setTopCountries(toArray(countryCounts, 'name'));
-            setTopUserAgents(toArray(uaCounts, 'agent'));
-
-            setLoadingStats(false);
-        };
-
-        loadTrafficData();
+        fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange);
     }, [selectedSubDomain, selectedZone, timeRange]);
 
     useEffect(() => {
