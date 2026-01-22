@@ -10,6 +10,6 @@ services:
       - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
       - NODE_ENV=production
     volumes:
-      - ./sdb_users.db:/app/sdb_users.db
+      - ./db:/app/db
       - ./app/data:/app/app/data
     restart: always
