@@ -221,6 +221,86 @@ export async function POST(request) {
 
         }
 
+        // 7. Get API Discovery (SDB System)
+        else if (action === 'get-api-discovery') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+
+            console.log(`🔍 Fetching API Discovery for Zone: ${zoneId}...`);
+
+            const query = `
+               query GetAPIDiscovery($zoneTag: string, $since: String, $until: String) {
+                 viewer {
+                   zones(filter: { zoneTag: $zoneTag }) {
+                     httpRequestsAdaptiveGroups(
+                       filter: {
+                           datetime_geq: $since,
+                           datetime_leq: $until
+                       }
+                       limit: 1500
+                       orderBy: [count_DESC]
+                     ) {
+                       count
+                       dimensions {
+                         clientRequestHTTPHost
+                         clientRequestPath
+                         edgeResponseStatus
+                       }
+                     }
+                   }
+                 }
+               }
+             `;
+
+            // Last 7 Days (Increased from 24h to ensure data is found)
+            const now = new Date();
+            const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            console.log(`📅 Discovery Time Range: ${since.toISOString()} to ${now.toISOString()}`);
+
+            const variables = {
+                zoneTag: zoneId,
+                since: since.toISOString(),
+                until: now.toISOString()
+            };
+
+            try {
+                const response = await axios({
+                    method: 'POST',
+                    url: `${CLOUDFLARE_API_BASE}/graphql`,
+                    headers: {
+                        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                        'Content-Type': 'application/json',
+                    },
+                    data: { query, variables }
+                });
+
+                const zoneData = response.data?.data?.viewer?.zones?.[0];
+                const rawGroups = zoneData?.httpRequestsAdaptiveGroups || [];
+
+                // Transform to simpler format for the table
+                const processedData = rawGroups.map(item => ({
+                    method: 'N/A', // Method field removed to ensure compatibility
+                    host: item.dimensions?.clientRequestHTTPHost || 'unknown',
+                    path: item.dimensions?.clientRequestPath || '/',
+                    state: item.dimensions?.edgeResponseStatus || '0',
+                    source: 'unknown', // Source removed from query to ensure stability
+                    count: item.count
+                }));
+
+                console.log(`✅ Discovery found ${processedData.length} paths`);
+
+                return NextResponse.json({
+                    success: true,
+                    data: processedData,
+                    raw: rawGroups // Optional for debug
+                });
+
+            } catch (gqlError) {
+                console.error('GraphQL Discovery Error:', gqlError.response?.data || gqlError.message);
+                return NextResponse.json({ success: false, message: 'Discovery GraphQL Failed' }, { status: 500 });
+            }
+        }
+
         else {
             return NextResponse.json({ success: false, message: 'Invalid action' }, { status: 400 });
         }
