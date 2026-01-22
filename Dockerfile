@@ -38,6 +38,9 @@ COPY --from=builder /app/public ./public
 RUN mkdir -p .next app/data
 RUN chown -R nextjs:nodejs .next app/data
 
+# Ensure the app directory itself is owned by nextjs so it can create the DB if it doesn't exist
+RUN chown nextjs:nodejs /app
+
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
