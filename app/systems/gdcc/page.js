@@ -254,7 +254,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 };
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, mode = 'report' }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report' }) => {
     // mode: 'report' | 'static-template'
 
     // If no template passed, use default (fallback)
@@ -380,7 +380,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     <div className="flex items-center gap-2">
                         <FileText className="w-5 h-5 text-blue-500" />
                         <h3 className="text-lg font-bold text-gray-100">
-                            {mode === 'static-template' ? 'แบบฟอร์มรายงาน (Report Template Source)' : (isEditing ? 'แก้ไข Template (Edit Template)' : 'สรุปรายงาน (Report Summary)')}
+                            {mode === 'static-template'
+                                ? 'แบบฟอร์มรายงาน (Report Template Source)'
+                                : (isEditing
+                                    ? 'แก้ไข Template (Edit Template)'
+                                    : ((mode === 'report' && !dashboardImage) ? 'ตรวจสอบ Template (Review Template)' : 'สรุปรายงาน (Report Summary)'))}
                         </h3>
                     </div>
                     <div className="flex items-center gap-2">
@@ -451,14 +455,24 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             </button>
                         </>
                     ) : (
-                        <>
-                            <button onClick={handleCopy} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                                <Copy className="w-3 h-3" /> Copy All
+                        (mode === 'report' && !dashboardImage) ? (
+                            <button
+                                onClick={onGenerate}
+                                className="px-6 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-sm font-bold rounded shadow-lg flex items-center gap-2 animate-pulse"
+                            >
+                                <Activity className="w-4 h-4" />
+                                Generate Snapshot & Report
                             </button>
-                            <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                                <FileType className="w-3 h-3" /> Download Word
-                            </button>
-                        </>
+                        ) : (
+                            <>
+                                <button onClick={handleCopy} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                    <Copy className="w-3 h-3" /> Copy All
+                                </button>
+                                <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                    <FileType className="w-3 h-3" /> Download Word
+                                </button>
+                            </>
+                        )
                     )}
                 </div>
             </div>
@@ -697,6 +711,7 @@ export default function GDCCPage() {
     const [currentUser, setCurrentUser] = useState(null);
     const [isExporting, setIsExporting] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isReportMenuOpen, setIsReportMenuOpen] = useState(false); // NEW: Dropdown State
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
@@ -1035,6 +1050,19 @@ export default function GDCCPage() {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
+        // Show blocked loading popup
+        Swal.fire({
+            title: 'Generating Batch Reports...',
+            html: 'Please wait while we generate reports for multiple domains.<br/><span class="text-sm text-gray-400">Do not close this window.</span>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            background: '#111827',
+            color: '#fff'
+        });
+
         const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
             "xmlns='http://www.w3.org/TR/REC-html40'>" +
@@ -1303,20 +1331,60 @@ export default function GDCCPage() {
         await saveStaticTemplate(newTemplate);
     };
 
-    const handleOpenReportWithImage = async () => {
+    const handleOpenReportWithImage = () => {
+        setDashboardImage(null); // Clear previous image
+        setReportModalMode('report');
+        setIsReportModalOpen(true);
+    };
+
+    const captureAndGenerateReport = async () => {
         if (!dashboardRef.current) return;
         setIsGeneratingReport(true);
+
+        // Show blocked loading popup
+        Swal.fire({
+            title: 'Generating Report...',
+            html: 'Please wait while we capture the dashboard and generate your report.<br/><span class="text-sm text-gray-400">Do not close this window.</span>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            background: '#111827',
+            color: '#fff'
+        });
+
         try {
-            window.scrollTo(0, 0); await new Promise(resolve => setTimeout(resolve, 800));
+            setIsReportModalOpen(false); // Hide the report modal to capture
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for close animation + Swal render
+
+            window.scrollTo(0, 0);
+            await new Promise(resolve => setTimeout(resolve, 800)); // Wait for scroll/render
+
             const element = dashboardRef.current;
             const imgData = await htmlToImage.toJpeg(element, {
                 quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
             });
+
             setDashboardImage(imgData);
-            setReportModalMode('report');
-            setIsReportModalOpen(true);
-        } catch (error) { console.error('Report Gen Failed:', error); }
-        finally { setIsGeneratingReport(false); }
+
+            // Close the loading popup
+            Swal.close();
+
+            setIsReportModalOpen(true); // Re-open with image
+        } catch (error) {
+            console.error('Report Gen Failed:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'Failed to generate report. Please try again.',
+                icon: 'error',
+                background: '#111827',
+                color: '#fff'
+            });
+            setIsReportModalOpen(true); // Re-open on error
+        } finally {
+            setIsGeneratingReport(false);
+        }
     };
 
     const handleOpenTemplateManager = () => {
@@ -1393,33 +1461,48 @@ export default function GDCCPage() {
                     </div>
                     <div className="flex items-center gap-4">
                         <button
-                            onClick={handleOpenTemplateManager}
-                            disabled={isActionDisabled}
-                            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <FileText className="w-3 h-3" /> Report Template
-                        </button>
-                        <button
-                            onClick={handleOpenReportWithImage}
-                            disabled={isGeneratingReport || isActionDisabled}
-                            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isGeneratingReport ? <Activity className="w-3 h-3 animate-spin" /> : <Edit3 className="w-3 h-3" />} {isGeneratingReport ? 'Capturing...' : 'Write Report'}
-                        </button>
-                        <button
                             onClick={handleExportPDF}
                             disabled={isExporting || isActionDisabled}
                             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Export PDF'}
+                            {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Print page'}
                         </button>
-                        <button
-                            onClick={() => setIsBatchModalOpen(true)}
-                            disabled={(subDomains.length <= 1) || isActionDisabled}
-                            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <List className="w-3 h-3" /> Batch Report
-                        </button>
+
+                        <div className="relative">
+                            <button
+                                onClick={() => !isActionDisabled && setIsReportMenuOpen(!isReportMenuOpen)}
+                                disabled={isActionDisabled}
+                                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <FileText className="w-3 h-3" /> Report
+                                <svg className={`w-3 h-3 transition-transform ${isReportMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+
+                            {isReportMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-[60] overflow-hidden animate-fade-in-up">
+                                    <button
+                                        onClick={() => { setIsReportMenuOpen(false); handleOpenReportWithImage(); }}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
+                                    >
+                                        <Edit3 className="w-3 h-3" /> Sub Report
+                                    </button>
+                                    <button
+                                        onClick={() => { setIsReportMenuOpen(false); handleOpenTemplateManager(); }}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
+                                    >
+                                        <FileText className="w-3 h-3" /> Domain Report
+                                    </button>
+                                    <button
+                                        onClick={() => { setIsReportMenuOpen(false); setIsBatchModalOpen(true); }}
+                                        disabled={subDomains.length <= 1}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <List className="w-3 h-3" /> Batch Report
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="bg-orange-600/20 text-orange-500 w-8 h-8 rounded flex items-center justify-center">
                             <span className="font-bold text-xs">{currentUser.ownerName?.charAt(0) || 'U'}</span>
                         </div>
@@ -1437,6 +1520,7 @@ export default function GDCCPage() {
                 dashboardImage={dashboardImage}
                 template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}
                 onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : handleSaveTemplate}
+                onGenerate={captureAndGenerateReport} // NEW PROP
                 mode={reportModalMode}
             />
 
