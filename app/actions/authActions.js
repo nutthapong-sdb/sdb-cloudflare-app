@@ -35,7 +35,7 @@ export async function loginAction(username, password) {
         };
     } catch (error) {
         console.error('Login Error:', error);
-        return { success: false, message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' };
+        return { success: false, message: `System Error: ${error.message}` };
     }
 }
 
