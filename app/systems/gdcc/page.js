@@ -1379,6 +1379,8 @@ export default function GDCCPage() {
         topAttackers: topAttackers // NEW
     };
 
+    const isActionDisabled = !selectedSubDomain || loadingStats;
+
     return (
         <div className="min-h-screen bg-black font-sans text-white">
             <nav className="border-b border-gray-800 bg-[#0f1115] sticky top-0 z-50">
@@ -1390,16 +1392,32 @@ export default function GDCCPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button onClick={handleOpenTemplateManager} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
+                        <button
+                            onClick={handleOpenTemplateManager}
+                            disabled={isActionDisabled}
+                            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             <FileText className="w-3 h-3" /> Report Template
                         </button>
-                        <button onClick={handleOpenReportWithImage} disabled={isGeneratingReport} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700">
+                        <button
+                            onClick={handleOpenReportWithImage}
+                            disabled={isGeneratingReport || isActionDisabled}
+                            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             {isGeneratingReport ? <Activity className="w-3 h-3 animate-spin" /> : <Edit3 className="w-3 h-3" />} {isGeneratingReport ? 'Capturing...' : 'Write Report'}
                         </button>
-                        <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                        <button
+                            onClick={handleExportPDF}
+                            disabled={isExporting || isActionDisabled}
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Export PDF'}
                         </button>
-                        <button onClick={() => setIsBatchModalOpen(true)} disabled={subDomains.length <= 1} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button
+                            onClick={() => setIsBatchModalOpen(true)}
+                            disabled={(subDomains.length <= 1) || isActionDisabled}
+                            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             <List className="w-3 h-3" /> Batch Report
                         </button>
                         <div className="bg-orange-600/20 text-orange-500 w-8 h-8 rounded flex items-center justify-center">
