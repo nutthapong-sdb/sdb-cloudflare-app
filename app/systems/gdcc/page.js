@@ -412,7 +412,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
             <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 flex-shrink-0">
@@ -587,7 +592,12 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
             <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
                 {/* Header */}
                 <div className="p-4 border-b border-gray-800 bg-gray-950/50 flex justify-between items-center">
