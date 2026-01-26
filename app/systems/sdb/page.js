@@ -272,35 +272,51 @@ export default function SDBPage() {
 
   // ฟังก์ชันดาวน์โหลด CSV
   const handleDownloadCSV = () => {
+    console.log('🔽 CSV Download clicked');
+    console.log('📊 Discovery Data:', discoveryData);
+    console.log('📊 Data length:', discoveryData?.length);
+
     if (!discoveryData || discoveryData.length === 0) {
       showToast('ไม่มีข้อมูลสำหรับดาวน์โหลด', 'error');
       return;
     }
 
-    // CSV Header
-    const headers = ['Hostname,Method,Source,State,Path'];
+    try {
+      // CSV Header
+      const headers = ['Hostname,Method,Source,State,Path'];
 
-    // CSV Rows
-    const rows = discoveryData.map(item => {
-      // Escape ข้อมูลที่มี comma ด้วย double quotes
-      const host = `"${(item.host || '').replace(/"/g, '""')}"`;
-      const method = `"${(item.method || '').replace(/"/g, '""')}"`;
-      const source = `"${(item.source || '').replace(/"/g, '""')}"`;
-      const state = `"${(item.state || '').replace(/"/g, '""')}"`;
-      const path = `"${(item.path || '').replace(/"/g, '""')}"`;
+      // CSV Rows
+      const rows = discoveryData.map(item => {
+        // Convert to string first, then escape ข้อมูลที่มี comma ด้วย double quotes
+        const host = `"${String(item.host || '').replace(/"/g, '""')}"`;
+        const method = `"${String(item.method || '').replace(/"/g, '""')}"`;
+        const source = `"${String(item.source || '').replace(/"/g, '""')}"`;
+        const state = `"${String(item.state || '').replace(/"/g, '""')}"`;
+        const path = `"${String(item.path || '').replace(/"/g, '""')}"`;
 
-      return `${host},${method},${source},${state},${path}`;
-    });
+        return `${host},${method},${source},${state},${path}`;
+      });
 
-    const csvContent = [headers, ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `api_discovery_${selectedZone}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const csvContent = [headers, ...rows].join('\n');
+      console.log('📄 CSV Content preview:', csvContent.substring(0, 200));
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `api_discovery_${selectedZone}_${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log('✅ CSV Download initiated:', filename);
+      showToast('กำลังดาวน์โหลด CSV...', 'success');
+    } catch (error) {
+      console.error('❌ CSV Download Error:', error);
+      showToast('เกิดข้อผิดพลาดในการดาวน์โหลด CSV', 'error');
+    }
   };
 
   return (
