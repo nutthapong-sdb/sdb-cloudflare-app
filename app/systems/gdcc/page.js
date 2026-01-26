@@ -16,6 +16,7 @@ import {
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import Swal from 'sweetalert2';
+import { Editor } from '@tinymce/tinymce-react';
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
@@ -134,7 +135,7 @@ const generateHtmlTable = (headers, rows, styles = {}) => {
     const thStyle = "border: 1px solid black; padding: 8px; background-color: #f3f4f6; font-weight: bold;";
     const tdStyle = "border: 1px solid black; padding: 8px;";
 
-    let html = `<div class="mt-2 pl-4 mb-4" style="${styles.div || ''}">
+    let html = `<div style="margin-top: 0; margin-bottom: 0; ${styles.div || ''}">
     <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; ${styles.table || ''}">
         <thead><tr>`;
 
@@ -199,6 +200,12 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@PEAK_ATTACK_COUNT': (safeData.peakAttack?.count || 0).toLocaleString(),
         '@PEAK_HTTP_TIME': safeData.peakHttpStatus?.time || '-',
         '@PEAK_HTTP_COUNT': (safeData.peakHttpStatus?.count || 0).toLocaleString(),
+        '@DAY': now.getDate().toString(),
+        '@MONTH': now.toLocaleString('th-TH', { month: 'long' }),
+        '@YEAR': (now.getFullYear() + 543).toString(),
+        '@FULL_DATE': now.toLocaleString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+        '@ACCOUNT_NAME': safeData.accountName || '-',
+        '@ZONE_NAME': safeData.zoneName || '-',
     };
 
     for (const [key, val] of Object.entries(replacements)) {
@@ -264,6 +271,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [isEditing, setIsEditing] = useState(false);
     const [localTemplate, setLocalTemplate] = useState(currentTemplate);
     const reportContentRef = useRef(null);
+    const editorRef = useRef(null);
 
     // Sync local template when prop changes
     useEffect(() => {
@@ -299,7 +307,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // --- TEMPLATE PROCESSING ---
     const getProcessedHtml = () => {
-        if (mode === 'static-template') return localTemplate;
+        // Even for static template, we want to process date variables
         return processTemplate(localTemplate, safeData, new Date());
     };
 
@@ -338,22 +346,43 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "/* Define Page Size and Margins (Standard) */" +
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
+            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; white-space: pre-wrap; }" +
             "img { width: 500px; height: auto; }" +
             "table { width: 100%; border-collapse: collapse; }" +
+            "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
+            "h1 { font-size: 24pt; font-weight: bold; margin-bottom: 0.5em; }" +
+            "h2 { font-size: 18pt; font-weight: bold; margin-bottom: 0.5em; }" +
+            "h3 { font-size: 14pt; font-weight: bold; margin-bottom: 0.5em; }" +
+            "ul, ol { list-style-type: disc; padding-left: 20px; margin-bottom: 0px; }" +
+            "li { margin-bottom: 0px; }" +
+            "div, table { margin-top: 0px; margin-bottom: 0px; }" +
             "</style>" +
             "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
             "</head><body><div class='Section1'>";
         const footer = "</div></body></html>";
 
-        let cleanHTML = reportContentRef.current.innerHTML;
+        let cleanHTML = "";
 
-        // If editing, cleanHTML is the TEXTAREA html. We don't want that.
-        // We want the RAW template text if in edit mode (as user requested to download the 'template').
         if (isEditing) {
             cleanHTML = localTemplate;
         } else {
+            // Clone the node to manipulate text without affecting the UI
+            const clone = reportContentRef.current.cloneNode(true);
+
+            // Traverse text nodes and replace consecutive spaces with non-breaking spaces
+            // This ensures Word respects multiple spaces which it otherwise collapses
+            const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while (node = walker.nextNode()) {
+                if (node.nodeValue) {
+                    // Replace any space that is followed by another space with a non-breaking space
+                    // This preserves the whitespace width while keeping the last space as a breaking point if needed
+                    node.nodeValue = node.nodeValue.replace(/ (?= )/g, '\u00A0');
+                }
+            }
+
+            cleanHTML = clone.innerHTML;
             cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
         }
 
@@ -388,11 +417,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         </h3>
                     </div>
                     <div className="flex items-center gap-2">
-                        {!isEditing && (
-                            <button onClick={() => setIsEditing(true)} className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded border border-gray-700 transition-colors">
-                                Edit Template
-                            </button>
-                        )}
+
                         <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
                             <X className="w-5 h-5" />
                         </button>
@@ -401,7 +426,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
                 {/* CONTENT AREA (Scrollable) */}
                 <div className="flex-grow overflow-y-auto p-8 bg-white text-black font-serif shadow-inner" id="print-area">
-                    <div ref={reportContentRef} className="space-y-4 text-base leading-relaxed" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
+                    <style dangerouslySetInnerHTML={{
+                        __html: `
+                        .report-content h1 { font-size: 2em; font-weight: bold; margin-top: 0.67em; margin-bottom: 0.67em; }
+                        .report-content h2 { font-size: 1.5em; font-weight: bold; margin-top: 0.83em; margin-bottom: 0.83em; }
+                        .report-content h3 { font-size: 1.17em; font-weight: bold; margin-top: 1em; margin-bottom: 1em; }
+                        .report-content ul { list-style-type: disc; padding-left: 2em; }
+                        .report-content ol { list-style-type: decimal; padding-left: 2em; }
+                        .report-content li { display: list-item; }
+                        .report-content, .report-content p, .report-content div { white-space: pre-wrap !important; }
+                    `}} />
+                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
                         {/* Image only in Preview (Report Mode) */}
                         {mode === 'report' && !isEditing && dashboardImage && (
@@ -418,16 +453,55 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
                         {isEditing ? (
                             <div className="flex flex-col h-full">
-                                <div className="mb-2 text-xs text-gray-500 bg-yellow-50 p-2 rounded border border-yellow-200">
-                                    <strong>Template Editor:</strong> HTML Tags supported.
-                                    {mode === 'report' && " Use variables like @TIME_RANGE, @DOMAIN."}
+                                <div className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-2">
+                                        <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Variables</span>
+                                        <span>Click to insert into template:</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(mode === 'report' ?
+                                            ['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@time_range', '@DOMAIN', '@ACCOUNT_NAME', '@ZONE_NAME', '@TOTAL_REQ', '@AVG_TIME', '@BLOCK_PCT', '@LOG_PCT',
+                                                '@PEAK_TIME', '@PEAK_COUNT', '@TOP_URLS_LIST', '@TOP_IPS_LIST',
+                                                '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST']
+                                            :
+                                            ['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME']
+                                        ).map(v => (
+                                            <button
+                                                key={v}
+                                                onClick={() => editorRef.current?.insertContent(v)}
+                                                className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95"
+                                                title={`Insert ${v}`}
+                                            >
+                                                {v}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <textarea
-                                    className="w-full h-[500px] p-4 text-sm font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 mb-4"
-                                    value={localTemplate}
-                                    onChange={(e) => setLocalTemplate(e.target.value)}
-                                    placeholder="Enter your HTML template here..."
-                                />
+                                <div className="h-[500px] mb-12 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
+                                    <Editor
+                                        tinymceScriptSrc='/tinymce/tinymce.min.js'
+                                        licenseKey='gpl'
+                                        onInit={(evt, editor) => editorRef.current = editor}
+                                        value={localTemplate}
+                                        onEditorChange={(content) => setLocalTemplate(content)}
+                                        init={{
+                                            height: 500,
+                                            menubar: false,
+                                            plugins: [
+                                                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                                                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                                                'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking'
+                                            ],
+                                            toolbar: 'undo redo | blocks | ' +
+                                                'bold italic forecolor | alignleft aligncenter ' +
+                                                'alignright alignjustify | bullist numlist outdent indent | ' +
+                                                'removeformat | help',
+                                            content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
+                                            forced_root_block: 'p',
+                                            nonbreaking_force_tab: true
+                                        }}
+                                    />
+                                </div>
                             </div>
                         ) : (
                             <div dangerouslySetInnerHTML={{ __html: getProcessedHtml() }} />
@@ -441,14 +515,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     {/* In Edit Mode (Default for Static) */}
                     {isEditing ? (
                         <>
-                            <button onClick={() => setLocalTemplate(template || DEFAULT_TEMPLATE)} className="px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-200 text-xs font-bold rounded">
-                                Reset
-                            </button>
                             <button onClick={() => setIsEditing(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
                                 Cancel
-                            </button>
-                            <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                                <FileType className="w-3 h-3" /> Download Word
                             </button>
                             <button onClick={handleSave} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded flex items-center gap-2">
                                 <Edit3 className="w-3 h-3" /> {mode === 'static-template' ? 'Save Template' : 'Save & Preview'}
@@ -465,8 +533,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             </button>
                         ) : (
                             <>
-                                <button onClick={handleCopy} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                                    <Copy className="w-3 h-3" /> Copy All
+                                <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                    <Edit3 className="w-3 h-3" /> Edit Template
                                 </button>
                                 <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
                                     <FileType className="w-3 h-3" /> Download Word
@@ -1515,7 +1583,8 @@ export default function GDCCPage() {
                 onClose={() => setIsReportModalOpen(false)}
                 data={{
                     ...reportData,
-                    zoneName: zones.find(z => z.id === selectedZone)?.name
+                    zoneName: zones.find(z => z.id === selectedZone)?.name,
+                    accountName: accounts.find(a => a.id === selectedAccount)?.name
                 }}
                 dashboardImage={dashboardImage}
                 template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}
