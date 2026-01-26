@@ -205,6 +205,38 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@FULL_DATE': now.toLocaleString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
         '@ACCOUNT_NAME': safeData.accountName || '-',
         '@ZONE_NAME': safeData.zoneName || '-',
+        // Zone Settings
+        '@SECURITY_LEVEL': safeData.securityLevel || 'unknown',
+        '@BOT_MANAGEMENT_STATUS': safeData.botManagementEnabled || 'unknown',
+        '@BLOCK_AI_BOTS': safeData.blockAiBots || 'unknown',
+        '@DEFINITELY_AUTOMATED': safeData.definitelyAutomated || 'unknown',
+        '@LIKELY_AUTOMATED': safeData.likelyAutomated || 'unknown',
+        '@VERIFIED_BOTS': safeData.verifiedBots || 'unknown',
+        // SSL/TLS Settings
+        '@SSL_MODE': safeData.sslMode || 'unknown',
+        '@MIN_TLS_VERSION': safeData.minTlsVersion || 'unknown',
+        '@TLS_1_3': safeData.tls13 || 'unknown',
+        // DNS
+        '@DNS_RECORDS': safeData.dnsRecordsStatus || 'unknown',
+        // Additional Security
+        '@LEAKED_CREDENTIALS': safeData.leakedCredentials || 'unknown',
+        '@BROWSER_INTEGRITY_CHECK': safeData.browserIntegrityCheck || 'unknown',
+        '@HOTLINK_PROTECTION': safeData.hotlinkProtection || 'unknown',
+        '@ZONE_LOCKDOWN_RULES': safeData.zoneLockdownRules || '0',
+        // DDoS Protection
+        '@DDOS_PROTECTION': safeData.ddosProtection || 'unknown',
+        '@HTTP_DDOS_PROTECTION': safeData.httpDdosProtection || 'unknown',
+        '@SSL_TLS_DDOS_PROTECTION': safeData.sslTlsDdosProtection || 'unknown',
+        '@NETWORK_DDOS_PROTECTION': safeData.networkDdosProtection || 'unknown',
+        // WAF Managed Rules
+        '@CLOUDFLARE_MANAGED_RULESET': safeData.cloudflareManaged || 'unknown',
+        '@OWASP_CORE_RULESET': safeData.owaspCore || 'unknown',
+        '@EXPOSED_CREDENTIALS_RULESET': safeData.exposedCredsRuleset || 'unknown',
+        '@DDOS_L7_RULESET': safeData.ddosL7Ruleset || 'unknown',
+        '@MANAGED_RULES_COUNT': safeData.managedRulesCount || '0',
+        '@RULESET_ACTIONS': safeData.rulesetActions || 'unknown',
+        // IP Access Rules
+        '@IP_ACCESS_RULES': safeData.ipAccessRules || '0',
     };
 
     for (const [key, val] of Object.entries(replacements)) {
@@ -255,6 +287,16 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, item.country, item.count.toLocaleString(), item.type])
     );
     html = html.replace('@TOP_ATTACKERS_LIST', topAttackersHtml);
+
+    // Top Sources Table
+    const topSourcesHtml = generateHtmlTable(
+        [
+            { label: 'Type (Security Source)', width: '70%' },
+            { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+        ],
+        (safeData.topFirewallSources || []).slice(0, 5).map(item => [item.source, item.count.toLocaleString()])
+    );
+    html = html.replace('@TOP_SOURCES_LIST', topSourcesHtml);
 
     return html;
 };
@@ -425,7 +467,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-7xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 flex-shrink-0">
                     <div className="flex items-center gap-2">
@@ -434,20 +476,18 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             {mode === 'static-template'
                                 ? 'แบบฟอร์มรายงาน (Report Template Source)'
                                 : (isEditing
-                                    ? 'แก้ไข Template (Edit Template)'
-                                    : ((mode === 'report' && !dashboardImage) ? 'ตรวจสอบ Template (Review Template)' : 'สรุปรายงาน (Report Summary)'))}
+                                    ? 'Edit Report'
+                                    : 'Preview Report'
+                                )}
                         </h3>
                     </div>
-                    <div className="flex items-center gap-2">
-
-                        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
 
-                {/* CONTENT AREA (Scrollable) */}
-                <div className="flex-grow overflow-y-auto p-8 bg-white text-black font-serif shadow-inner" id="print-area">
+                {/* Content */}
+                <div className="flex-1 overflow-hidden p-6 flex flex-col">
                     <style dangerouslySetInnerHTML={{
                         __html: `
                         .report-content h1 { font-size: 2em; font-weight: bold; margin-top: 0.67em; margin-bottom: 0.67em; }
@@ -458,7 +498,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         .report-content li { display: list-item; }
                         .report-content, .report-content p, .report-content div { white-space: pre-wrap !important; }
                     `}} />
-                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
+                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
                         {/* Image only in Preview (Report Mode) */}
                         {mode === 'report' && !isEditing && dashboardImage && (
@@ -474,62 +514,152 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         )}
 
                         {isEditing ? (
-                            <div className="flex flex-col h-full">
-                                <div className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                    <div className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-2">
-                                        <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Variables</span>
-                                        <span>Click to insert into template:</span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {(mode === 'report' ?
-                                            ['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@time_range', '@DOMAIN', '@ACCOUNT_NAME', '@ZONE_NAME', '@TOTAL_REQ', '@AVG_TIME', '@BLOCK_PCT', '@LOG_PCT',
-                                                '@PEAK_TIME', '@PEAK_COUNT', '@TOP_URLS_LIST', '@TOP_IPS_LIST',
-                                                '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST']
-                                            :
-                                            ['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME']
-                                        ).map(v => (
-                                            <button
-                                                key={v}
-                                                onClick={() => editorRef.current?.insertContent(v)}
-                                                className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95"
-                                                title={`Insert ${v}`}
-                                            >
-                                                {v}
-                                            </button>
-                                        ))}
+                            <div className="flex gap-4 h-full">
+                                {/* Editor Section - Left */}
+                                <div className="flex-1 flex flex-col min-w-0">
+                                    <div className="flex-1 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
+                                        <Editor
+                                            tinymceScriptSrc='/tinymce/tinymce.min.js'
+                                            licenseKey='gpl'
+                                            onInit={(evt, editor) => editorRef.current = editor}
+                                            value={localTemplate}
+                                            onEditorChange={(content) => setLocalTemplate(content)}
+                                            init={{
+                                                height: '100%',
+                                                menubar: false,
+                                                plugins: [
+                                                    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                                                    'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                                                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking'
+                                                ],
+                                                toolbar: 'undo redo | blocks | ' +
+                                                    'bold italic forecolor | alignleft aligncenter ' +
+                                                    'alignright alignjustify | bullist numlist outdent indent | ' +
+                                                    'image table | removeformat | help',
+                                                content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
+                                                forced_root_block: 'p',
+                                                nonbreaking_force_tab: true,
+                                                images_upload_handler: (blobInfo, progress) => new Promise((resolve, reject) => {
+                                                    const reader = new FileReader();
+                                                    reader.readAsDataURL(blobInfo.blob());
+                                                    reader.onload = () => resolve(reader.result);
+                                                    reader.onerror = (error) => reject(error);
+                                                })
+                                            }}
+                                        />
                                     </div>
                                 </div>
-                                <div className="h-[500px] mb-12 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
-                                    <Editor
-                                        tinymceScriptSrc='/tinymce/tinymce.min.js'
-                                        licenseKey='gpl'
-                                        onInit={(evt, editor) => editorRef.current = editor}
-                                        value={localTemplate}
-                                        onEditorChange={(content) => setLocalTemplate(content)}
-                                        init={{
-                                            height: 500,
-                                            menubar: false,
-                                            plugins: [
-                                                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-                                                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                                                'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking'
-                                            ],
-                                            toolbar: 'undo redo | blocks | ' +
-                                                'bold italic forecolor | alignleft aligncenter ' +
-                                                'alignright alignjustify | bullist numlist outdent indent | ' +
-                                                'image table | removeformat | help',
-                                            content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
-                                            forced_root_block: 'p',
-                                            forced_root_block: 'p',
-                                            nonbreaking_force_tab: true,
-                                            images_upload_handler: (blobInfo, progress) => new Promise((resolve, reject) => {
-                                                const reader = new FileReader();
-                                                reader.readAsDataURL(blobInfo.blob());
-                                                reader.onload = () => resolve(reader.result);
-                                                reader.onerror = (error) => reject(error);
-                                            })
-                                        }}
-                                    />
+                                {/* Variables Section - Right */}
+                                <div className="w-80 flex-shrink-0 flex flex-col bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                    <div className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2 sticky top-0 bg-gray-50 pb-2 border-b border-gray-300">
+                                        <span className="bg-blue-500 text-white px-2 py-1 rounded">Variables</span>
+                                        <span className="text-xs text-gray-500">Click to insert</span>
+                                    </div>
+                                    <div className="overflow-y-auto pr-2 space-y-4">
+                                        {mode === 'report' ? (
+                                            // Report Mode Variables
+                                            <>
+                                                {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@time_range', '@DOMAIN', '@ACCOUNT_NAME', '@ZONE_NAME', '@TOTAL_REQ', '@AVG_TIME', '@BLOCK_PCT', '@LOG_PCT',
+                                                    '@PEAK_TIME', '@PEAK_COUNT', '@PEAK_ATTACK_TIME', '@PEAK_ATTACK_COUNT', '@PEAK_HTTP_TIME', '@PEAK_HTTP_COUNT',
+                                                    '@TOP_UA_AGENT', '@TOP_UA_COUNT',
+                                                    '@TOP_URLS_LIST', '@TOP_IPS_LIST',
+                                                    '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST', '@TOP_SOURCES_LIST'].map(v => (
+                                                        <button
+                                                            key={v}
+                                                            onClick={() => editorRef.current?.insertContent(v)}
+                                                            className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 mr-2 mb-2"
+                                                            title={`Insert ${v}`}
+                                                        >
+                                                            {v}
+                                                        </button>
+                                                    ))}
+                                            </>
+                                        ) : (
+                                            // Static Template Mode - Grouped by Category
+                                            <>
+                                                {/* ข้อมูลพื้นฐาน */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-gray-600 mb-2 pb-1 border-b border-gray-300">
+                                                        ข้อมูลพื้นฐาน
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME', '@DNS_RECORDS'].map(v => (
+                                                            <button
+                                                                key={v}
+                                                                onClick={() => editorRef.current?.insertContent(v)}
+                                                                className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95"
+                                                                title={`Insert ${v}`}
+                                                            >
+                                                                {v}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* 1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-blue-700 mb-2 pb-1 border-b border-blue-300">
+                                                        1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['@SECURITY_LEVEL', '@BOT_MANAGEMENT_STATUS', '@BLOCK_AI_BOTS',
+                                                            '@DEFINITELY_AUTOMATED', '@LIKELY_AUTOMATED', '@VERIFIED_BOTS',
+                                                            '@CLOUDFLARE_MANAGED_RULESET', '@OWASP_CORE_RULESET', '@EXPOSED_CREDENTIALS_RULESET',
+                                                            '@MANAGED_RULES_COUNT', '@RULESET_ACTIONS'].map(v => (
+                                                                <button
+                                                                    key={v}
+                                                                    onClick={() => editorRef.current?.insertContent(v)}
+                                                                    className="px-2 py-1 bg-white border border-blue-200 rounded text-xs font-mono text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm active:scale-95"
+                                                                    title={`Insert ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* 2. ลดความเสี่ยงช่องโหว่ทางเทคนิค */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-green-700 mb-2 pb-1 border-b border-green-300">
+                                                        2. ลดความเสี่ยงช่องโหว่ทางเทคนิค
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['@SSL_MODE', '@MIN_TLS_VERSION', '@TLS_1_3',
+                                                            '@LEAKED_CREDENTIALS', '@BROWSER_INTEGRITY_CHECK', '@HOTLINK_PROTECTION'].map(v => (
+                                                                <button
+                                                                    key={v}
+                                                                    onClick={() => editorRef.current?.insertContent(v)}
+                                                                    className="px-2 py-1 bg-white border border-green-200 rounded text-xs font-mono text-green-700 hover:bg-green-50 hover:border-green-400 transition-all shadow-sm active:scale-95"
+                                                                    title={`Insert ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* 3. ป้องกัน DDoS และการโจมตีอื่นๆ */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-red-700 mb-2 pb-1 border-b border-red-300">
+                                                        3. ป้องกัน DDoS และการโจมตีอื่นๆ
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['@DDOS_PROTECTION', '@HTTP_DDOS_PROTECTION', '@SSL_TLS_DDOS_PROTECTION', '@NETWORK_DDOS_PROTECTION',
+                                                            '@DDOS_L7_RULESET', '@IP_ACCESS_RULES', '@ZONE_LOCKDOWN_RULES'].map(v => (
+                                                                <button
+                                                                    key={v}
+                                                                    onClick={() => editorRef.current?.insertContent(v)}
+                                                                    className="px-2 py-1 bg-white border border-red-200 rounded text-xs font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95"
+                                                                    title={`Insert ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -573,7 +703,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
@@ -834,6 +964,11 @@ export default function GDCCPage() {
     const [accounts, setAccounts] = useState([]);
     const [zones, setZones] = useState([]);
     const [subDomains, setSubDomains] = useState([]);
+
+    const [topRules, setTopRules] = useState([]);
+    const [topAttackers, setTopAttackers] = useState([]);
+    const [topFirewallSources, setTopFirewallSources] = useState([]);
+    const [zoneSettings, setZoneSettings] = useState(null);
 
     const [selectedAccount, setSelectedAccount] = useState('');
     const [selectedZone, setSelectedZone] = useState('');
@@ -1122,7 +1257,22 @@ export default function GDCCPage() {
         setTopUrls(toArray(urlCounts, 'path'));
         setTopIps(toArray(ipCounts, 'ip'));
         setTopCountries(toArray(countryCounts, 'name'));
+        setTopUrls(toArray(urlCounts, 'path'));
+        setTopIps(toArray(ipCounts, 'ip'));
+        setTopCountries(toArray(countryCounts, 'name'));
         setTopUserAgents(toArray(uaCounts, 'agent'));
+
+        // 8. Top Firewall Sources (Categories like WAF, Security Level)
+        const sourceMap = new Map();
+        (result.firewallSources || []).forEach(item => {
+            const source = item.dimensions.source || 'Unknown';
+            sourceMap.set(source, (sourceMap.get(source) || 0) + item.count);
+        });
+        const topSourcesSorted = Array.from(sourceMap.entries())
+            .map(([source, count]) => ({ source, count }))
+            .sort((a, b) => b.count - a.count);
+
+        setTopFirewallSources(topSourcesSorted);
 
         const stats = {
             filteredData,
@@ -1304,8 +1454,7 @@ export default function GDCCPage() {
     const [topFirewallActions, setTopFirewallActions] = useState([]);
 
     // New Data for Report
-    const [topRules, setTopRules] = useState([]);
-    const [topAttackers, setTopAttackers] = useState([]); // RENAMED/MODIFIED from topAttackCountries for clarity
+
 
     // --- API ---
     const callAPI = async (action, params = {}) => {
@@ -1400,6 +1549,16 @@ export default function GDCCPage() {
             setLoadingStats(false);
         };
         loadDNS();
+
+        // Fetch Zone Settings
+        const fetchSettings = async () => {
+            const result = await callAPI('get-zone-settings', { zoneId: selectedZone });
+            if (result && result.data) {
+                setZoneSettings(result.data);
+                console.log('✅ Zone Settings:', result.data);
+            }
+        };
+        fetchSettings();
     }, [selectedZone]);
 
 
@@ -1546,7 +1705,10 @@ export default function GDCCPage() {
         peakAttack: peakAttack,
         peakHttpStatus: peakHttpStatus,
         topRules: topRules,
-        topAttackers: topAttackers // NEW
+        peakHttpStatus: peakHttpStatus,
+        topRules: topRules,
+        topAttackers: topAttackers,
+        topFirewallSources: topFirewallSources
     };
 
     const isActionDisabled = !selectedSubDomain || loadingStats;
@@ -1618,7 +1780,39 @@ export default function GDCCPage() {
                 data={{
                     ...reportData,
                     zoneName: zones.find(z => z.id === selectedZone)?.name,
-                    accountName: accounts.find(a => a.id === selectedAccount)?.name
+                    accountName: accounts.find(a => a.id === selectedAccount)?.name,
+                    // Add zone settings
+                    securityLevel: zoneSettings?.securityLevel || 'unknown',
+                    botManagementEnabled: zoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
+                    blockAiBots: zoneSettings?.botManagement?.blockAiBots || 'unknown',
+                    definitelyAutomated: zoneSettings?.botManagement?.definitelyAutomated || 'unknown',
+                    likelyAutomated: zoneSettings?.botManagement?.likelyAutomated || 'unknown',
+                    verifiedBots: zoneSettings?.botManagement?.verifiedBots || 'unknown',
+                    // SSL/TLS Settings
+                    sslMode: zoneSettings?.sslMode || 'unknown',
+                    minTlsVersion: zoneSettings?.minTlsVersion || 'unknown',
+                    tls13: zoneSettings?.tls13 === 'on' ? 'Enabled' : 'Disabled',
+                    // DNS
+                    dnsRecordsStatus: zoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
+                    // Additional Security
+                    leakedCredentials: zoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
+                    browserIntegrityCheck: zoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
+                    hotlinkProtection: zoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
+                    zoneLockdownRules: zoneSettings?.zoneLockdownRules || '0',
+                    // DDoS Protection
+                    ddosProtection: zoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
+                    httpDdosProtection: 'Always On',
+                    sslTlsDdosProtection: 'Always On',
+                    networkDdosProtection: 'Always On',
+                    // WAF Managed Rules
+                    cloudflareManaged: zoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
+                    owaspCore: zoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
+                    exposedCredsRuleset: zoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
+                    ddosL7Ruleset: zoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
+                    managedRulesCount: zoneSettings?.wafManagedRules?.managedRulesCount || '0',
+                    rulesetActions: zoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
+                    // IP Access Rules
+                    ipAccessRules: zoneSettings?.ipAccessRules || '0',
                 }}
                 dashboardImage={dashboardImage}
                 template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}

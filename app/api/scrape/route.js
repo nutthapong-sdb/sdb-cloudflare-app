@@ -163,6 +163,21 @@ export async function POST(request) {
                           action
                         }
                      }
+
+                     firewallSources: firewallEventsAdaptiveGroups(
+                        filter: {
+                            datetime_geq: $since,
+                            datetime_leq: $until
+                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
+                        }
+                        limit: 100
+                        orderBy: [count_DESC]
+                     ) {
+                        count
+                        dimensions {
+                          source
+                        }
+                     }
                    }
                  }
                }
@@ -199,15 +214,17 @@ export async function POST(request) {
                 const firewallActivity = zoneData?.firewallActivity || [];
                 const firewallRules = zoneData?.firewallRules || [];
                 const firewallIPs = zoneData?.firewallIPs || [];
+                const firewallSources = zoneData?.firewallSources || [];
 
-                console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs`);
+                console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs, ${firewallSources.length} Sources`);
 
                 return NextResponse.json({
                     success: true,
                     data: httpGroups,
                     firewallActivity,
                     firewallRules,
-                    firewallIPs
+                    firewallIPs,
+                    firewallSources
                 });
 
             } catch (gqlError) {
@@ -298,6 +315,216 @@ export async function POST(request) {
             } catch (gqlError) {
                 console.error('GraphQL Discovery Error:', gqlError.response?.data || gqlError.message);
                 return NextResponse.json({ success: false, message: 'Discovery GraphQL Failed' }, { status: 500 });
+            }
+        }
+
+        // 8. Get Zone Settings (Bot Management, Security Level, etc.)
+        else if (action === 'get-zone-settings') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+            console.log(`🔧 Fetching Zone Settings for: ${zoneId}...`);
+
+            try {
+                const headers = {
+                    'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                    'Content-Type': 'application/json',
+                };
+
+                // Fetch multiple settings in parallel
+                const [
+                    securityLevelRes,
+                    sslRes,
+                    minTlsRes,
+                    tls13Res,
+                    dnsRecordsRes,
+                    leakedCredsRes,
+                    browserCheckRes,
+                    hotlinkRes,
+                    lockdownRes
+                ] = await Promise.all([
+                    // Security Level
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/security_level`, { headers }),
+                    // SSL/TLS Mode
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`, { headers }),
+                    // Minimum TLS Version
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/min_tls_version`, { headers }),
+                    // TLS 1.3
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/tls_1_3`, { headers }),
+                    // DNS Records
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?per_page=1`, { headers }),
+                    // Leaked Credentials Check
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/security_header`, { headers })
+                        .catch(() => ({ data: { result: { value: 'unknown' } } })),
+                    // Browser Integrity Check
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/browser_check`, { headers }),
+                    // Hotlink Protection
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/hotlink_protection`, { headers }),
+                    // Zone Lockdown Rules
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/lockdowns?per_page=1`, { headers })
+                        .catch(() => ({ data: { result_info: { total_count: 0 } } }))
+                ]);
+
+                // Fetch Bot Management Configuration
+                let botManagementConfig = null;
+                try {
+                    const botMgmtRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/bot_management`,
+                        { headers }
+                    );
+                    botManagementConfig = botMgmtRes.data.result;
+                } catch (err) {
+                    console.log('Bot Management not available (likely not Enterprise plan)');
+                }
+
+                // Fetch DDoS Protection Settings
+                let ddosSettings = {
+                    enabled: 'unknown',
+                    httpDdos: 'unknown',
+                    sslTlsDdos: 'unknown',
+                    networkDdos: 'unknown'
+                };
+                try {
+                    const ddosRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ddos_protection`,
+                        { headers }
+                    ).catch(() => null);
+
+                    if (ddosRes) {
+                        ddosSettings.enabled = ddosRes.data.result?.value || 'on'; // Usually always on
+                    }
+                } catch (err) {
+                    console.log('DDoS settings fetch failed');
+                }
+
+                // Fetch WAF Managed Rulesets
+                let wafRulesets = {
+                    cloudflareManaged: 'unknown',
+                    owaspCore: 'unknown',
+                    exposedCredentials: 'unknown',
+                    ddosL7Ruleset: 'unknown',
+                    managedRulesCount: 0,
+                    rulesetActions: []
+                };
+                try {
+                    const wafRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets/phases/http_request_firewall_managed/entrypoint`,
+                        { headers }
+                    ).catch(() => null);
+
+                    if (wafRes && wafRes.data.result) {
+                        const rules = wafRes.data.result.rules || [];
+
+                        // Count total managed rules
+                        wafRulesets.managedRulesCount = rules.filter(r => r.action === 'execute').length;
+
+                        // Capture unique actions
+                        const actions = [...new Set(rules.map(r => r.action))];
+                        wafRulesets.rulesetActions = actions.join(', ');
+
+                        // Check for Cloudflare Managed Ruleset
+                        const cfManaged = rules.find(r => r.action === 'execute' && r.action_parameters?.id?.includes('efb7b8c949ac4650a09736fc376e9aee'));
+                        wafRulesets.cloudflareManaged = cfManaged?.enabled ? 'enabled' : 'disabled';
+
+                        // Check for OWASP Core Ruleset
+                        const owasp = rules.find(r => r.action === 'execute' && r.action_parameters?.id?.includes('4814384a9e5d4991b9815dcfc25d2f1f'));
+                        wafRulesets.owaspCore = owasp?.enabled ? 'enabled' : 'disabled';
+
+                        // Check for Exposed Credentials Check
+                        const exposedCreds = rules.find(r => r.action === 'execute' && r.action_parameters?.id?.includes('c2e184081120413c86c3ab7e14069605'));
+                        wafRulesets.exposedCredentials = exposedCreds?.enabled ? 'enabled' : 'disabled';
+                    }
+
+                    // Fetch DDoS L7 Ruleset
+                    const ddosL7Res = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets/phases/ddos_l7/entrypoint`,
+                        { headers }
+                    ).catch(() => null);
+
+                    if (ddosL7Res && ddosL7Res.data.result) {
+                        wafRulesets.ddosL7Ruleset = ddosL7Res.data.result.rules?.length > 0 ? 'enabled' : 'disabled';
+                    }
+                } catch (err) {
+                    console.log('WAF Rulesets fetch failed');
+                }
+
+                // Fetch IP Access Rules count
+                let ipAccessRulesCount = 0;
+                try {
+                    const ipRulesRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/access_rules/rules?per_page=1`,
+                        { headers }
+                    ).catch(() => null);
+
+                    if (ipRulesRes) {
+                        ipAccessRulesCount = ipRulesRes.data.result_info?.total_count || 0;
+                    }
+                } catch (err) {
+                    console.log('IP Access Rules fetch failed');
+                }
+
+                const settings = {
+                    // Security
+                    securityLevel: securityLevelRes.data.result?.value || 'unknown',
+
+                    // SSL/TLS
+                    sslMode: sslRes.data.result?.value || 'unknown',
+                    minTlsVersion: minTlsRes.data.result?.value || 'unknown',
+                    tls13: tls13Res.data.result?.value || 'off',
+
+                    // DNS
+                    dnsRecordsCount: dnsRecordsRes.data.result_info?.total_count || 0,
+
+                    // Security Features
+                    leakedCredentials: leakedCredsRes.data.result?.value || 'unknown',
+                    browserIntegrityCheck: browserCheckRes.data.result?.value || 'off',
+                    hotlinkProtection: hotlinkRes.data.result?.value || 'off',
+                    zoneLockdownRules: lockdownRes.data.result_info?.total_count || 0,
+
+                    // DDoS Protection
+                    ddosProtection: {
+                        enabled: ddosSettings.enabled,
+                        httpDdos: ddosSettings.httpDdos,
+                        sslTlsDdos: ddosSettings.sslTlsDdos,
+                        networkDdos: ddosSettings.networkDdos
+                    },
+
+                    // WAF Managed Rulesets
+                    wafManagedRules: {
+                        cloudflareManaged: wafRulesets.cloudflareManaged,
+                        owaspCore: wafRulesets.owaspCore,
+                        exposedCredentials: wafRulesets.exposedCredentials,
+                        ddosL7Ruleset: wafRulesets.ddosL7Ruleset,
+                        managedRulesCount: wafRulesets.managedRulesCount,
+                        rulesetActions: wafRulesets.rulesetActions
+                    },
+
+                    // IP Access Rules
+                    ipAccessRules: ipAccessRulesCount,
+
+                    // Bot Management
+                    botManagement: {
+                        enabled: botManagementConfig ? true : false,
+                        definitelyAutomated: botManagementConfig?.fight_mode?.definitely_automated || 'unknown',
+                        likelyAutomated: botManagementConfig?.fight_mode?.likely_automated || 'unknown',
+                        verifiedBots: botManagementConfig?.fight_mode?.verified_bots || 'allow',
+                        blockAiBots: botManagementConfig?.ai_bots_protection?.mode || 'unknown',
+                        superBotFightMode: botManagementConfig?.sbfm?.enabled || false
+                    }
+                };
+
+                console.log(`✅ Settings fetched:`, settings);
+
+                return NextResponse.json({
+                    success: true,
+                    data: settings
+                });
+
+            } catch (error) {
+                console.error('Settings Fetch Error:', error.message);
+                return NextResponse.json({
+                    success: false,
+                    message: 'Failed to fetch zone settings',
+                    error: error.message
+                }, { status: 500 });
             }
         }
 
