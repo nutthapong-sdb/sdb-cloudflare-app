@@ -461,6 +461,63 @@ export async function POST(request) {
                     console.log('IP Access Rules fetch failed');
                 }
 
+                // Fetch Custom Rules (Firewall Rules)
+                let customRulesData = {
+                    status: 'None', // Changed from count to status
+                    bypassWaf: 'not found',
+                    bypassEmail: 'not found',
+                    blockUrlSecure: 'not found'
+                };
+                try {
+                    const customRulesRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/rules?per_page=100`,
+                        { headers }
+                    ).catch(() => null);
+
+                    if (customRulesRes && customRulesRes.data.result) {
+                        const rules = customRulesRes.data.result;
+                        // Check if ANY rule is active (not paused)
+                        const anyActive = rules.some(r => !r.paused);
+                        customRulesData.status = rules.length > 0 ? (anyActive ? 'Enabled' : 'Disabled') : 'None';
+
+                        // Helper to find status by flexible name matching
+                        const findStatus = (namePart) => {
+                            const rule = rules.find(r => r.description && r.description.toLowerCase().includes(namePart.toLowerCase()));
+                            return rule ? (rule.paused ? 'Disabled' : 'Enabled') : 'Not Found';
+                        };
+
+                        customRulesData.bypassWaf = findStatus('BYPASSWAF');
+                        customRulesData.bypassEmail = findStatus('Bypass_send_email');
+                        customRulesData.blockUrlSecure = findStatus('Block_URL_Secure'); // Matches Block_URL_Secure/login
+                    }
+                } catch (err) {
+                    console.log('Custom Rules fetch failed');
+                }
+
+                // Fetch Rate Limiting Rules
+                let rateLimitData = {
+                    status: 'None', // Changed from count to status
+                    log1000Req: 'not found'
+                };
+                try {
+                    const rateLimitRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rate_limits?per_page=100`,
+                        { headers }
+                    ).catch(() => null);
+
+                    if (rateLimitRes && rateLimitRes.data.result) {
+                        const rules = rateLimitRes.data.result;
+                        // Check if ANY rule is active (not disabled)
+                        const anyActive = rules.some(r => !r.disabled);
+                        rateLimitData.status = rules.length > 0 ? (anyActive ? 'Enabled' : 'Disabled') : 'None';
+
+                        const logRule = rules.find(r => r.description && r.description.toLowerCase().includes('log 1000 req 1 min') || r.description?.includes('Log 1000 req 1 min'));
+                        rateLimitData.log1000Req = logRule ? (logRule.disabled ? 'Disabled' : 'Enabled') : 'Not Found';
+                    }
+                } catch (err) {
+                    console.log('Rate Limit Rules fetch failed');
+                }
+
                 const settings = {
                     // Security
                     securityLevel: securityLevelRes.data.result?.value || 'unknown',
@@ -499,6 +556,12 @@ export async function POST(request) {
 
                     // IP Access Rules
                     ipAccessRules: ipAccessRulesCount,
+
+                    // Custom Rules
+                    customRules: customRulesData,
+
+                    // Rate Limiting
+                    rateLimits: rateLimitData,
 
                     // Bot Management
                     botManagement: {
