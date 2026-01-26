@@ -346,7 +346,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; white-space: pre-wrap; }" +
-            "img { width: 500px; height: auto; }" +
+            "img { max-width: 100%; height: auto; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
@@ -392,6 +392,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             // Matches </ul> or </ol>, followed by ANYTHING (non-greedy), followed by <table or <div
             // AND specifically target the table start
             cleanHTML = cleanHTML.replace(/(<\/ul>|<\/ol>)[\s\S]*?(<table|<div)/gi, '$1$2');
+
+            // 3. Fix Image alignment
+            // TinyMCE uses `style="display: block; margin-left: auto; margin-right: auto;"` for center.
+            // Word prefers <p align="center"> or <div align="center">
+            cleanHTML = cleanHTML.replace(/<img[^>]*style="[^"]*margin-left:\s*auto;[^"]*margin-right:\s*auto;[^"]*"[^>]*>/gi, (match) => {
+                return `<p align="center">${match}</p>`;
+            });
 
             cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
         }
@@ -510,10 +517,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             toolbar: 'undo redo | blocks | ' +
                                                 'bold italic forecolor | alignleft aligncenter ' +
                                                 'alignright alignjustify | bullist numlist outdent indent | ' +
-                                                'removeformat | help',
+                                                'image table | removeformat | help',
                                             content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                             forced_root_block: 'p',
-                                            nonbreaking_force_tab: true
+                                            forced_root_block: 'p',
+                                            nonbreaking_force_tab: true,
+                                            images_upload_handler: (blobInfo, progress) => new Promise((resolve, reject) => {
+                                                const reader = new FileReader();
+                                                reader.readAsDataURL(blobInfo.blob());
+                                                reader.onload = () => resolve(reader.result);
+                                                reader.onerror = (error) => reject(error);
+                                            })
                                         }}
                                     />
                                 </div>
