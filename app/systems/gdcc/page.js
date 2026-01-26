@@ -135,8 +135,7 @@ const generateHtmlTable = (headers, rows, styles = {}) => {
     const thStyle = "border: 1px solid black; padding: 8px; background-color: #f3f4f6; font-weight: bold;";
     const tdStyle = "border: 1px solid black; padding: 8px;";
 
-    let html = `<div style="margin-top: 0; margin-bottom: 0; ${styles.div || ''}">
-    <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; ${styles.table || ''}">
+    let html = `<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; margin-top: 0; margin-bottom: 0; ${styles.table || ''}">
         <thead><tr>`;
 
     headers.forEach(h => {
@@ -154,7 +153,7 @@ const generateHtmlTable = (headers, rows, styles = {}) => {
         html += `</tr>`;
     });
 
-    html += `</tbody></table></div>`;
+    html += `</tbody></table>`;
     return html;
 };
 
@@ -383,6 +382,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             }
 
             cleanHTML = clone.innerHTML;
+
+            // 1. Unwrap divs that are inside paragraphs (TinyMCE often creates <p><div>...</div></p>)
+            // This is invalid HTML and causes extra margins in Word.
+            cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
+            cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
+
+            // 2. Remove any gap between lists and tables (Aggressive)
+            // Matches </ul> or </ol>, followed by ANYTHING (non-greedy), followed by <table or <div
+            // AND specifically target the table start
+            cleanHTML = cleanHTML.replace(/(<\/ul>|<\/ol>)[\s\S]*?(<table|<div)/gi, '$1$2');
+
             cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
         }
 
