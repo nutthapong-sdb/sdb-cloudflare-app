@@ -237,6 +237,14 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@RULESET_ACTIONS': safeData.rulesetActions || 'unknown',
         // IP Access Rules
         '@IP_ACCESS_RULES': safeData.ipAccessRules || '0',
+        // Custom Rules
+        '@CUSTOM_RULES_STATUS': safeData.customRules?.status || 'None',
+        '@RULE_BYPASSWAF': safeData.customRules?.bypassWaf || 'unknown',
+        '@RULE_BYPASS_EMAIL': safeData.customRules?.bypassEmail || 'unknown',
+        '@RULE_BLOCK_URL': safeData.customRules?.blockUrlSecure || 'unknown',
+        // Rate Limiting
+        '@RATE_LIMIT_RULES_STATUS': safeData.rateLimits?.status || 'None',
+        '@RULE_LOG_1000_REQ': safeData.rateLimits?.log1000Req || 'unknown',
     };
 
     for (const [key, val] of Object.entries(replacements)) {
@@ -650,6 +658,26 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                                     key={v}
                                                                     onClick={() => editorRef.current?.insertContent(v)}
                                                                     className="px-2 py-1 bg-white border border-red-200 rounded text-xs font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95"
+                                                                    title={`Insert ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* 4. Custom Rules & Rulesets */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-purple-700 mb-2 pb-1 border-b border-purple-300">
+                                                        4. Custom Rules & Rulesets
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['@CUSTOM_RULES_STATUS', '@RULE_BYPASSWAF', '@RULE_BYPASS_EMAIL', '@RULE_BLOCK_URL',
+                                                            '@RATE_LIMIT_RULES_STATUS', '@RULE_LOG_1000_REQ'].map(v => (
+                                                                <button
+                                                                    key={v}
+                                                                    onClick={() => editorRef.current?.insertContent(v)}
+                                                                    className="px-2 py-1 bg-white border border-purple-200 rounded text-xs font-mono text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all shadow-sm active:scale-95"
                                                                     title={`Insert ${v}`}
                                                                 >
                                                                     {v}
