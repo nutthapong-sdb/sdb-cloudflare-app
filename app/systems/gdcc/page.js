@@ -1362,6 +1362,48 @@ export default function GDCCPage() {
         let combinedHtml = "";
 
         try {
+            // 0. Generate Domain Report (First Page)
+            // Requirement: Use "static-template" (Domain Template) + Existing Data. No new fetch, no screenshot.
+            console.log('Generating Domain Report (Template)...');
+
+            let domainTemplateContent = DEFAULT_STATIC_TEMPLATE; // Use default static template as fallback
+            try {
+                const loaded = await loadStaticTemplate();
+                if (loaded && loaded.content) {
+                    domainTemplateContent = loaded.content;
+                }
+            } catch (e) {
+                console.warn("Could not load custom domain template, using default.", e);
+            }
+
+            // Prepare basic data for Domain Report using current state/props + zoneSettings if available
+            // Note: zoneSettings might need to be fetched if not available in current scope, 
+            // but user said "Call Domain Report function".
+            // Since we are inside handleBatchReport, we might need to fetch settings fast or use what we have.
+            // User instruction: "get-zone-settings for Config values" IS allowed/implied to get "Config status"
+            // BUT "No get-traffic-analytics ALL_SUBDOMAINS".
+
+            // We'll quickly fetch zone settings to ensure variables like @CUSTOM_RULES_STATUS work.
+            const zoneSettingsResponse = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get-zone-settings', zoneId: selectedZone })
+            });
+            const zoneSettings = (await zoneSettingsResponse.json()).data || {};
+
+            const domainReportData = {
+                domain: zones.find(z => z.id === selectedZone)?.name || 'Unknown Zone',
+                zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
+                timeRange: timeRange, // Pass timeRange if template uses it
+                ...zoneSettings
+            };
+
+            // Process HTML
+            const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date());
+
+            // Add to combined HTML
+            combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
+
             for (let i = 0; i < selectedHosts.length; i++) {
                 const host = selectedHosts[i];
                 console.log(`Processing report ${i + 1}/${selectedHosts.length}: ${host}`);
