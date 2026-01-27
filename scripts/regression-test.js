@@ -131,8 +131,17 @@ async function main() {
             if (!response.data.success) throw new Error('Failed to fetch Zone Settings');
 
             const settings = response.data.data;
-            if (!settings.securityLevel) throw new Error('Missing securityLevel');
+            // Note: securityLevel was removed from the app
             if (!settings.wafManagedRules) throw new Error('Missing wafManagedRules');
+
+            // Verify Block AI Bots Fix
+            const aiBots = settings.botManagement?.blockAiBots;
+            if (aiBots) {
+                log(`    Confirmed blockAiBots value: "${aiBots}"`, colors.green);
+                if (aiBots === 'unknown') throw new Error('blockAiBots is still unknown!');
+            } else {
+                throw new Error('Missing blockAiBots in response');
+            }
         });
 
         // 5. GDCC: Traffic Analytics
@@ -148,6 +157,8 @@ async function main() {
             // Basic structure check
             if (!Array.isArray(data)) throw new Error('Data should be an array');
         });
+
+
 
     } else {
         log('⚠️ Skipping Zone-dependent tests because no Zone ID was found.', colors.yellow);

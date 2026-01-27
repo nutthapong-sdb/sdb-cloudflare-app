@@ -100,10 +100,6 @@ const DEFAULT_STATIC_TEMPLATE = `
     <th style="border: 1px solid #ccc; padding: 10px; text-align: left; width: 60%;">สถานะปัจจุบัน (Current Status)</th>
   </tr>
   <tr>
-    <td style="border: 1px solid #ccc; padding: 10px;"><strong>Security Level</strong></td>
-    <td style="border: 1px solid #ccc; padding: 10px;">@SECURITY_LEVEL</td>
-  </tr>
-  <tr>
     <td style="border: 1px solid #ccc; padding: 10px;"><strong>SSL/TLS Mode</strong></td>
     <td style="border: 1px solid #ccc; padding: 10px;">@SSL_MODE (Min: @MIN_TLS_VERSION, TLS 1.3: @TLS_1_3)</td>
   </tr>
@@ -125,6 +121,7 @@ const DEFAULT_STATIC_TEMPLATE = `
     <td style="border: 1px solid #ccc; padding: 10px;"><strong>DDoS Protection</strong></td>
     <td style="border: 1px solid #ccc; padding: 10px;">@DDOS_PROTECTION (L7: @DDOS_L7_RULESET)</td>
   </tr>
+  @DNS_RECORDS_ROWS
 </table>
 
 <h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">2. รายละเอียดการตั้งค่า (Configuration Details)</h3>
@@ -231,8 +228,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@FULL_DATE': now.toLocaleString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
         '@ACCOUNT_NAME': safeData.accountName || '-',
         '@ZONE_NAME': safeData.zoneName || '-',
-        // Zone Settings
-        '@SECURITY_LEVEL': safeData.securityLevel || 'unknown',
+        // Zone Settings (Security Level removed)
         '@BOT_MANAGEMENT_STATUS': safeData.botManagementEnabled || 'unknown',
         '@BLOCK_AI_BOTS': safeData.blockAiBots || 'unknown',
         '@DEFINITELY_AUTOMATED': safeData.definitelyAutomated || 'unknown',
@@ -273,6 +269,48 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@RULE_LOG_1000_REQ': safeData.rateLimits?.log1000Req || 'unknown',
     };
 
+    // CRITICAL: Process special placeholders FIRST before simple replacements
+    // This prevents conflicts like @DNS_RECORDS replacing part of @DNS_RECORDS_ROWS
+
+    // DNS Records - HARDCODED TEST (3 rows only)
+    // Format: 3 columns - empty | DNS name | Proxy status
+    const dnsRowsHtml = `
+<tr>
+    <td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p>
+    </td>
+    <td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Type:A example1.com</span></p>
+    </td>
+    <td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Proxied</span></p>
+    </td>
+</tr>
+<tr>
+    <td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p>
+    </td>
+    <td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Type:CNAME example2.com</span></p>
+    </td>
+    <td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">DNS Only</span></p>
+    </td>
+</tr>
+<tr>
+    <td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p>
+    </td>
+    <td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Type:MX example3.com</span></p>
+    </td>
+    <td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%">
+        <p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Proxied</span></p>
+    </td>
+</tr>`;
+    html = html.replace(/@DNS_TOTAL_ROWS/g, dnsRowsHtml);
+
+    // Now do simple text replacements
     for (const [key, val] of Object.entries(replacements)) {
         html = html.split(key).join(val);
     }
@@ -364,10 +402,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // --- DATA PREPARATION ---
     // Safely handle missing data for static mode or initial load
-    const safeData = data || {
+    // Use spread to merge defaults with incoming data
+    const safeData = {
         domain: '-', timeRange: 0, totalRequests: 0, avgTime: 0,
         blockedEvents: 0, logEvents: 0, topUrls: [], topIps: [],
-        topRules: [], topAttackers: []
+        topRules: [], topAttackers: [], dnsRecords: [],
+        ...data  // Override defaults with actual data
     };
 
     const startDate = new Date(Date.now() - (safeData.timeRange || 1440) * 60 * 1000);
@@ -1008,9 +1048,9 @@ export default function GDCCPage() {
 
     // --- DEFAULT CONFIG ---
     const DEFAULT_CONFIG = {
-        accountName: "Softdebut POC",
-        zoneName: "softdebut.online",
-        subDomain: "softdebut.online"
+        accountName: "Cloudflare Training2",
+        zoneName: "skeepmenot2.online",
+        subDomain: "skeepmenot2.online"
     };
 
     // Selector States
@@ -1023,6 +1063,7 @@ export default function GDCCPage() {
     const [topAttackers, setTopAttackers] = useState([]);
     const [topFirewallSources, setTopFirewallSources] = useState([]);
     const [zoneSettings, setZoneSettings] = useState(null);
+    const [dnsRecords, setDnsRecords] = useState([]);
 
     const [selectedAccount, setSelectedAccount] = useState('');
     const [selectedZone, setSelectedZone] = useState('');
@@ -1655,6 +1696,16 @@ export default function GDCCPage() {
             }
         };
         fetchSettings();
+
+        // Fetch DNS Records
+        const fetchDNS = async () => {
+            const result = await callAPI('get-dns-records', { zoneId: selectedZone });
+            if (result && result.data) {
+                setDnsRecords(result.data);
+                console.log('✅ DNS Records Count:', result.data.length);
+            }
+        };
+        fetchDNS();
     }, [selectedZone]);
 
 
@@ -1877,8 +1928,7 @@ export default function GDCCPage() {
                     ...reportData,
                     zoneName: zones.find(z => z.id === selectedZone)?.name,
                     accountName: accounts.find(a => a.id === selectedAccount)?.name,
-                    // Add zone settings
-                    securityLevel: zoneSettings?.securityLevel || 'unknown',
+                    // Add zone settings (Security Level removed)
                     botManagementEnabled: zoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
                     blockAiBots: zoneSettings?.botManagement?.blockAiBots || 'unknown',
                     definitelyAutomated: zoneSettings?.botManagement?.definitelyAutomated || 'unknown',
@@ -1887,7 +1937,7 @@ export default function GDCCPage() {
                     // SSL/TLS Settings
                     sslMode: zoneSettings?.sslMode || 'unknown',
                     minTlsVersion: zoneSettings?.minTlsVersion || 'unknown',
-                    tls13: zoneSettings?.tls13 === 'on' ? 'Enabled' : 'Disabled',
+                    tls13: (zoneSettings?.tls13 === 'on' || zoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
                     // DNS
                     dnsRecordsStatus: zoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
                     // Additional Security
@@ -1909,6 +1959,8 @@ export default function GDCCPage() {
                     rulesetActions: zoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
                     // IP Access Rules
                     ipAccessRules: zoneSettings?.ipAccessRules || '0',
+                    // DNS Records
+                    dnsRecords: dnsRecords || []
                 }}
                 dashboardImage={dashboardImage}
                 template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}

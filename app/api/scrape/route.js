@@ -415,6 +415,21 @@ export async function POST(request) {
                         { headers }
                     );
                     botManagementConfig = botMgmtRes.data.result;
+                    console.log('Bot Management Response Structure:', JSON.stringify(botManagementConfig, null, 2));
+
+                    // If fight_mode is missing, try the settings endpoint for SBFM
+                    if (!botManagementConfig?.fight_mode) {
+                        console.log('fight_mode not found in bot_management, checking for Super Bot Fight Mode...');
+                        try {
+                            const sbfmRes = await axios.get(
+                                `${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/bot_fight_mode`,
+                                { headers }
+                            );
+                            console.log('SBFM Settings Response:', JSON.stringify(sbfmRes.data, null, 2));
+                        } catch (sbfmErr) {
+                            console.log('SBFM endpoint not available:', sbfmErr.response?.status || sbfmErr.message);
+                        }
+                    }
                 } catch (err) {
                     console.log('Bot Management not available (likely not Enterprise plan)');
                 }
@@ -564,7 +579,7 @@ export async function POST(request) {
 
                 const settings = {
                     // Security
-                    securityLevel: securityLevelRes.data.result?.value || 'unknown',
+                    // securityLevel removed as requested
 
                     // SSL/TLS
                     sslMode: sslRes.data.result?.value || 'unknown',
@@ -610,11 +625,18 @@ export async function POST(request) {
                     // Bot Management
                     botManagement: {
                         enabled: botManagementConfig ? true : false,
-                        definitelyAutomated: botManagementConfig?.fight_mode?.definitely_automated || 'unknown',
-                        likelyAutomated: botManagementConfig?.fight_mode?.likely_automated || 'unknown',
-                        verifiedBots: botManagementConfig?.fight_mode?.verified_bots || 'allow',
-                        blockAiBots: botManagementConfig?.ai_bots_protection?.mode || 'unknown',
-                        superBotFightMode: botManagementConfig?.sbfm?.enabled || false
+                        // SBFM fields use sbfm_ prefix
+                        definitelyAutomated: botManagementConfig?.sbfm_definitely_automated
+                            ? (botManagementConfig.sbfm_definitely_automated.charAt(0).toUpperCase() + botManagementConfig.sbfm_definitely_automated.slice(1))
+                            : 'unknown',
+                        likelyAutomated: botManagementConfig?.sbfm_likely_automated
+                            ? (botManagementConfig.sbfm_likely_automated.charAt(0).toUpperCase() + botManagementConfig.sbfm_likely_automated.slice(1))
+                            : 'unknown',
+                        verifiedBots: botManagementConfig?.sbfm_verified_bots
+                            ? (botManagementConfig.sbfm_verified_bots.charAt(0).toUpperCase() + botManagementConfig.sbfm_verified_bots.slice(1))
+                            : 'unknown',
+                        blockAiBots: (botManagementConfig?.ai_bots_protection === 'block' ? 'Enabled' : (botManagementConfig?.ai_bots_protection ? 'Disabled' : 'unknown')),
+                        superBotFightMode: botManagementConfig?.sbfm_definitely_automated ? true : false
                     }
                 };
 
