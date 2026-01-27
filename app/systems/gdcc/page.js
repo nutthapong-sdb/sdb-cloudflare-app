@@ -88,45 +88,71 @@ const DEFAULT_TEMPLATE = `
 `;
 
 const DEFAULT_STATIC_TEMPLATE = `
-<h1 style="text-align: center; font-size: 24pt; font-weight: bold;">รายงานสรุปผลการดำเนินงาน (Standard Report Form)</h1>
-<h2 style="text-align: center; font-size: 18pt;">ประจำเดือน .............................. พ.ศ. ...........</h2>
+<h1 style="text-align: center; font-size: 24pt; font-weight: bold;">รายงานสรุปผลการตั้งค่าและความปลอดภัย (Domain Configuration Report)</h1>
+<h2 style="text-align: center; font-size: 18pt;">Domain: <span style="color: #2563eb;">@ZONE_NAME</span></h2>
+<p style="text-align: center; font-size: 16pt;">วันที่ออกรายงาน: @FULL_DATE</p>
 <br>
-<p><strong>เรียน:</strong> ผู้บริหาร / คณะกรรมการ</p>
-<p><strong>เรื่อง:</strong> รายงานสรุปสถานะความมั่นคงปลอดภัยไซเบอร์ (Web Application Firewall)</p>
-<br>
-<p><strong>1. บทสรุปผู้บริหาร (Executive Summary)</strong></p>
-<p style="text-indent: 1cm;">[ใส่เนื้อหาบทสรุปที่นี่...]</p>
-<br>
-<p><strong>2. สถิติการใช้งานและการโจมตี (Statistics & Attacks)</strong></p>
-<table style="width: 100%; border-collapse: collapse; border: 1px solid black;">
-  <tr>
-    <th style="border: 1px solid black; padding: 5px; background-color: #eee; width: 30%;">รายการ (Item)</th>
-    <th style="border: 1px solid black; padding: 5px; background-color: #eee; width: 20%;">สถานะ (Status)</th>
-    <th style="border: 1px solid black; padding: 5px; background-color: #eee; width: 50%;">รายละเอียด (Details)</th>
+
+<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">1. บทสรุปสถานะความปลอดภัย (Security Overview)</h3>
+<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+  <tr style="background-color: #f3f4f6;">
+    <th style="border: 1px solid #ccc; padding: 10px; text-align: left; width: 40%;">หัวข้อ (Item)</th>
+    <th style="border: 1px solid #ccc; padding: 10px; text-align: left; width: 60%;">สถานะปัจจุบัน (Current Status)</th>
   </tr>
   <tr>
-    <td style="border: 1px solid black; padding: 5px;">Total Requests</td>
-    <td style="border: 1px solid black; padding: 5px;"></td>
-    <td style="border: 1px solid black; padding: 5px;"></td>
+    <td style="border: 1px solid #ccc; padding: 10px;"><strong>Security Level</strong></td>
+    <td style="border: 1px solid #ccc; padding: 10px;">@SECURITY_LEVEL</td>
   </tr>
-   <tr>
-    <td style="border: 1px solid black; padding: 5px;">Attacks Blocked</td>
-    <td style="border: 1px solid black; padding: 5px;"></td>
-    <td style="border: 1px solid black; padding: 5px;"></td>
+  <tr>
+    <td style="border: 1px solid #ccc; padding: 10px;"><strong>SSL/TLS Mode</strong></td>
+    <td style="border: 1px solid #ccc; padding: 10px;">@SSL_MODE (Min: @MIN_TLS_VERSION, TLS 1.3: @TLS_1_3)</td>
+  </tr>
+  <tr>
+    <td style="border: 1px solid #ccc; padding: 10px;"><strong>WAF Managed Rules</strong></td>
+    <td style="border: 1px solid #ccc; padding: 10px;">
+      CF Managed: @CLOUDFLARE_MANAGED_RULESET<br>
+      OWASP Core: @OWASP_CORE_RULESET
+    </td>
+  </tr>
+  <tr>
+    <td style="border: 1px solid #ccc; padding: 10px;"><strong>Bot Management</strong></td>
+    <td style="border: 1px solid #ccc; padding: 10px;">
+      Status: @BOT_MANAGEMENT_STATUS<br>
+      Block AI Bots: @BLOCK_AI_BOTS
+    </td>
+  </tr>
+  <tr>
+    <td style="border: 1px solid #ccc; padding: 10px;"><strong>DDoS Protection</strong></td>
+    <td style="border: 1px solid #ccc; padding: 10px;">@DDOS_PROTECTION (L7: @DDOS_L7_RULESET)</td>
   </tr>
 </table>
-<br>
-<p><strong>3. ข้อเสนอแนะ (Recommendation)</strong></p>
-<ul style="list-style-type: square; margin-left: 20px;">
-  <li>ตรวจสอบการโจมตีที่เกิดขึ้นบ่อย</li>
-  <li>ปรับปรุง Rule WAF ให้เหมาะสม</li>
+
+<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">2. รายละเอียดการตั้งค่า (Configuration Details)</h3>
+
+<h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px; color: #4b5563;">2.1 Custom & Rate Limit Rules</h4>
+<ul style="list-style-type: disc; margin-left: 20px; line-height: 1.6;">
+  <li><strong>Custom Rules Status:</strong> <span style="font-weight: bold; color: #059669;">@CUSTOM_RULES_STATUS</span></li>
+  <li><strong>Rate Limiting Status:</strong> <span style="font-weight: bold; color: #059669;">@RATE_LIMIT_RULES_STATUS</span></li>
+  <li><strong>Zone Lockdown Rules:</strong> @ZONE_LOCKDOWN_RULES Rules</li>
+  <li><strong>IP Access Rules:</strong> @IP_ACCESS_RULES Rules</li>
 </ul>
-<br>
+
+<h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px; color: #4b5563;">2.2 Additional Security Features</h4>
+<ul style="list-style-type: disc; margin-left: 20px; line-height: 1.6;">
+  <li><strong>Browser Integrity Check:</strong> @BROWSER_INTEGRITY_CHECK</li>
+  <li><strong>Hotlink Protection:</strong> @HOTLINK_PROTECTION</li>
+  <li><strong>Leaked Credentials Check:</strong> @LEAKED_CREDENTIALS</li>
+</ul>
+
+<div style="margin-top: 40px; padding: 15px; background-color: #eef2ff; border-left: 5px solid #4f46e5; border-radius: 4px;">
+    <strong>บันทึก (Note):</strong><br>
+    รายงานฉบับนี้แสดงสถานะการตั้งค่า ณ วันที่ออกรายงาน ข้อมูลอาจมีการเปลี่ยนแปลงได้ตามการปรับปรุงนโยบายความปลอดภัย
+</div>
+
 <div style="margin-top: 50px; text-align: right;">
-    <p>ลงชื่อ ....................................................... ผู้จัดทำรายงาน</p>
+    <p>ลงชื่อ ....................................................... ผู้ตวรจสอบ</p>
     <p>(.......................................................)</p>
     <p>ตำแหน่ง .......................................................</p>
-    <p>วันที่ ......../......../............</p>
 </div>
 `;
 

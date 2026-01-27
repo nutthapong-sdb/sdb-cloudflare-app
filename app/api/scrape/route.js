@@ -244,77 +244,121 @@ export async function POST(request) {
 
             console.log(`🔍 Fetching API Discovery for Zone: ${zoneId}...`);
 
-            const query = `
-               query GetAPIDiscovery($zoneTag: string, $since: String, $until: String) {
-                 viewer {
-                   zones(filter: { zoneTag: $zoneTag }) {
-                     httpRequestsAdaptiveGroups(
-                       filter: {
-                           datetime_geq: $since,
-                           datetime_leq: $until
-                       }
-                       limit: 1500
-                       orderBy: [count_DESC]
-                     ) {
-                       count
-                       dimensions {
-                         clientRequestHTTPHost
-                         clientRequestPath
-                         edgeResponseStatus
-                       }
-                     }
-                   }
-                 }
-               }
-             `;
-
-            // Last 7 Days (Increased from 24h to ensure data is found)
-            const now = new Date();
-            const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-            console.log(`📅 Discovery Time Range: ${since.toISOString()} to ${now.toISOString()}`);
-
-            const variables = {
-                zoneTag: zoneId,
-                since: since.toISOString(),
-                until: now.toISOString()
+            const headers = {
+                'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                'Content-Type': 'application/json',
             };
 
             try {
-                const response = await axios({
-                    method: 'POST',
-                    url: `${CLOUDFLARE_API_BASE}/graphql`,
-                    headers: {
-                        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-                        'Content-Type': 'application/json',
-                    },
-                    data: { query, variables }
-                });
+                // Use the API Gateway Discovery Endpoint directly (better than GraphQL for this)
+                const response = await axios.get(
+                    `${CLOUDFLARE_API_BASE}/zones/${zoneId}/api_gateway/discovery`,
+                    { headers }
+                );
 
-                const zoneData = response.data?.data?.viewer?.zones?.[0];
-                const rawGroups = zoneData?.httpRequestsAdaptiveGroups || [];
+                const result = response.data;
+                console.log('📦 Raw API Response Success:', result.success);
 
-                // Transform to simpler format for the table
-                const processedData = rawGroups.map(item => ({
-                    method: 'N/A', // Method field removed to ensure compatibility
-                    host: item.dimensions?.clientRequestHTTPHost || 'unknown',
-                    path: item.dimensions?.clientRequestPath || '/',
-                    state: item.dimensions?.edgeResponseStatus || '0',
-                    source: 'unknown', // Source removed from query to ensure stability
-                    count: item.count
-                }));
+                if (result.success) {
+                    let discoveries = [];
 
-                console.log(`✅ Discovery found ${processedData.length} paths`);
+                    // Logic to handle different Cloudflare API response formats (Arrays, Objects, Schemas)
+                    if (Array.isArray(result.result)) {
+                        console.log('✅ result.result is an array with', result.result.length, 'elements');
 
-                return NextResponse.json({
-                    success: true,
-                    data: processedData,
-                    raw: rawGroups // Optional for debug
-                });
+                        if (result.result.length > 0) {
+                            const firstItem = result.result[0];
+                            // Flat Operations Format
+                            if (firstItem.method && firstItem.endpoint) {
+                                console.log('✅ Data is flat operations format!');
+                                discoveries = result.result.map(op => ({
+                                    id: op.id,
+                                    host: op.host || '-',
+                                    method: op.method || '-',
+                                    path: op.endpoint || '-',
+                                    state: op.state || '-',
+                                    source: op.source || '-', // If available directly
+                                    last_seen: op.last_updated || '-',
+                                }));
+                            }
+                            // Nested Array/Schema Format
+                            else if (Array.isArray(firstItem)) {
+                                console.log('📋 Data is nested array format');
+                                for (const item of result.result) {
+                                    if (Array.isArray(item)) {
+                                        // Flatten OpenAPI schemas
+                                        for (const schema of item) {
+                                            if (schema && schema.paths && typeof schema.paths === 'object') {
+                                                const host = schema.info?.title?.replace('Schema for ', '') || '-';
+                                                for (const [path, pathObj] of Object.entries(schema.paths)) {
+                                                    for (const [method, methodObj] of Object.entries(pathObj)) {
+                                                        if (typeof methodObj === 'object' && method !== 'parameters') {
+                                                            discoveries.push({
+                                                                host: host,
+                                                                method: method.toUpperCase(),
+                                                                path: path,
+                                                                state: schema.state || methodObj['x-cf-api-discovery-state'] || 'review',
+                                                                source: methodObj['x-cf-api-discovery-source']?.join(', ') || '-',
+                                                                last_seen: schema.last_seen || schema.timestamp || '-',
+                                                            });
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else if (result.result && typeof result.result === 'object') {
+                        // Object Format (Schemas, endpoints, etc.)
+                        console.log('⚠️ result.result is an object:', Object.keys(result.result));
+                        let targetArray = [];
 
-            } catch (gqlError) {
-                console.error('GraphQL Discovery Error:', gqlError.response?.data || gqlError.message);
-                return NextResponse.json({ success: false, message: 'Discovery GraphQL Failed' }, { status: 500 });
+                        if (result.result.schemas) targetArray = result.result.schemas;
+                        else if (result.result.discovered_origins) targetArray = result.result.discovered_origins;
+                        else if (result.result.operations) targetArray = result.result.operations;
+                        else if (result.result.endpoints) targetArray = result.result.endpoints;
+                        else targetArray = Object.values(result.result).find(v => Array.isArray(v)) || [];
+
+                        for (const schema of targetArray) {
+                            if (schema && schema.paths && typeof schema.paths === 'object') {
+                                const host = schema.info?.title?.replace('Schema for ', '') || '-';
+                                for (const [path, pathObj] of Object.entries(schema.paths)) {
+                                    for (const [method, methodObj] of Object.entries(pathObj)) {
+                                        if (typeof methodObj === 'object' && method !== 'parameters') {
+                                            discoveries.push({
+                                                host: host,
+                                                method: method.toUpperCase(),
+                                                path: path,
+                                                state: schema.state || methodObj['x-cf-api-discovery-state'] || 'review',
+                                                source: methodObj['x-cf-api-discovery-source']?.join(', ') || '-',
+                                                last_seen: schema.last_seen || schema.timestamp || '-',
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    console.log(`✅ Discovery found ${discoveries.length} paths`);
+
+                    return NextResponse.json({
+                        success: true,
+                        data: discoveries,
+                        raw: result.result // Optional for debug
+                    });
+
+                } else {
+                    console.error('API returned success: false', result.errors);
+                    return NextResponse.json({ success: false, message: 'Cloudflare API Error', error: result.errors }, { status: 500 });
+                }
+
+            } catch (error) {
+                console.error('Discovery API Error:', error.response?.data || error.message);
+                return NextResponse.json({ success: false, message: 'Discovery API Failed' }, { status: 500 });
             }
         }
 
