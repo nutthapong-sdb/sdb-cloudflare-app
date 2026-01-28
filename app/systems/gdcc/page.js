@@ -119,7 +119,7 @@ const DEFAULT_STATIC_TEMPLATE = `
   </tr>
   <tr>
     <td style="border: 1px solid #ccc; padding: 10px;"><strong>DDoS Protection</strong></td>
-    <td style="border: 1px solid #ccc; padding: 10px;">@DDOS_PROTECTION (L7: @DDOS_L7_RULESET)</td>
+    <td style="border: 1px solid #ccc; padding: 10px;">@DDOS_PROTECTION</td>
   </tr>
   @DNS_RECORDS_ROWS
 </table>
@@ -130,8 +130,8 @@ const DEFAULT_STATIC_TEMPLATE = `
 <ul style="list-style-type: disc; margin-left: 20px; line-height: 1.6;">
   <li><strong>Custom Rules Status:</strong> <span style="font-weight: bold; color: #059669;">@CUSTOM_RULES_STATUS</span></li>
   <li><strong>Rate Limiting Status:</strong> <span style="font-weight: bold; color: #059669;">@RATE_LIMIT_RULES_STATUS</span></li>
-  <li><strong>Zone Lockdown Rules:</strong> @ZONE_LOCKDOWN_RULES Rules</li>
-  <li><strong>IP Access Rules:</strong> @IP_ACCESS_RULES Rules</li>
+
+
 </ul>
 
 <h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px; color: #4b5563;">2.2 Additional Security Features</h4>
@@ -244,21 +244,22 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@LEAKED_CREDENTIALS': safeData.leakedCredentials || 'unknown',
         '@BROWSER_INTEGRITY_CHECK': safeData.browserIntegrityCheck || 'unknown',
         '@HOTLINK_PROTECTION': safeData.hotlinkProtection || 'unknown',
-        '@ZONE_LOCKDOWN_RULES': safeData.zoneLockdownRules || '0',
-        // DDoS Protection
-        '@DDOS_PROTECTION': safeData.ddosProtection || 'unknown',
-        '@HTTP_DDOS_PROTECTION': safeData.httpDdosProtection || 'unknown',
-        '@SSL_TLS_DDOS_PROTECTION': safeData.sslTlsDdosProtection || 'unknown',
-        '@NETWORK_DDOS_PROTECTION': safeData.networkDdosProtection || 'unknown',
+
+
+        // DDoS Protection - individual protections (convert Always On to Enable)
+        '@HTTP_DDOS_PROTECTION': (safeData.httpDdosProtection === 'Always On' ? 'Enable' : safeData.httpDdosProtection) || 'unknown',
+        '@SSL_TLS_DDOS_PROTECTION': (safeData.sslTlsDdosProtection === 'Always On' ? 'Enable' : safeData.sslTlsDdosProtection) || 'unknown',
+        '@NETWORK_DDOS_PROTECTION': (safeData.networkDdosProtection === 'Always On' ? 'Enable' : safeData.networkDdosProtection) || 'unknown',
+        // Note: @DDOS_PROTECTION is computed below based on the 3 individual protections
         // WAF Managed Rules
         '@CLOUDFLARE_MANAGED_RULESET': safeData.cloudflareManaged || 'unknown',
         '@OWASP_CORE_RULESET': safeData.owaspCore || 'unknown',
-        '@EXPOSED_CREDENTIALS_RULESET': safeData.exposedCredsRuleset || 'unknown',
-        '@DDOS_L7_RULESET': safeData.ddosL7Ruleset || 'unknown',
+
+
         '@MANAGED_RULES_COUNT': safeData.managedRulesCount || '0',
-        '@RULESET_ACTIONS': safeData.rulesetActions || 'unknown',
+
         // IP Access Rules
-        '@IP_ACCESS_RULES': safeData.ipAccessRules || '0',
+
         // Custom Rules
         '@CUSTOM_RULES_STATUS': safeData.customRules?.status || 'None',
         '@RULE_BYPASSWAF': safeData.customRules?.bypassWaf || 'unknown',
@@ -271,6 +272,30 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
     // This prevents conflicts like @DNS_RECORDS replacing part of @DNS_RECORDS_ROWS
+
+    // Compute DDOS_PROTECTION based on the 3 individual protections
+    // Logic: Enable if any is Enable, Disable if all are Disable
+    const computeDdosProtectionStatus = () => {
+        const protections = [
+            replacements['@HTTP_DDOS_PROTECTION'],
+            replacements['@SSL_TLS_DDOS_PROTECTION'],
+            replacements['@NETWORK_DDOS_PROTECTION']
+        ];
+
+        // Check if any protection is Enable
+        const hasEnabled = protections.some(p => p === 'Enable');
+        if (hasEnabled) return 'Enable';
+
+        // Check if all protections are Disable
+        const allDisabled = protections.every(p => p === 'Disable');
+        if (allDisabled) return 'Disable';
+
+        // Otherwise unknown
+        return 'unknown';
+    };
+
+    // Add computed DDOS_PROTECTION to replacements
+    replacements['@DDOS_PROTECTION'] = computeDdosProtectionStatus();
 
     // DNS Records - Real data from API (Proxied only)
     // Format: 3 columns - empty | DNS name (Type:X name) with 8-space indent | Proxy status
@@ -661,8 +686,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <div className="flex flex-wrap gap-2">
                                                         {['@SECURITY_LEVEL', '@BOT_MANAGEMENT_STATUS', '@BLOCK_AI_BOTS',
                                                             '@DEFINITELY_AUTOMATED', '@LIKELY_AUTOMATED', '@VERIFIED_BOTS',
-                                                            '@CLOUDFLARE_MANAGED_RULESET', '@OWASP_CORE_RULESET', '@EXPOSED_CREDENTIALS_RULESET',
-                                                            '@MANAGED_RULES_COUNT', '@RULESET_ACTIONS'].map(v => (
+                                                            '@CLOUDFLARE_MANAGED_RULESET', '@OWASP_CORE_RULESET',
+                                                            '@MANAGED_RULES_COUNT'].map(v => (
                                                                 <button
                                                                     key={v}
                                                                     onClick={() => editorRef.current?.insertContent(v)}
@@ -702,16 +727,16 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
                                                         {['@DDOS_PROTECTION', '@HTTP_DDOS_PROTECTION', '@SSL_TLS_DDOS_PROTECTION', '@NETWORK_DDOS_PROTECTION',
-                                                            '@DDOS_L7_RULESET', '@IP_ACCESS_RULES', '@ZONE_LOCKDOWN_RULES'].map(v => (
-                                                                <button
-                                                                    key={v}
-                                                                    onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-red-200 rounded text-xs font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95"
-                                                                    title={`Insert ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ))}
+                                                        ].map(v => (
+                                                            <button
+                                                                key={v}
+                                                                onClick={() => editorRef.current?.insertContent(v)}
+                                                                className="px-2 py-1 bg-white border border-red-200 rounded text-xs font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95"
+                                                                title={`Insert ${v}`}
+                                                            >
+                                                                {v}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
 
