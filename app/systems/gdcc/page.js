@@ -197,12 +197,10 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 
         // Custom Rules
         '@CUSTOM_RULES_STATUS': safeData.customRules?.status || 'None',
-        '@RULE_BYPASSWAF': safeData.customRules?.bypassWaf || 'unknown',
-        '@RULE_BYPASS_EMAIL': safeData.customRules?.bypassEmail || 'unknown',
-        '@RULE_BLOCK_URL': safeData.customRules?.blockUrlSecure || 'unknown',
+
         // Rate Limiting
         '@RATE_LIMIT_RULES_STATUS': safeData.rateLimits?.status || 'None',
-        '@RULE_LOG_1000_REQ': safeData.rateLimits?.log1000Req || 'unknown',
+
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -300,6 +298,36 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     }
 
     html = html.replace(/@IP_ACCESS_RULES_ROWS/g, ipAccessRulesHtml);
+
+    // Custom Rules - Real data from API
+    let customRulesHtml = '';
+    if (safeData.customRules && safeData.customRules.rules && safeData.customRules.rules.length > 0) {
+        safeData.customRules.rules.forEach(rule => {
+            // Use 8-space indent for the description
+            const indent = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+            // Show Action if Enabled, otherwise Disabled
+            const actionRaw = rule.status === 'Disabled' ? 'Disabled' : (rule.action || rule.status);
+            const actionDisplay = actionRaw.charAt(0).toUpperCase() + actionRaw.slice(1);
+
+            customRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
+        });
+    }
+    html = html.replace(/@CUSTOM_RULES_ROWS/g, customRulesHtml);
+
+    // Rate Limiting Rules - Real data from API
+    let rateLimitRulesHtml = '';
+    if (safeData.rateLimits && safeData.rateLimits.rules && safeData.rateLimits.rules.length > 0) {
+        safeData.rateLimits.rules.forEach(rule => {
+            // Use 8-space indent for the description
+            const indent = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+            // Show Action if Enabled, otherwise Disabled
+            const actionRaw = rule.status === 'Disabled' ? 'Disabled' : (rule.action || rule.status);
+            const actionDisplay = actionRaw.charAt(0).toUpperCase() + actionRaw.slice(1);
+
+            rateLimitRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
+        });
+    }
+    html = html.replace(/@RATE_LIMITING_RULES_ROWS/g, rateLimitRulesHtml);
 
     // Now do simple text replacements
     for (const [key, val] of Object.entries(replacements)) {
@@ -1974,6 +2002,9 @@ export default function GDCCPage() {
                     rulesetActions: zoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
                     // IP Access Rules
                     ipAccessRules: zoneSettings?.ipAccessRules || '0',
+                    // Custom Rules & Rate Limiting (New)
+                    customRules: zoneSettings?.customRules,
+                    rateLimits: zoneSettings?.rateLimits,
                     // DNS Records
                     dnsRecords: dnsRecords || []
                 }}

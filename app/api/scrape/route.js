@@ -534,10 +534,8 @@ export async function POST(request) {
 
                 // Fetch Custom Rules (Firewall Rules)
                 let customRulesData = {
-                    status: 'None', // Changed from count to status
-                    bypassWaf: 'not found',
-                    bypassEmail: 'not found',
-                    blockUrlSecure: 'not found'
+                    status: 'None',
+                    rules: []
                 };
                 try {
                     const customRulesRes = await axios.get(
@@ -551,42 +549,80 @@ export async function POST(request) {
                         const anyActive = rules.some(r => !r.paused);
                         customRulesData.status = rules.length > 0 ? (anyActive ? 'Enabled' : 'Disabled') : 'None';
 
-                        // Helper to find status by flexible name matching
-                        const findStatus = (namePart) => {
-                            const rule = rules.find(r => r.description && r.description.toLowerCase().includes(namePart.toLowerCase()));
-                            return rule ? (rule.paused ? 'Disabled' : 'Enabled') : 'Not Found';
-                        };
-
-                        customRulesData.bypassWaf = findStatus('BYPASSWAF');
-                        customRulesData.bypassEmail = findStatus('Bypass_send_email');
-                        customRulesData.blockUrlSecure = findStatus('Block_URL_Secure'); // Matches Block_URL_Secure/login
+                        customRulesData.rules = rules.map(r => ({
+                            description: r.description || 'No Description',
+                            action: r.action || 'unknown',
+                            status: r.paused ? 'Disabled' : 'Enabled'
+                        }));
                     }
                 } catch (err) {
                     console.log('Custom Rules fetch failed');
                 }
 
-                // Fetch Rate Limiting Rules
+                // Fetch Rate Limiting Rules (Legacy + Rulesets)
                 let rateLimitData = {
-                    status: 'None', // Changed from count to status
-                    log1000Req: 'not found'
+                    status: 'None',
+                    rules: []
                 };
                 try {
+                    // 1. Legacy Rate Limits
+                    console.log(`Fetching Legacy Rate Limits for ${zoneId}...`);
                     const rateLimitRes = await axios.get(
                         `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rate_limits?per_page=100`,
                         { headers }
-                    ).catch(() => null);
+                    ).catch(err => {
+                        console.log('Legacy Rate Limit Error:', err.message);
+                        return null;
+                    });
 
                     if (rateLimitRes && rateLimitRes.data.result) {
                         const rules = rateLimitRes.data.result;
-                        // Check if ANY rule is active (not disabled)
-                        const anyActive = rules.some(r => !r.disabled);
-                        rateLimitData.status = rules.length > 0 ? (anyActive ? 'Enabled' : 'Disabled') : 'None';
-
-                        const logRule = rules.find(r => r.description && r.description.toLowerCase().includes('log 1000 req 1 min') || r.description?.includes('Log 1000 req 1 min'));
-                        rateLimitData.log1000Req = logRule ? (logRule.disabled ? 'Disabled' : 'Enabled') : 'Not Found';
+                        console.log(`Found ${rules.length} Legacy Rate Limits`);
+                        rules.forEach(r => {
+                            rateLimitData.rules.push({
+                                description: r.description || 'No Description',
+                                match: r.match ? 'Custom Match' : 'All',
+                                action: (r.action && typeof r.action === 'object' ? r.action.mode : r.action) || 'unknown',
+                                status: r.disabled ? 'Disabled' : 'Enabled'
+                            });
+                        });
                     }
+
+                    // 2. New Rate Limiting Rulesets (http_ratelimit)
+                    // Note: Use 'http_ratelimit' phase for compatibility with most zones
+                    const rateLimitRulesetRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets/phases/http_ratelimit/entrypoint`,
+                        { headers }
+                    ).catch(err => {
+                        console.log('Ruleset Rate Limit fetch failed (api):', err.response?.status, err.response?.data?.errors?.[0]?.message);
+                        return null;
+                    });
+
+                    if (rateLimitRulesetRes && rateLimitRulesetRes.data.result && rateLimitRulesetRes.data.result.rules) {
+                        const rules = rateLimitRulesetRes.data.result.rules;
+                        console.log(`Found ${rules.length} Ruleset Rate Limits`);
+                        rules.forEach(r => {
+                            // Only include if not already present (check description)
+                            if (!rateLimitData.rules.some(existing => existing.description === r.description)) {
+                                rateLimitData.rules.push({
+                                    description: r.description || 'Rate Limiting Rule',
+                                    match: r.expression || 'Custom Match',
+                                    action: r.action || 'unknown',
+                                    status: r.enabled ? 'Enabled' : 'Disabled'
+                                });
+                            }
+                        });
+                    }
+
+                    console.log(`Total Rate Limits collected: ${rateLimitData.rules.length}`);
+
+                    if (rateLimitData.rules.length > 0) {
+                        const anyActive = rateLimitData.rules.some(r => r.status === 'Enabled');
+                        rateLimitData.status = anyActive ? 'Enabled' : 'Disabled';
+                    }
+
                 } catch (err) {
-                    console.log('Rate Limit Rules fetch failed');
+                    console.log('Rate Limit Rules fetch failed', err.message);
                 }
 
                 const settings = {
