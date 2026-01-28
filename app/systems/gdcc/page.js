@@ -253,6 +253,54 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 
     html = html.replace(/@DNS_TOTAL_ROWS/g, dnsRowsHtml);
 
+    // IP Access Rules - Real data from API
+    // Format according to user requirements:
+    // Row 1: Column 2 = "Applies to: All websites in account", Column 3 = empty
+    // Row 2+: Column 2 = IP address, Column 3 = Action (e.g., Block)
+    let ipAccessRulesHtml = '';
+
+    if (safeData.ipAccessRules && Array.isArray(safeData.ipAccessRules)) {
+        console.log(`Debug IP Access Rules: Found ${safeData.ipAccessRules.length} total rules in safeData`);
+        console.log('Debug IP Access Rules Data:', JSON.stringify(safeData.ipAccessRules));
+    } else {
+        console.log('Debug IP Access Rules: safeData.ipAccessRules is missing or not an array', safeData.ipAccessRules);
+    }
+
+    if (safeData.ipAccessRules && Array.isArray(safeData.ipAccessRules) && safeData.ipAccessRules.length > 0) {
+        // Group rules by scope
+        const accountRules = safeData.ipAccessRules.filter(rule => rule.scope === 'account' || rule.scope === 'organization');
+        const zoneRules = safeData.ipAccessRules.filter(rule => rule.scope === 'zone');
+
+        if (accountRules.length > 0) {
+            // Row 1: Scope header
+            ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Applies to: All websites in account</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td></tr>`;
+
+            // Row 2+: IP rules
+            accountRules.forEach(rule => {
+                const actionDisplay = rule.action.charAt(0).toUpperCase() + rule.action.slice(1); // Capitalize first letter
+                ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${rule.ip}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
+            });
+
+            console.log(`Generated ${accountRules.length} IP Access Rule rows (account-level) for domain report`);
+        }
+
+        if (zoneRules.length > 0) {
+            // Header for Zone rules
+            ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Applies to: This website</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td></tr>`;
+
+            // Zone rules rows
+            zoneRules.forEach(rule => {
+                const actionDisplay = rule.action.charAt(0).toUpperCase() + rule.action.slice(1);
+                ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${rule.ip}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
+            });
+            console.log(`Generated ${zoneRules.length} IP Access Rule rows (zone-level) for domain report`);
+        }
+    } else {
+        console.log('No IP Access Rules found for domain report');
+    }
+
+    html = html.replace(/@IP_ACCESS_RULES_ROWS/g, ipAccessRulesHtml);
+
     // Now do simple text replacements
     for (const [key, val] of Object.entries(replacements)) {
         html = html.split(key).join(val);
@@ -692,6 +740,25 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                                     {v}
                                                                 </button>
                                                             ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* 5. Table Variables */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-teal-700 mb-2 pb-1 border-b border-teal-300">
+                                                        5. Table Variables
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {['@IP_ACCESS_RULES_ROWS', '@DNS_TOTAL_ROWS'].map(v => (
+                                                            <button
+                                                                key={v}
+                                                                onClick={() => editorRef.current?.insertContent(v)}
+                                                                className="px-2 py-1 bg-white border border-teal-200 rounded text-xs font-mono text-teal-700 hover:bg-teal-50 hover:border-teal-400 transition-all shadow-sm active:scale-95"
+                                                                title={`Insert ${v}`}
+                                                            >
+                                                                {v}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             </>

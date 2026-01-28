@@ -505,16 +505,28 @@ export async function POST(request) {
                     console.log('WAF Rulesets fetch failed');
                 }
 
-                // Fetch IP Access Rules count
-                let ipAccessRulesCount = 0;
+                // Fetch IP Access Rules details
+                let ipAccessRulesData = [];
                 try {
                     const ipRulesRes = await axios.get(
-                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/access_rules/rules?per_page=1`,
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/access_rules/rules?per_page=100`,
                         { headers }
                     ).catch(() => null);
 
-                    if (ipRulesRes) {
-                        ipAccessRulesCount = ipRulesRes.data.result_info?.total_count || 0;
+                    if (ipRulesRes && ipRulesRes.data.result) {
+                        // Extract relevant info: IP, action, scope
+                        ipAccessRulesData = ipRulesRes.data.result.map(rule => ({
+                            ip: rule.configuration?.value || 'unknown',
+                            action: rule.mode || 'unknown', // e.g., "block", "challenge", "whitelist"
+                            scope: rule.scope?.type || 'unknown', // e.g., "zone", "account", "user"
+                            notes: rule.notes || ''
+                        }));
+                        console.log(`✓ Found ${ipAccessRulesData.length} IP Access Rules`);
+                        const scopes = [...new Set(ipAccessRulesData.map(r => r.scope))];
+                        console.log(`Debug API: IP Access Rules Scopes found: ${scopes.join(', ')}`);
+                        if (ipAccessRulesData.length > 0) {
+                            console.log('Debug API: First rule sample:', JSON.stringify(ipAccessRulesData[0]));
+                        }
                     }
                 } catch (err) {
                     console.log('IP Access Rules fetch failed');
@@ -614,7 +626,7 @@ export async function POST(request) {
                     },
 
                     // IP Access Rules
-                    ipAccessRules: ipAccessRulesCount,
+                    ipAccessRules: ipAccessRulesData,
 
                     // Custom Rules
                     customRules: customRulesData,
