@@ -1475,10 +1475,10 @@ export default function GDCCPage() {
             let domainTemplateContent;
             try {
                 const loaded = await loadStaticTemplate();
-                if (!loaded || !loaded.template) {
+                if (!loaded) {
                     throw new Error('Static template file is empty or invalid');
                 }
-                domainTemplateContent = loaded.template;
+                domainTemplateContent = loaded;
                 console.log('✓ Loaded static template from JSON file');
             } catch (e) {
                 console.error("Failed to load domain template from JSON file:", e);
@@ -1501,11 +1501,54 @@ export default function GDCCPage() {
             });
             const zoneSettings = (await zoneSettingsResponse.json()).data || {};
 
+            // Also fetch DNS records for @DNS_TOTAL_ROWS
+            const dnsResponse = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get-dns-records', zoneId: selectedZone })
+            });
+            const dnsRecords = (await dnsResponse.json()).data || [];
+
             const domainReportData = {
                 domain: zones.find(z => z.id === selectedZone)?.name || 'Unknown Zone',
                 zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
+                accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
                 timeRange: timeRange, // Pass timeRange if template uses it
-                ...zoneSettings
+                dnsRecords: dnsRecords,
+                // Add zone settings (Security Level removed)
+                botManagementEnabled: zoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
+                blockAiBots: zoneSettings?.botManagement?.blockAiBots || 'unknown',
+                definitelyAutomated: zoneSettings?.botManagement?.definitelyAutomated || 'unknown',
+                likelyAutomated: zoneSettings?.botManagement?.likelyAutomated || 'unknown',
+                verifiedBots: zoneSettings?.botManagement?.verifiedBots || 'unknown',
+                // SSL/TLS Settings
+                sslMode: zoneSettings?.sslMode || 'unknown',
+                minTlsVersion: zoneSettings?.minTlsVersion || 'unknown',
+                tls13: (zoneSettings?.tls13 === 'on' || zoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
+                // DNS
+                dnsRecordsStatus: zoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
+                // Additional Security
+                leakedCredentials: zoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
+                browserIntegrityCheck: zoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
+                hotlinkProtection: zoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
+                zoneLockdownRules: zoneSettings?.zoneLockdownRules || '0',
+                // DDoS Protection
+                ddosProtection: zoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
+                httpDdosProtection: 'Always On',
+                sslTlsDdosProtection: 'Always On',
+                networkDdosProtection: 'Always On',
+                // WAF Managed Rules
+                cloudflareManaged: zoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
+                owaspCore: zoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
+                exposedCredsRuleset: zoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
+                ddosL7Ruleset: zoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
+                managedRulesCount: zoneSettings?.wafManagedRules?.managedRulesCount || '0',
+                rulesetActions: zoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
+                // IP Access Rules
+                ipAccessRules: zoneSettings?.ipAccessRules || '0',
+                // Custom Rules & Rate Limiting (New)
+                customRules: zoneSettings?.customRules,
+                rateLimits: zoneSettings?.rateLimits
             };
 
             // Process HTML
