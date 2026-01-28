@@ -87,71 +87,6 @@ const DEFAULT_TEMPLATE = `
 @TOP_ATTACKERS_LIST
 `;
 
-const DEFAULT_STATIC_TEMPLATE = `
-<h1 style="text-align: center; font-size: 24pt; font-weight: bold;">รายงานสรุปผลการตั้งค่าและความปลอดภัย (Domain Configuration Report)</h1>
-<h2 style="text-align: center; font-size: 18pt;">Domain: <span style="color: #2563eb;">@ZONE_NAME</span></h2>
-<p style="text-align: center; font-size: 16pt;">วันที่ออกรายงาน: @FULL_DATE</p>
-<br>
-
-<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">1. บทสรุปสถานะความปลอดภัย (Security Overview)</h3>
-<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-  <tr style="background-color: #f3f4f6;">
-    <th style="border: 1px solid #ccc; padding: 10px; text-align: left; width: 40%;">หัวข้อ (Item)</th>
-    <th style="border: 1px solid #ccc; padding: 10px; text-align: left; width: 60%;">สถานะปัจจุบัน (Current Status)</th>
-  </tr>
-  <tr>
-    <td style="border: 1px solid #ccc; padding: 10px;"><strong>SSL/TLS Mode</strong></td>
-    <td style="border: 1px solid #ccc; padding: 10px;">@SSL_MODE (Min: @MIN_TLS_VERSION, TLS 1.3: @TLS_1_3)</td>
-  </tr>
-  <tr>
-    <td style="border: 1px solid #ccc; padding: 10px;"><strong>WAF Managed Rules</strong></td>
-    <td style="border: 1px solid #ccc; padding: 10px;">
-      CF Managed: @CLOUDFLARE_MANAGED_RULESET<br>
-      OWASP Core: @OWASP_CORE_RULESET
-    </td>
-  </tr>
-  <tr>
-    <td style="border: 1px solid #ccc; padding: 10px;"><strong>Bot Management</strong></td>
-    <td style="border: 1px solid #ccc; padding: 10px;">
-      Status: @BOT_MANAGEMENT_STATUS<br>
-      Block AI Bots: @BLOCK_AI_BOTS
-    </td>
-  </tr>
-  <tr>
-    <td style="border: 1px solid #ccc; padding: 10px;"><strong>DDoS Protection</strong></td>
-    <td style="border: 1px solid #ccc; padding: 10px;">@DDOS_PROTECTION</td>
-  </tr>
-  @DNS_RECORDS_ROWS
-</table>
-
-<h3 style="font-size: 18pt; font-weight: bold; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-top: 20px;">2. รายละเอียดการตั้งค่า (Configuration Details)</h3>
-
-<h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px; color: #4b5563;">2.1 Custom & Rate Limit Rules</h4>
-<ul style="list-style-type: disc; margin-left: 20px; line-height: 1.6;">
-  <li><strong>Custom Rules Status:</strong> <span style="font-weight: bold; color: #059669;">@CUSTOM_RULES_STATUS</span></li>
-  <li><strong>Rate Limiting Status:</strong> <span style="font-weight: bold; color: #059669;">@RATE_LIMIT_RULES_STATUS</span></li>
-
-
-</ul>
-
-<h4 style="font-size: 16pt; font-weight: bold; margin-top: 15px; color: #4b5563;">2.2 Additional Security Features</h4>
-<ul style="list-style-type: disc; margin-left: 20px; line-height: 1.6;">
-  <li><strong>Browser Integrity Check:</strong> @BROWSER_INTEGRITY_CHECK</li>
-  <li><strong>Hotlink Protection:</strong> @HOTLINK_PROTECTION</li>
-  <li><strong>Leaked Credentials Check:</strong> @LEAKED_CREDENTIALS</li>
-</ul>
-
-<div style="margin-top: 40px; padding: 15px; background-color: #eef2ff; border-left: 5px solid #4f46e5; border-radius: 4px;">
-    <strong>บันทึก (Note):</strong><br>
-    รายงานฉบับนี้แสดงสถานะการตั้งค่า ณ วันที่ออกรายงาน ข้อมูลอาจมีการเปลี่ยนแปลงได้ตามการปรับปรุงนโยบายความปลอดภัย
-</div>
-
-<div style="margin-top: 50px; text-align: right;">
-    <p>ลงชื่อ ....................................................... ผู้ตวรจสอบ</p>
-    <p>(.......................................................)</p>
-    <p>ตำแหน่ง .......................................................</p>
-</div>
-`;
 
 // Helper to generate HTML tables for lists
 const generateHtmlTable = (headers, rows, styles = {}) => {
@@ -1049,7 +984,7 @@ export default function GDCCPage() {
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
-    const [staticReportTemplate, setStaticReportTemplate] = useState(DEFAULT_STATIC_TEMPLATE);
+    const [staticReportTemplate, setStaticReportTemplate] = useState(''); // Will be loaded from JSON file only
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
     const dashboardRef = useRef(null);
@@ -1438,17 +1373,22 @@ export default function GDCCPage() {
 
         try {
             // 0. Generate Domain Report (First Page)
-            // Requirement: Use "static-template" (Domain Template) + Existing Data. No new fetch, no screenshot.
+            // Requirement: Use "static-template" (Domain Template) from JSON file ONLY
             console.log('Generating Domain Report (Template)...');
 
-            let domainTemplateContent = DEFAULT_STATIC_TEMPLATE; // Use default static template as fallback
+            // ALWAYS load from JSON file - no fallback
+            let domainTemplateContent;
             try {
                 const loaded = await loadStaticTemplate();
-                if (loaded && loaded.content) {
-                    domainTemplateContent = loaded.content;
+                if (!loaded || !loaded.template) {
+                    throw new Error('Static template file is empty or invalid');
                 }
+                domainTemplateContent = loaded.template;
+                console.log('✓ Loaded static template from JSON file');
             } catch (e) {
-                console.warn("Could not load custom domain template, using default.", e);
+                console.error("Failed to load domain template from JSON file:", e);
+                alert('Error: Could not load Domain Report template from file. Please check staticReportTemplate.json');
+                throw e; // Stop execution instead of using fallback
             }
 
             // Prepare basic data for Domain Report using current state/props + zoneSettings if available
