@@ -11,7 +11,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -860,9 +860,70 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 };
 
 
+// --- THEME CONFIG ---
+const THEMES = {
+    dark: {
+        id: 'dark',
+        name: 'Dark (Default)',
+        bg: 'bg-black',
+        nav: 'bg-[#0f1115]',
+        card: 'bg-gray-900 border-gray-800',
+        cardHeader: 'bg-gray-900/50 border-gray-800',
+        text: 'text-white',
+        subText: 'text-gray-400',
+        accent: 'text-orange-500',
+        button: 'bg-gray-800 hover:bg-gray-700 text-gray-300',
+        icon: 'text-gray-500 hover:text-white',
+        selectorContainer: 'bg-gray-900/40 border-gray-800',
+        rawData: 'bg-gray-950 border-gray-800 text-gray-400',
+        tableRowHover: 'hover:bg-gray-900',
+        dropdown: {
+            bg: 'bg-gray-900',
+            border: 'border-gray-700',
+            menuBg: 'bg-gray-800',
+            menuBorder: 'border-gray-700',
+            hover: 'hover:bg-gray-700',
+            text: 'text-gray-300',
+            active: 'bg-blue-600 text-white',
+            label: 'text-gray-400',
+            placeholder: 'text-gray-500',
+            inputText: 'text-white'
+        }
+    },
+    pastel: {
+        id: 'pastel',
+        name: 'Pink Pastel',
+        bg: 'bg-pink-50',
+        nav: 'bg-pink-200 border-pink-300',
+        card: 'bg-white border-pink-300 shadow-md',
+        cardHeader: 'bg-pink-100/50 border-pink-200',
+        text: 'text-pink-900',
+        subText: 'text-pink-500',
+        accent: 'text-pink-600',
+        button: 'bg-white hover:bg-pink-100 text-pink-600 border border-pink-300',
+        icon: 'text-pink-400 hover:text-pink-600',
+        selectorContainer: 'bg-white/60 border-pink-300 shadow-sm',
+        rawData: 'bg-white border-pink-200 text-gray-600',
+        tableRowHover: 'hover:bg-pink-50',
+        dropdown: {
+            bg: 'bg-white',
+            border: 'border-pink-300',
+            menuBg: 'bg-white',
+            menuBorder: 'border-pink-200 font-medium',
+            hover: 'hover:bg-pink-50',
+            text: 'text-gray-600',
+            active: 'bg-pink-400 text-white',
+            label: 'text-pink-500',
+            placeholder: 'text-gray-400',
+            inputText: 'text-gray-800'
+        }
+    }
+};
+
 // Batch Report Modal Component
 const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     const [selected, setSelected] = useState(new Set());
+    const [batchTimeRange, setBatchTimeRange] = useState(1440); // Default 1d
 
     useEffect(() => {
         if (isOpen) {
@@ -899,7 +960,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                 <div className="p-4 border-b border-gray-800 bg-gray-950/50 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <List className="w-5 h-5 text-purple-400" />
-                        Batch Report Selection
+                        Create Report
                     </h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
                         <X className="w-5 h-5" />
@@ -908,6 +969,22 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
 
                 {/* Body */}
                 <div className="p-4 overflow-y-auto flex-1">
+                    {/* Time Range Selector */}
+                    <div className="mb-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">Time Range</label>
+                        <div className="flex gap-2">
+                            {[{ label: '1 Day', val: 1440 }, { label: '7 Days', val: 10080 }, { label: '30 Days', val: 43200 }].map(t => (
+                                <button
+                                    key={t.val}
+                                    onClick={() => setBatchTimeRange(t.val)}
+                                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors border ${batchTimeRange === t.val ? 'bg-blue-600 border-blue-600 text-white' : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-200'}`}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
                         <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
@@ -940,7 +1017,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                 <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
                     <button
-                        onClick={() => onConfirm(Array.from(selected))}
+                        onClick={() => onConfirm(Array.from(selected), batchTimeRange)}
                         disabled={selected.size === 0}
                         className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
                     >
@@ -955,10 +1032,24 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
 
 
 
-function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
+function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon, theme }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef(null);
+
+    // Default theme fallback
+    const t = theme ? theme.dropdown : {
+        bg: 'bg-gray-900',
+        border: 'border-gray-700',
+        menuBg: 'bg-gray-800',
+        menuBorder: 'border-gray-700',
+        hover: 'hover:bg-gray-700',
+        text: 'text-gray-300',
+        active: 'bg-blue-600 text-white',
+        label: 'text-gray-400',
+        placeholder: 'text-gray-500',
+        inputText: 'text-white'
+    };
 
     const filteredOptions = options.filter(option =>
         option.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -975,7 +1066,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 
     return (
         <div className="space-y-2 relative" ref={dropdownRef}>
-            <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider flex items-center gap-2 mb-1">
+            <label className={`${t.label} text-xs font-semibold uppercase tracking-wider flex items-center gap-2 mb-1`}>
                 {icon}
                 {label}
             </label>
@@ -984,9 +1075,10 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                 <div
                     onClick={() => !loading && setIsOpen(!isOpen)}
                     className={`
-             w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg cursor-pointer transition-all 
+             w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all 
              flex items-center justify-between
-             ${isOpen ? 'ring-2 ring-blue-500/50 border-blue-500' : 'hover:border-gray-500'}
+             ${t.bg} border ${t.border}
+             ${isOpen ? 'ring-2 ring-blue-500/50 border-blue-500' : 'hover:opacity-80'}
           `}
                 >
                     {isOpen ? (
@@ -996,21 +1088,21 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                             onChange={(e) => setSearchTerm(e.target.value)}
                             onBlur={() => setTimeout(() => setIsOpen(false), 200)}
                             placeholder="Search..."
-                            className="w-full bg-transparent outline-none text-sm text-white placeholder-gray-500"
+                            className={`w-full bg-transparent outline-none text-sm ${t.inputText} placeholder-gray-500`}
                             autoFocus
                         />
                     ) : (
-                        <span className={`text-sm ${selectedOption ? 'text-white' : 'text-gray-500'}`}>
+                        <span className={`text-sm ${selectedOption ? t.inputText : t.placeholder}`}>
                             {selectedOption ? selectedOption.label : placeholder}
                         </span>
                     )}
-                    <svg className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${t.placeholder}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                 </div>
 
                 {isOpen && (
-                    <div className="absolute z-[100] w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    <div className={`absolute z-[100] w-full mt-1 ${t.menuBg} border ${t.menuBorder} rounded-lg shadow-xl max-h-60 overflow-y-auto`}>
                         {loading ? (
                             <div className="p-3 text-center text-xs text-gray-400">Loading...</div>
                         ) : filteredOptions.length === 0 ? (
@@ -1022,7 +1114,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                                     onMouseDown={() => handleSelect(option.value)}
                                     className={`
                     px-4 py-2 cursor-pointer transition-colors text-sm
-                    ${value === option.value ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-300'}
+                    ${value === option.value ? t.active : `${t.hover} ${t.text}`}
                   `}
                                 >
                                     <div className="font-medium">{option.label}</div>
@@ -1037,23 +1129,31 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
     );
 }
 
-const Card = ({ title, children, className = '' }) => (
-    <div className={`bg-gray-900 border border-gray-800 rounded-lg overflow-hidden ${className} pdf-card`}>
-        <div className="bg-gray-900/50 p-3 border-b border-gray-800 flex justify-between items-center px-4 py-2">
-            <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider">{title}</h3>
-            <div className="flex gap-2">
-                <Search className="w-3 h-3 text-gray-500 cursor-pointer hover:text-white" />
-                <MoreMenuIcon />
+const Card = ({ title, children, className = '', theme }) => {
+    // Default to dark theme styles if theme prop isn't provided (backward compatibility)
+    const cardClass = theme ? theme.card : 'bg-gray-900 border-gray-800';
+    const headerClass = theme ? theme.cardHeader : 'bg-gray-900/50 border-gray-800';
+    const titleClass = theme ? theme.subText : 'text-gray-400';
+    const iconClass = theme ? theme.icon : 'text-gray-500 hover:text-white';
+
+    return (
+        <div className={`border rounded-lg overflow-hidden ${cardClass} ${className} pdf-card`}>
+            <div className={`${headerClass} p-3 border-b flex justify-between items-center px-4 py-2`}>
+                <h3 className={`${titleClass} text-xs font-semibold uppercase tracking-wider`}>{title}</h3>
+                <div className="flex gap-2">
+                    <Search className={`w-3 h-3 cursor-pointer ${iconClass}`} />
+                    <MoreMenuIcon className={iconClass} />
+                </div>
+            </div>
+            <div className="p-4">
+                {children}
             </div>
         </div>
-        <div className="p-4">
-            {children}
-        </div>
-    </div>
-);
+    );
+};
 
-const MoreMenuIcon = () => (
-    <svg className="w-3 h-3 text-gray-500 cursor-pointer hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+const MoreMenuIcon = ({ className = "text-gray-500 hover:text-white" }) => (
+    <svg className={`w-3 h-3 cursor-pointer ${className}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
 );
 
 const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) => {
@@ -1096,6 +1196,8 @@ export default function GDCCPage() {
 
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isReportMenuOpen, setIsReportMenuOpen] = useState(false); // NEW: Dropdown State
+    const [isTemplateSubmenuOpen, setIsTemplateSubmenuOpen] = useState(false); // NEW: Submenu State
+    const [isThemeSubmenuOpen, setIsThemeSubmenuOpen] = useState(false); // NEW: Theme Submenu State
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
@@ -1103,6 +1205,10 @@ export default function GDCCPage() {
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
     const dashboardRef = useRef(null);
+
+    // Theme State
+    const [currentTheme, setCurrentTheme] = useState('dark');
+    const theme = THEMES[currentTheme] || THEMES.dark;
 
     // --- DEFAULT CONFIG ---
     const DEFAULT_CONFIG = {
@@ -1450,28 +1556,50 @@ export default function GDCCPage() {
         return stats;
     };
 
-    // Handle Batch Report Logic
-    const handleBatchReport = async (selectedHosts) => {
+    // Updated handleBatchReport to accept timeRange
+    const handleBatchReport = async (selectedHosts, batchTimeRange) => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
         // Progress tracking
-        let progressLogs = [];
-        const updateProgress = (message, type = 'info') => {
+        // Progress tracking
+        let progressLogs = []; // Full history for final summary
+        let displayLogs = [];  // Current display state for modal
+
+        const updateProgress = (message, type = 'info', isReplace = false, showSpinner = true) => {
             const icons = { info: '📝', success: '✅', warning: '⚠️', error: '❌', step: '🔄' };
             const icon = icons[type] || '📝';
-            progressLogs.push(`${icon} ${message}`);
+            const logEntry = `${icon} ${message}`;
+
+            // Always add to full history
+            progressLogs.push(logEntry);
+
+            // Update display logs
+            if (isReplace && displayLogs.length > 0) {
+                displayLogs[displayLogs.length - 1] = logEntry;
+            } else {
+                displayLogs.push(logEntry);
+            }
+
+            if (message.includes('Processing:')) {
+                displayLogs = [logEntry];
+            }
 
             // Update modal content
-            const logHtml = progressLogs.slice(-15).join('<br/>'); // Show last 15 logs
+            const logHtml = displayLogs.join('<br/>');
             Swal.update({
                 html: `
-                    <div style="text-align: left; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;">
+                    <div style="text-align: left; font-family: monospace; font-size: 14px; min-height: 100px; display: flex; flex-direction: column; justify-content: center;">
                         ${logHtml}
                     </div>
-                    <div class="text-sm text-gray-400 mt-4">Do not close this window.</div>
                 `
             });
+            // Conditionally show spinner
+            if (showSpinner) {
+                Swal.showLoading();
+            } else {
+                Swal.hideLoading();
+            }
         };
 
         // Show blocked loading popup
@@ -1513,8 +1641,8 @@ export default function GDCCPage() {
 
         try {
             // 0. Generate Domain Report (First Page)
-            updateProgress('Step 0: Generating Domain Report template...', 'step');
-            console.log('Generating Domain Report (Template)...');
+            updateProgress('Step 0: Creating Document Structure...', 'step');
+            console.log('Creating Document Structure from staticReportTemplate.json...');
 
             // ALWAYS load from JSON file - no fallback
             let domainTemplateContent;
@@ -1524,8 +1652,8 @@ export default function GDCCPage() {
                     throw new Error('Static template file is empty or invalid');
                 }
                 domainTemplateContent = loaded;
-                updateProgress('✓ Loaded static template from JSON file', 'success');
-                console.log('✓ Loaded static template from JSON file');
+                updateProgress('✓ Created Document Structure', 'success');
+                console.log('✓ Created Document Structure');
             } catch (e) {
                 const errorMsg = e?.message || 'Unknown error loading template';
                 console.error("Failed to load domain template from JSON file:", e);
@@ -1544,7 +1672,7 @@ export default function GDCCPage() {
             }
 
             // Prepare basic data for Domain Report using current state/props + zoneSettings if available
-            updateProgress('Fetching zone settings and DNS records...', 'step');
+            updateProgress('Fetching zone configurations...', 'step');
 
             // We'll quickly fetch zone settings to ensure variables like @CUSTOM_RULES_STATUS work.
             const zoneSettingsResponse = await fetch('/api/scrape', {
@@ -1561,7 +1689,7 @@ export default function GDCCPage() {
                 body: JSON.stringify({ action: 'get-dns-records', zoneId: selectedZone })
             });
             const dnsRecords = (await dnsResponse.json()).data || [];
-            updateProgress('✓ Zone settings and DNS records fetched', 'success');
+            updateProgress('✓ Fetched zone configurations', 'success');
 
             const domainReportData = {
                 domain: zones.find(z => z.id === selectedZone)?.name || 'Unknown Zone',
@@ -1606,12 +1734,12 @@ export default function GDCCPage() {
             };
 
             // Process HTML
-            updateProgress('Processing domain report template...', 'step');
+            updateProgress('Filling the Document Template using zone configurations...', 'step');
             const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date());
 
             // Add to combined HTML
             combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
-            updateProgress('✓ Domain Report page added', 'success');
+            updateProgress('✓ Filled the Document Template using zone configurations', 'success');
 
 
             let processedCount = 0;
@@ -1621,21 +1749,27 @@ export default function GDCCPage() {
 
             for (let i = 0; i < selectedHosts.length; i++) {
                 const host = selectedHosts[i];
-                updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
                 updateProgress(`[${i + 1}/${selectedHosts.length}] Processing: ${host}`, 'info');
-                updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
                 console.log(`\n${'='.repeat(60)}`);
                 console.log(`📊 [${i + 1}/${selectedHosts.length}] Processing: ${host}`);
                 console.log(`${'='.repeat(60)}`);
 
                 try {
+                    const hostStartTime = performance.now();
+
                     // 1. Switch Domain and Fetch Data
-                    updateProgress(`[${i + 1}] Step 1/5: Fetching traffic data...`, 'step');
+                    updateProgress(`Step 1/5: Fetching traffic data...`, 'step');
                     console.log(`🔄 Step 1/5: Switching to domain and fetching traffic data...`);
+
+                    const apiStart = performance.now();
                     setSelectedSubDomain(host);
-                    const stats = await fetchAndApplyTrafficData(host, selectedZone, timeRange);
-                    updateProgress(`[${i + 1}] ✓ Data fetched - Requests: ${stats?.totalRequests || 0}`, 'success');
-                    console.log(`✅ Data fetched - Total Requests: ${stats?.totalRequests || 0}`);
+                    // USE batchTimeRange HERE
+                    const stats = await fetchAndApplyTrafficData(host, selectedZone, batchTimeRange);
+                    const apiEnd = performance.now();
+                    const apiDuration = ((apiEnd - apiStart) / 1000).toFixed(2);
+
+                    updateProgress(`Step 1/5: Data fetched (${apiDuration}s)`, 'step', true); // Replace previous line
+                    console.log(`✅ Data fetched in ${apiDuration}s`);
 
                     // Use data even if empty (show zeros instead of skipping)
                     const safeStats = stats || {
@@ -1656,35 +1790,48 @@ export default function GDCCPage() {
                     };
 
                     // 2. Wait for animations and rendering
-                    updateProgress(`[${i + 1}] Step 2/5: Waiting for render (2s)...`, 'step');
+                    const renderStart = performance.now();
+                    updateProgress(`Step 2/5: Waiting for render (2s)...`, 'step', true); // Replace previous line
                     console.log(`⏳ Step 2/5: Waiting for dashboard render (2s)...`);
                     await new Promise(resolve => setTimeout(resolve, 2000));
-                    updateProgress(`[${i + 1}] ✓ Render complete`, 'success');
-                    console.log(`✅ Render complete`);
+                    const renderEnd = performance.now();
+                    const renderDuration = ((renderEnd - renderStart) / 1000).toFixed(2);
+                    updateProgress(`Step 2/5: Render wait complete (${renderDuration}s)`, 'success', true);
+                    console.log(`✅ Render complete in ${renderDuration}s`);
 
                     // 3. Capture Screenshot
-                    updateProgress(`[${i + 1}] Step 3/5: Capturing screenshot...`, 'step');
+                    const screenStart = performance.now();
+                    updateProgress(`Step 3/5: Capturing screenshot...`, 'step', true); // Replace previous line
                     console.log(`📸 Step 3/5: Capturing screenshot...`);
                     let imgData = null;
                     if (dashboardRef.current) {
                         try {
-                            imgData = await htmlToImage.toJpeg(dashboardRef.current, {
-                                quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
-                            });
-                            updateProgress(`[${i + 1}] ✓ Screenshot captured`, 'success');
-                            console.log(`✅ Screenshot captured successfully`);
+                            // Race between screenshot and 15s timeout
+                            imgData = await Promise.race([
+                                htmlToImage.toJpeg(dashboardRef.current, {
+                                    quality: 0.6, // Reduce quality slightly for speed
+                                    backgroundColor: '#000000',
+                                    pixelRatio: 1.0 // Reduce pixel ratio for speed (was 1.5)
+                                }),
+                                new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (15s)')), 15000))
+                            ]);
+
+                            const screenEnd = performance.now();
+                            const screenDuration = ((screenEnd - screenStart) / 1000).toFixed(2);
+                            updateProgress(`Step 3/5: Screenshot captured (${screenDuration}s)`, 'success', true);
+                            console.log(`✅ Screenshot captured in ${screenDuration}s`);
                         } catch (imgError) {
                             console.warn(`⚠️ Screenshot failed for ${host}:`, imgError);
-                            updateProgress(`[${i + 1}] ⚠ Screenshot failed, continuing...`, 'warning');
+                            updateProgress(`Step 3/5: Screenshot failed (Timeout), continuing...`, 'warning', true);
                             console.log(`⚠️ Continuing without screenshot`);
                         }
                     } else {
-                        updateProgress(`[${i + 1}] ⚠ No dashboard ref, skipping screenshot`, 'warning');
+                        updateProgress(`Step 3/5: Skipped screenshot (No ref)`, 'warning', true);
                         console.log(`⚠️ Dashboard ref not available, skipping screenshot`);
                     }
 
                     // 4. Prepare Data for Template
-                    updateProgress(`[${i + 1}] Step 4/5: Preparing template data...`, 'step');
+                    updateProgress(`Step 4/5: Preparing template data...`, 'step', true);
                     console.log(`📋 Step 4/5: Preparing template data...`);
                     const currentReportData = {
                         domain: host,
@@ -1705,33 +1852,34 @@ export default function GDCCPage() {
                         topAttackers: safeStats.topAttackers,
                         zoneName: zones.find(z => z.id === selectedZone)?.name
                     };
-                    updateProgress(`[${i + 1}] ✓ Data prepared`, 'success');
+                    updateProgress(`Step 4/5: Data prepared`, 'success', true);
                     console.log(`✅ Data prepared`);
 
                     // 5. Generate HTML
-                    updateProgress(`[${i + 1}] Step 5/5: Generating HTML...`, 'step');
+                    const htmlStart = performance.now();
+                    updateProgress(`Step 5/5: Generating HTML...`, 'step', true);
                     console.log(`🔨 Step 5/5: Generating HTML report...`);
                     let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
 
                     // Insert Image at the top if captured
                     if (imgData) {
                         reportHtml = `<img src="${imgData}" width="600" style="width: 500px; height: auto; display: block; margin: 0 auto 20px auto;" />` + reportHtml;
-                        updateProgress(`[${i + 1}] ✓ HTML generated with screenshot`, 'success');
-                        console.log(`✅ HTML generated with screenshot`);
-                    } else {
-                        updateProgress(`[${i + 1}] ✓ HTML generated (no screenshot)`, 'success');
-                        console.log(`✅ HTML generated (no screenshot)`);
                     }
+
+                    const htmlEnd = performance.now();
+                    const htmlDuration = ((htmlEnd - htmlStart) / 1000).toFixed(2);
+
+                    const hostTotalTime = ((performance.now() - hostStartTime) / 1000).toFixed(2);
+                    updateProgress(`Step 5/5: Completed in ${hostTotalTime}s`, 'success', true);
+                    console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed in ${hostTotalTime}s`);
 
                     // Add to combined HTML with page break
                     combinedHtml += `<div class="${i === selectedHosts.length - 1 ? '' : 'page-break'}">${reportHtml}</div>`;
                     processedCount++;
-                    updateProgress(`[${i + 1}] ✅ Host completed successfully!`, 'success');
-                    console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed successfully!`);
 
                 } catch (hostError) {
                     console.error(`❌ Error processing ${host}:`, hostError);
-                    updateProgress(`[${i + 1}] ❌ Error: ${hostError.message}`, 'error');
+                    updateProgress(`❌ Error processing ${host}: ${hostError.message}`, 'error');
                     failedHosts.push(host);
                     // Continue with next host instead of failing entire batch
                     continue;
@@ -1751,34 +1899,38 @@ export default function GDCCPage() {
             fileDownload.download = `batch_report_${new Date().getTime()}.doc`;
             fileDownload.click();
             document.body.removeChild(fileDownload);
-            updateProgress(`✓ File download initiated`, 'success');
+            updateProgress(`✓ File download initiated`, 'success', true);
             console.log(`✅ File download initiated`);
 
 
 
-            // Build success message with statistics
+            // Final Update to the EXISTING modal (keep logs visible)
             updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-            updateProgress(`Summary: ${processedCount}/${selectedHosts.length} completed`, 'success');
-            console.log(`\n${'='.repeat(60)}`);
-            console.log(`📊 Batch Report Summary:`);
-            console.log(`   ✅ Processed: ${processedCount}/${selectedHosts.length}`);
-            if (failedHosts.length > 0) {
-                console.log(`   ❌ Failed: ${failedHosts.length} - [${failedHosts.join(', ')}]`);
-            }
-            console.log(`${'='.repeat(60)}\n`);
-            let successMessage = `Successfully processed ${processedCount} out of ${selectedHosts.length} domains.`;
-            if (failedHosts.length > 0) {
-                successMessage += `\n\nFailed ${failedHosts.length} domain(s) due to errors:\n${failedHosts.join(', ')}`;
-            }
+            updateProgress(`Summary: ${processedCount}/${selectedHosts.length} completed`, 'success', false, false);
 
-            Swal.fire({
-                title: processedCount === selectedHosts.length ? 'Success!' : 'Partially Completed',
-                html: `<div style="text-align: left; white-space: pre-line;">${successMessage}</div>`,
-                icon: processedCount > 0 ? 'success' : 'error',
-                confirmButtonColor: '#9333ea',
-                background: '#111827',
-                color: '#fff'
+            // Show OK button and update title
+            Swal.update({
+                title: 'Batch Report Completed',
+                icon: processedCount > 0 ? 'success' : 'warning',
+                showConfirmButton: true,
+                confirmButtonText: 'OK, Close',
+                allowOutsideClick: true,
+                didOpen: () => {
+                    Swal.hideLoading(); // FORCE HIDE SPINNER
+                },
+                html: `
+                    <div style="text-align: left;">
+                        <p class="mb-2">✅ Generated: <b>${processedCount}</b> / ${selectedHosts.length} hosts.</p>
+                        ${failedHosts.length > 0 ? `<p class="text-red-400 mb-2">❌ Failed: ${failedHosts.join(', ')}</p>` : ''}
+                        
+                        <div style="font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; background: #0f172a; padding: 10px; rounded: 4px; border: 1px solid #334155;">
+                            ${progressLogs.join('<br/>')}
+                        </div>
+                        <div class="text-sm text-green-400 mt-4 text-center">Batch process finished. You can close this window.</div>
+                    </div>
+                `
             });
+
         } catch (error) {
             console.error('Batch Report Failed:', error);
 
@@ -1894,10 +2046,11 @@ export default function GDCCPage() {
         const result = await callAPI('get-account-info');
         if (result && result.data) {
             setAccounts(result.data);
-            const defaultAcc = result.data.find(a => a.name.toLowerCase() === DEFAULT_CONFIG.accountName.toLowerCase());
+            // Disabled Auto Select Account
+            /* const defaultAcc = result.data.find(a => a.name.toLowerCase() === DEFAULT_CONFIG.accountName.toLowerCase());
             if (defaultAcc) {
                 handleAccountChange(defaultAcc.id, true);
-            }
+            } */
         }
     };
 
@@ -1914,12 +2067,13 @@ export default function GDCCPage() {
         const result = await callAPI('list-zones', { accountId });
         if (result && result.data) {
             setZones(result.data);
-            if (isAuto) {
-                const defaultZone = result.data.find(z => z.name.toLowerCase() === DEFAULT_CONFIG.zoneName.toLowerCase());
-                if (defaultZone) {
-                    setSelectedZone(defaultZone.id);
-                }
-            }
+            // Disabled Auto Select Zone
+            /* if (isAuto) {
+                 const defaultZone = result.data.find(z => z.name.toLowerCase() === DEFAULT_CONFIG.zoneName.toLowerCase());
+                 if (defaultZone) {
+                     setSelectedZone(defaultZone.id);
+                 }
+             } */
         }
         setLoadingZones(false);
     };
@@ -2130,54 +2284,102 @@ export default function GDCCPage() {
     const isActionDisabled = !selectedSubDomain || loadingStats;
 
     return (
-        <div className="min-h-screen bg-black font-sans text-white">
-            <nav className="border-b border-gray-800 bg-[#0f1115] sticky top-0 z-50">
+        <div className={`min-h-screen font-sans ${theme.bg} ${theme.text}`}>
+            <nav className={`border-b ${theme.nav === 'bg-[#0f1115]' ? 'border-gray-800' : ''} ${theme.nav} sticky top-0 z-50`}>
                 <div className="w-full px-6 h-14 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
-                            <LayoutDashboard className="w-5 h-5 text-orange-500" />
-                            <h1 className="text-sm font-bold text-gray-200">GDCC <span className="text-gray-500">Analytics</span></h1>
+                            <LayoutDashboard className={`w-5 h-5 ${theme.accent}`} />
+                            <h1 className={`text-sm font-bold ${theme.text}`}>GDCC <span className={theme.subText}>Analytics</span></h1>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
 
+                        {/* CREATE REPORT BUTTON */}
+                        <button
+                            onClick={() => setIsBatchModalOpen(true)}
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors"
+                        >
+                            <List className="w-3 h-3" /> Create Report
+                        </button>
+
+                        {/* SETTINGS DROPDOWN (with Report Template submenu) */}
                         <div className="relative">
                             <button
-                                onClick={() => !isActionDisabled && setIsReportMenuOpen(!isReportMenuOpen)}
-                                disabled={isActionDisabled}
-                                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 hover:text-white text-gray-300 px-3 py-1.5 rounded text-xs transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={() => setIsReportMenuOpen(!isReportMenuOpen)}
+                                className={`flex items-center gap-2 ${theme.button} px-3 py-1.5 rounded text-xs transition-colors border border-gray-700`}
                             >
-                                <FileText className="w-3 h-3" /> Report
+                                <Settings className="w-3 h-3" />
                                 <svg className={`w-3 h-3 transition-transform ${isReportMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </button>
 
                             {isReportMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-[60] overflow-hidden animate-fade-in-up">
-                                    <button
-                                        onClick={() => { setIsReportMenuOpen(false); handleOpenReportWithImage(); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
-                                    >
-                                        <Edit3 className="w-3 h-3" /> Sub Report
-                                    </button>
-                                    <button
-                                        onClick={() => { setIsReportMenuOpen(false); handleOpenTemplateManager(); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
-                                    >
-                                        <FileText className="w-3 h-3" /> Domain Report
-                                    </button>
-                                    <button
-                                        onClick={() => { setIsReportMenuOpen(false); setIsBatchModalOpen(true); }}
-                                        disabled={subDomains.length <= 1}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <List className="w-3 h-3" /> Batch Report
-                                    </button>
+                                <div className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-[60] animate-fade-in-up">
+                                    {/* Report Template - with submenu */}
+                                    <div className="relative border-b border-gray-700">
+                                        <button
+                                            onClick={() => setIsTemplateSubmenuOpen(!isTemplateSubmenuOpen)}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center justify-between"
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <FileText className="w-3 h-3" /> Report Template
+                                            </span>
+                                            <svg className={`w-3 h-3 transition-transform ${isTemplateSubmenuOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+
+                                        {/* Submenu */}
+                                        {isTemplateSubmenuOpen && (
+                                            <div className="bg-gray-900 border-t border-gray-700 shadow-inner">
+                                                <button
+                                                    onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); handleOpenReportWithImage(); }}
+                                                    className="w-full text-left px-8 py-2 text-xs text-gray-400 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                                                >
+                                                    <Edit3 className="w-3 h-3" /> Sub Report
+                                                </button>
+                                                <button
+                                                    onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); handleOpenTemplateManager(); }}
+                                                    className="w-full text-left px-8 py-2 text-xs text-gray-400 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                                                >
+                                                    <FileText className="w-3 h-3" /> Domain Report
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Theme Settings (Refactored to Submenu) */}
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setIsThemeSubmenuOpen(!isThemeSubmenuOpen)}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center justify-between"
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Activity className="w-3 h-3" /> Theme {/* Using Activity as placeholder icon */}
+                                            </span>
+                                            <svg className={`w-3 h-3 transition-transform ${isThemeSubmenuOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+
+                                        {/* Submenu */}
+                                        {isThemeSubmenuOpen && (
+                                            <div className="bg-gray-900 border-t border-gray-700 shadow-inner">
+                                                {Object.values(THEMES).map(t => (
+                                                    <button
+                                                        key={t.id}
+                                                        onClick={() => { setCurrentTheme(t.id); setIsReportMenuOpen(false); setIsThemeSubmenuOpen(false); }}
+                                                        className={`w-full text-left px-8 py-2 text-xs flex items-center gap-2 hover:bg-gray-800 ${currentTheme === t.id ? 'text-blue-400 font-bold' : 'text-gray-400 hover:text-white'}`}
+                                                    >
+                                                        {currentTheme === t.id && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                                                        {t.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
 
                         <div className="bg-orange-600/20 text-orange-500 w-8 h-8 rounded flex items-center justify-center">
-                            <span className="font-bold text-xs">{currentUser.ownerName?.charAt(0) || 'U'}</span>
+                            <span className="font-bold text-xs">{currentUser?.ownerName?.charAt(0) || 'U'}</span>
                         </div>
                     </div>
                 </div>
@@ -2241,13 +2443,13 @@ export default function GDCCPage() {
                 onConfirm={handleBatchReport}
             />
 
-            <main ref={dashboardRef} className="p-4 bg-black min-h-screen">
+            <main ref={dashboardRef} className="p-4 min-h-screen">
 
                 {/* SELECTORS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 bg-gray-900/40 p-5 rounded-xl border border-dashed border-gray-800">
-                    <SearchableDropdown icon={<Key className="w-4 h-4 text-blue-400" />} label="Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))} value={selectedAccount} onChange={(val) => handleAccountChange(val, false)} loading={loading && accounts.length === 0} />
-                    <SearchableDropdown icon={<Server className="w-4 h-4 text-green-400" />} label="Select Zone (Domain)" placeholder={!selectedAccount ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."} options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))} value={selectedZone} onChange={setSelectedZone} loading={loadingZones} />
-                    <SearchableDropdown icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingStats && subDomains.length === 0} />
+                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 p-5 rounded-xl border border-dashed ${theme.selectorContainer}`}>
+                    <SearchableDropdown theme={theme} icon={<Key className="w-4 h-4 text-blue-400" />} label="Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))} value={selectedAccount} onChange={(val) => handleAccountChange(val, false)} loading={loading && accounts.length === 0} />
+                    <SearchableDropdown theme={theme} icon={<Server className="w-4 h-4 text-green-400" />} label="Select Zone (Domain)" placeholder={!selectedAccount ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."} options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))} value={selectedZone} onChange={setSelectedZone} loading={loadingZones} />
+                    <SearchableDropdown theme={theme} icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingStats && subDomains.length === 0} />
                 </div>
 
                 {/* TIME RANGE */}
@@ -2264,14 +2466,14 @@ export default function GDCCPage() {
 
                     {/* STATS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card title="Total Requests"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-blue-400">{totalRequests.toLocaleString()}</span><span className="text-xl text-gray-500 font-thai">Req</span></div></Card>
-                        <Card title="Avg Response Time (TTFB)"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-purple-400">{avgResponseTime}</span><span className="text-xl text-gray-500">ms</span></div></Card>
-                        <Card title="Blocked Events"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-orange-400">{blockedEvents}</span><span className="text-xl text-gray-500 font-thai">Events</span></div></Card>
+                        <Card theme={theme} title="Total Requests"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-blue-400">{totalRequests.toLocaleString()}</span><span className="text-xl font-thai opacity-60">Req</span></div></Card>
+                        <Card theme={theme} title="Avg Response Time (TTFB)"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-purple-400">{avgResponseTime}</span><span className="text-xl opacity-60">ms</span></div></Card>
+                        <Card theme={theme} title="Blocked Events"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-orange-400">{blockedEvents}</span><span className="text-xl font-thai opacity-60">Events</span></div></Card>
                     </div>
 
                     {/* CHARTS ROW 1 */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <Card title="Traffic Volume">
+                        <Card theme={theme} title="Traffic Volume">
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={throughputData}>
@@ -2284,8 +2486,8 @@ export default function GDCCPage() {
                                 </ResponsiveContainer>
                             </div>
                         </Card>
-                        <Card title="Top URLs"><HorizontalBarList data={topUrls} labelKey="path" valueKey="count" /></Card>
-                        <Card title="Top Firewall Actions">
+                        <Card theme={theme} title="Top URLs"><HorizontalBarList data={topUrls} labelKey="path" valueKey="count" /></Card>
+                        <Card theme={theme} title="Top Firewall Actions">
                             <div className="h-64 flex flex-col justify-between">
                                 {topFirewallActions.length === 0 ? (<div className="text-gray-500 text-xs italic flex-grow flex items-center justify-center">No firewall events</div>) : (
                                     <>
@@ -2310,14 +2512,14 @@ export default function GDCCPage() {
 
                     {/* CHARTS ROW 2 (Swapped IPs and User Agents) */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <Card title="Top Client IPs"><HorizontalBarList data={topIps} labelKey="ip" valueKey="count" color="bg-cyan-600" /></Card>
-                        <Card title="Top User Agents"><HorizontalBarList data={topUserAgents} labelKey="agent" valueKey="count" color="bg-indigo-600" /></Card>
-                        <Card title="Top Countries"><HorizontalBarList data={topCountries} labelKey="name" valueKey="count" color="bg-blue-800" /></Card>
+                        <Card theme={theme} title="Top Client IPs"><HorizontalBarList data={topIps} labelKey="ip" valueKey="count" color="bg-cyan-600" /></Card>
+                        <Card theme={theme} title="Top User Agents"><HorizontalBarList data={topUserAgents} labelKey="agent" valueKey="count" color="bg-indigo-600" /></Card>
+                        <Card theme={theme} title="Top Countries"><HorizontalBarList data={topCountries} labelKey="name" valueKey="count" color="bg-blue-800" /></Card>
                     </div>
 
                     {/* CHARTS ROW 3: NEW SECURITY & HTTP CHARTS */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <Card title="Attack Prevention History (Block/Challenge)">
+                        <Card theme={theme} title="Attack Prevention History (Block/Challenge)">
                             <div className="h-64 flex flex-col">
                                 <div className="flex-grow">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -2352,7 +2554,7 @@ export default function GDCCPage() {
                             </div>
                         </Card>
 
-                        <Card title="Non-200 HTTP Status Codes">
+                        <Card theme={theme} title="Non-200 HTTP Status Codes">
                             <div className="h-64">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={httpStatusSeriesData.data}>
@@ -2379,12 +2581,12 @@ export default function GDCCPage() {
 
                     {/* NEW CHARTS ROW 4 (Security Details) */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <Card title="Top WAF Rules">
+                        <Card theme={theme} title="Top WAF Rules">
                             <div className="overflow-y-auto max-h-64">
                                 <HorizontalBarList data={topRules} labelKey="rule" valueKey="count" color="bg-orange-600" />
                             </div>
                         </Card>
-                        <Card title="Top 5 Attackers">
+                        <Card theme={theme} title="Top 5 Attackers">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-xs text-left text-gray-400">
                                     <thead className="text-gray-500 uppercase font-bold border-b border-gray-800">
@@ -2400,7 +2602,7 @@ export default function GDCCPage() {
                                             <tr><td colSpan="4" className="text-center py-4 italic">No attackers found</td></tr>
                                         ) : (
                                             topAttackers.slice(0, 5).map((attacker, i) => (
-                                                <tr key={i} className="hover:bg-gray-900/50 transition-colors">
+                                                <tr key={i} className={`${theme.tableRowHover} transition-colors`}>
                                                     <td className="py-2 pl-2 font-mono text-blue-400">{attacker.ip}</td>
                                                     <td className="py-2 text-gray-300">{attacker.country}</td>
                                                     <td className="py-2 text-right text-red-500 font-bold">{attacker.count.toLocaleString()}</td>
@@ -2416,15 +2618,15 @@ export default function GDCCPage() {
 
                     {/* RAW DATA INSPECTOR */}
                     <div className="grid grid-cols-1 gap-4">
-                        <Card title={`Raw API Data for ${selectedSubDomain}`}>
-                            <div className="overflow-x-auto max-h-48 overflow-y-auto font-mono text-xs text-gray-400 bg-gray-950 p-4 rounded border border-gray-800">
+                        <Card theme={theme} title={`Raw API Data for ${selectedSubDomain}`}>
+                            <div className={`overflow-x-auto max-h-48 overflow-y-auto font-mono text-xs p-4 rounded border ${theme.rawData}`}>
                                 <div className="grid grid-cols-8 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[900px]">
                                     <div className="col-span-1">Time</div>
                                     <div className="col-span-2">Host</div><div className="col-span-1">IP</div><div className="col-span-1">Country</div>
                                     <div className="col-span-1">Status</div><div className="col-span-1">Device</div><div className="col-span-1 text-right">Count</div>
                                 </div>
-                                {rawData.map((item, i) => (
-                                    <div key={i} className="grid grid-cols-8 gap-2 hover:bg-gray-900 transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center">
+                                {rawData.slice(0, 10).map((item, i) => (
+                                    <div key={i} className={`grid grid-cols-8 gap-2 ${theme.tableRowHover} transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center`}>
                                         <div className="col-span-1 text-gray-500">
                                             {item.dimensions?.datetimeMinute ? new Date(item.dimensions.datetimeMinute).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </div>
