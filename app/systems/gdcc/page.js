@@ -844,24 +844,14 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             </button>
                         </>
                     ) : (
-                        (mode === 'report' && !dashboardImage) ? (
-                            <button
-                                onClick={onGenerate}
-                                className="px-6 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-sm font-bold rounded shadow-lg flex items-center gap-2 animate-pulse"
-                            >
-                                <Activity className="w-4 h-4" />
-                                Generate Snapshot & Report
+                        <>
+                            <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                <Edit3 className="w-3 h-3" /> Edit Template
                             </button>
-                        ) : (
-                            <>
-                                <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                                    <Edit3 className="w-3 h-3" /> Edit Template
-                                </button>
-                                <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
-                                    <FileType className="w-3 h-3" /> Download Word
-                                </button>
-                            </>
-                        )
+                            <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                                <FileType className="w-3 h-3" /> Download Word
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -1103,7 +1093,7 @@ const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) 
 export default function GDCCPage() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState(null);
-    const [isExporting, setIsExporting] = useState(false);
+
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isReportMenuOpen, setIsReportMenuOpen] = useState(false); // NEW: Dropdown State
     const [dashboardImage, setDashboardImage] = useState(null);
@@ -1923,38 +1913,7 @@ export default function GDCCPage() {
         setIsReportModalOpen(true);
     };
 
-    const handleExportPDF = async () => {
-        if (!dashboardRef.current) return;
-        setIsExporting(true);
-        try {
-            window.scrollTo(0, 0); await new Promise(resolve => setTimeout(resolve, 800));
-            const element = dashboardRef.current;
 
-            const imgData = await htmlToImage.toJpeg(element, {
-                quality: 0.9, backgroundColor: '#000000', pixelRatio: 2
-            });
-
-            // Force Portrait - standard arguments
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-
-            // 1. Fill PDF Background with Black (matches App Theme)
-            pdf.setFillColor(0, 0, 0);
-            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-
-            // Calculate height to maintain aspect ratio based on the captured element's dimensions
-            const contentWidth = element.scrollWidth;
-            const contentHeight = element.scrollHeight;
-            const ratio = contentHeight / contentWidth;
-            const calculatedHeight = pdfWidth * ratio;
-
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, calculatedHeight);
-
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            pdf.save(`gdcc-report-portrait-${timestamp}.pdf`);
-        } catch (error) { console.error('Export Failed:', error); } finally { setIsExporting(false); }
-    };
 
     if (!currentUser) return null;
 
@@ -1994,13 +1953,6 @@ export default function GDCCPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button
-                            onClick={handleExportPDF}
-                            disabled={isExporting || isActionDisabled}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isExporting ? <Activity className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {isExporting ? 'Exporting...' : 'Print page'}
-                        </button>
 
                         <div className="relative">
                             <button
