@@ -1136,7 +1136,7 @@ export default function GDCCPage() {
     const [selectedAccount, setSelectedAccount] = useState('');
     const [selectedZone, setSelectedZone] = useState('');
     const [selectedSubDomain, setSelectedSubDomain] = useState('');
-    const [timeRange, setTimeRange] = useState(1440); // Default 24h
+    const [timeRange, setTimeRange] = useState(1440); // Default 1d
 
     const fetchAndApplyTrafficData = async (subdomain, zoneId, timeRange) => {
         setLoadingStats(true);
@@ -2114,7 +2114,7 @@ export default function GDCCPage() {
                 {/* TIME RANGE */}
                 <div className="flex justify-end mb-4">
                     <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
-                        {[{ label: '30m', val: 30 }, { label: '6h', val: 360 }, { label: '12h', val: 720 }, { label: '24h', val: 1440 }].map(t => (
+                        {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
                             <button key={t.val} onClick={() => setTimeRange(t.val)} className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{t.label}</button>
                         ))}
                     </div>
