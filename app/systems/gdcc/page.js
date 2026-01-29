@@ -1501,9 +1501,20 @@ export default function GDCCPage() {
                 domainTemplateContent = loaded;
                 console.log('✓ Loaded static template from JSON file');
             } catch (e) {
+                const errorMsg = e?.message || 'Unknown error loading template';
                 console.error("Failed to load domain template from JSON file:", e);
-                alert('Error: Could not load Domain Report template from file. Please check staticReportTemplate.json');
-                throw e; // Stop execution instead of using fallback
+                Swal.fire({
+                    title: 'Template Load Error',
+                    html: `<div style="text-align: left;">
+                        <p><strong>Error:</strong> ${errorMsg}</p>
+                        <p class="text-sm text-gray-400 mt-2">Please check staticReportTemplate.json file.</p>
+                    </div>`,
+                    icon: 'error',
+                    confirmButtonColor: '#ef4444',
+                    background: '#111827',
+                    color: '#fff'
+                });
+                throw new Error(`Template Load Failed: ${errorMsg}`);
             }
 
             // Prepare basic data for Domain Report using current state/props + zoneSettings if available
@@ -1577,57 +1588,92 @@ export default function GDCCPage() {
             // Add to combined HTML
             combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
 
+
+            let processedCount = 0;
+            let failedHosts = [];
+
             for (let i = 0; i < selectedHosts.length; i++) {
                 const host = selectedHosts[i];
                 console.log(`Processing report ${i + 1}/${selectedHosts.length}: ${host}`);
 
-                // 1. Switch Domain and Fetch Data
-                setSelectedSubDomain(host);
-                const stats = await fetchAndApplyTrafficData(host, selectedZone, timeRange);
+                try {
+                    // 1. Switch Domain and Fetch Data
+                    setSelectedSubDomain(host);
+                    const stats = await fetchAndApplyTrafficData(host, selectedZone, timeRange);
 
-                // 2. Wait for animations and rendering
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Use data even if empty (show zeros instead of skipping)
+                    const safeStats = stats || {
+                        totalRequests: 0,
+                        blockedEvents: 0,
+                        logEvents: 0,
+                        avgResponseTime: 0,
+                        topUrls: [],
+                        topIps: [],
+                        topCountries: [],
+                        topUserAgents: [],
+                        peakTraffic: { time: '-', count: 0 },
+                        peakAttack: { time: '-', count: 0 },
+                        peakHttpStatus: { time: '-', count: 0 },
+                        topRules: [],
+                        topAttackers: [],
+                        topFirewallSources: []
+                    };
 
-                // 3. Capture Screenshot
-                let imgData = null;
-                if (dashboardRef.current) {
-                    imgData = await htmlToImage.toJpeg(dashboardRef.current, {
-                        quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
-                    });
+                    // 2. Wait for animations and rendering
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // 3. Capture Screenshot
+                    let imgData = null;
+                    if (dashboardRef.current) {
+                        try {
+                            imgData = await htmlToImage.toJpeg(dashboardRef.current, {
+                                quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
+                            });
+                        } catch (imgError) {
+                            console.warn(`⚠️ Screenshot failed for ${host}:`, imgError);
+                            // Continue without screenshot
+                        }
+                    }
+
+                    // 4. Prepare Data for Template
+                    const currentReportData = {
+                        domain: host,
+                        timeRange: timeRange,
+                        totalRequests: safeStats.totalRequests,
+                        blockedEvents: safeStats.blockedEvents,
+                        logEvents: safeStats.logEvents,
+                        avgTime: safeStats.avgResponseTime,
+                        topUrls: safeStats.topUrls,
+                        topIps: safeStats.topIps,
+                        topCountries: safeStats.topCountries,
+                        topUserAgents: safeStats.topUserAgents,
+                        peakTime: safeStats.peakTraffic.time,
+                        peakCount: safeStats.peakTraffic.count,
+                        peakAttack: safeStats.peakAttack,
+                        peakHttpStatus: safeStats.peakHttpStatus,
+                        topRules: safeStats.topRules,
+                        topAttackers: safeStats.topAttackers,
+                        zoneName: zones.find(z => z.id === selectedZone)?.name
+                    };
+
+                    // 5. Generate HTML
+                    let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
+
+                    // Insert Image at the top if captured
+                    if (imgData) {
+                        reportHtml = `<img src="${imgData}" width="600" style="width: 500px; height: auto; display: block; margin: 0 auto 20px auto;" />` + reportHtml;
+                    }
+
+                    // Add to combined HTML with page break
+                    combinedHtml += `<div class="${i === selectedHosts.length - 1 ? '' : 'page-break'}">${reportHtml}</div>`;
+                    processedCount++;
+
+                } catch (hostError) {
+                    console.error(`❌ Error processing ${host}:`, hostError);
+                    failedHosts.push(host);
+                    // Continue with next host instead of failing entire batch
+                    continue;
                 }
-
-                // 4. Prepare Data for Template
-                // 4. Prepare Data for Template
-                const currentReportData = {
-                    domain: host,
-                    timeRange: timeRange,
-                    totalRequests: stats.totalRequests,
-                    blockedEvents: stats.blockedEvents,
-                    logEvents: stats.logEvents,
-                    avgTime: stats.avgResponseTime,
-                    topUrls: stats.topUrls,
-                    topIps: stats.topIps, // Fixed: Using stats.topIps instead of state
-                    topCountries: stats.topCountries,
-                    topUserAgents: stats.topUserAgents,
-                    peakTime: stats.peakTraffic.time,
-                    peakCount: stats.peakTraffic.count,
-                    peakAttack: stats.peakAttack,
-                    peakHttpStatus: stats.peakHttpStatus,
-                    topRules: stats.topRules,
-                    topAttackers: stats.topAttackers,
-                    zoneName: zones.find(z => z.id === selectedZone)?.name
-                };
-
-                // 5. Generate HTML
-                let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
-
-                // Insert Image at the top if captured
-                if (imgData) {
-                    reportHtml = `<img src="${imgData}" width="600" style="width: 500px; height: auto; display: block; margin: 0 auto 20px auto;" />` + reportHtml;
-                }
-
-                // Add to combined HTML with page break
-                combinedHtml += `<div class="${i === selectedHosts.length - 1 ? '' : 'page-break'}">${reportHtml}</div>`;
             }
 
             // 6. Download the final Word document
@@ -1642,19 +1688,35 @@ export default function GDCCPage() {
 
 
 
+            // Build success message with statistics
+            let successMessage = `Successfully processed ${processedCount} out of ${selectedHosts.length} domains.`;
+            if (failedHosts.length > 0) {
+                successMessage += `\n\nFailed ${failedHosts.length} domain(s) due to errors:\n${failedHosts.join(', ')}`;
+            }
+
             Swal.fire({
-                title: 'Success!',
-                text: `Successfully generated report for ${selectedHosts.length} domains.`,
-                icon: 'success',
-                confirmButtonColor: '#9333ea', // Purple to match the button
+                title: processedCount === selectedHosts.length ? 'Success!' : 'Partially Completed',
+                html: `<div style="text-align: left; white-space: pre-line;">${successMessage}</div>`,
+                icon: processedCount > 0 ? 'success' : 'error',
+                confirmButtonColor: '#9333ea',
                 background: '#111827',
                 color: '#fff'
             });
         } catch (error) {
             console.error('Batch Report Failed:', error);
+
+            // Handle different error types
+            const errorMsg = error?.message || error?.toString() || 'An unexpected error occurred during batch report generation';
+            const errorStack = error?.stack ? error.stack.split('\n').slice(0, 3).join('\n') : 'No stack trace available';
+
+            console.log('Error details:', { message: errorMsg, stack: errorStack, fullError: error });
+
             Swal.fire({
-                title: 'Error',
-                text: 'Batch report generation failed. Check console for details.',
+                title: 'Batch Report Error',
+                html: `<div style="text-align: left;">
+                    <p><strong>Error:</strong> ${errorMsg}</p>
+                    <p class="text-sm text-gray-400 mt-2">Stack trace logged to console.</p>
+                </div>`,
                 icon: 'error',
                 confirmButtonColor: '#ef4444',
                 background: '#111827',
@@ -1709,9 +1771,40 @@ export default function GDCCPage() {
                 body: JSON.stringify({ action, ...params }),
             });
             const result = await response.json();
-            return result.success ? result : null;
+
+            if (!result.success) {
+                // Show error on webpage
+                Swal.fire({
+                    title: 'API Error',
+                    html: `<div style="text-align: left;">
+                        <p><strong>Action:</strong> ${action}</p>
+                        <p><strong>Message:</strong> ${result.message || 'Unknown error occurred'}</p>
+                        ${result.error ? `<p><strong>Details:</strong> ${result.error}</p>` : ''}
+                    </div>`,
+                    icon: 'error',
+                    confirmButtonColor: '#ef4444',
+                    background: '#111827',
+                    color: '#fff'
+                });
+                return null;
+            }
+
+            return result;
         } catch (err) {
             console.error('API Error:', err);
+            // Show network error on webpage
+            Swal.fire({
+                title: 'Network Error',
+                html: `<div style="text-align: left;">
+                    <p><strong>Action:</strong> ${action}</p>
+                    <p><strong>Error:</strong> ${err.message || 'Failed to connect to server'}</p>
+                    <p class="text-sm text-gray-400 mt-2">Please check your connection and try again.</p>
+                </div>`,
+                icon: 'error',
+                confirmButtonColor: '#ef4444',
+                background: '#111827',
+                color: '#fff'
+            });
             return null;
         } finally {
             setLoading(false);
@@ -1902,9 +1995,13 @@ export default function GDCCPage() {
         } catch (error) {
             console.error('Report Gen Failed:', error);
             Swal.fire({
-                title: 'Error',
-                text: 'Failed to generate report. Please try again.',
+                title: 'Report Generation Error',
+                html: `<div style="text-align: left;">
+                    <p><strong>Error:</strong> ${error.message || 'Unknown error occurred'}</p>
+                    <p class="text-sm text-gray-400 mt-2">Please try again or check console for details.</p>
+                </div>`,
                 icon: 'error',
+                confirmButtonColor: '#ef4444',
                 background: '#111827',
                 color: '#fff'
             });

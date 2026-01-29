@@ -688,7 +688,7 @@ export async function POST(request) {
                     }
                 };
 
-                console.log(`✅ Settings fetched:`, settings);
+                // console.log(`✅ Settings fetched:`, settings);
 
                 return NextResponse.json({
                     success: true,
