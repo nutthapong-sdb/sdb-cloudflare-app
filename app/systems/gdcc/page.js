@@ -389,6 +389,36 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     );
     html = html.replace('@TOP_SOURCES_LIST', topSourcesHtml);
 
+    // 3. Cleanup Empty Rows (Remove rows with no text content)
+    if (typeof DOMParser !== 'undefined') {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const rows = doc.querySelectorAll('tr');
+            let removedCount = 0;
+
+            rows.forEach(row => {
+                const text = row.textContent || "";
+                // Keep if text is not empty or if it has media (img, etc)
+                // Filter out rows that are purely whitespace/NBSP
+                const hasMedia = row.querySelector('img, svg, canvas, video, hr');
+                const isEmptyText = text.replace(/[\s\u00A0]/g, '') === '';
+
+                if (isEmptyText && !hasMedia) {
+                    row.remove();
+                    removedCount++;
+                }
+            });
+
+            if (removedCount > 0) {
+                console.log(`Cleanup: Removed ${removedCount} empty rows from template.`);
+                return doc.body.innerHTML;
+            }
+        } catch (e) {
+            console.error("Error cleaning empty rows:", e);
+        }
+    }
+
     return html;
 };
 
