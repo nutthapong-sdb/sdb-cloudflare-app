@@ -1881,7 +1881,14 @@ export default function GDCCPage() {
         }
     };
 
-    const handleOpenTemplateManager = () => {
+    const handleOpenTemplateManager = async () => {
+        // Reload template to ensure we have the latest file version
+        try {
+            const latest = await loadStaticTemplate();
+            if (latest) setStaticReportTemplate(latest);
+        } catch (e) {
+            console.error("Error reloading static template:", e);
+        }
         setReportModalMode('static-template');
         setIsReportModalOpen(true);
     };
