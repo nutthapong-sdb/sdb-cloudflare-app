@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
+import { getUserProfileAction } from '@/app/actions/authActions';
 import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate } from '@/app/utils/templateApi';
+import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
@@ -1195,9 +1197,10 @@ export default function GDCCPage() {
     const [currentUser, setCurrentUser] = useState(null);
 
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const [isReportMenuOpen, setIsReportMenuOpen] = useState(false); // NEW: Dropdown State
-    const [isTemplateSubmenuOpen, setIsTemplateSubmenuOpen] = useState(false); // NEW: Submenu State
-    const [isThemeSubmenuOpen, setIsThemeSubmenuOpen] = useState(false); // NEW: Theme Submenu State
+    const [isReportMenuOpen, setIsReportMenuOpen] = useState(false); // Dropdown State
+    const [isTemplateSubmenuOpen, setIsTemplateSubmenuOpen] = useState(false); // Submenu State
+    const [isThemeSubmenuOpen, setIsThemeSubmenuOpen] = useState(false); // Submenu State
+
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
@@ -1242,7 +1245,8 @@ export default function GDCCPage() {
         const result = await callAPI('get-traffic-analytics', {
             zoneId: zoneId,
             timeRange: timeRange,
-            subdomain: isAllSubdomains ? null : subdomain
+            subdomain: isAllSubdomains ? null : subdomain,
+            apiToken: currentUser?.cloudflare_api_token // Pass user token
         });
 
         let filteredData = [];
@@ -1991,13 +1995,13 @@ export default function GDCCPage() {
 
 
     // --- API ---
-    const callAPI = async (action, params = {}) => {
+    const callAPI = async (action, params = {}, explicitToken = null) => {
         setLoading(true);
         try {
             const response = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...params }),
+                body: JSON.stringify({ action, ...params, apiToken: explicitToken || currentUser?.cloudflare_api_token }),
             });
             const result = await response.json();
 
@@ -2041,9 +2045,9 @@ export default function GDCCPage() {
     };
 
     // 1. Initial Load
-    const loadAccounts = async () => {
+    const loadAccounts = async (tokenOverride = null) => {
         console.log('🚀 Loading Accounts...');
-        const result = await callAPI('get-account-info');
+        const result = await callAPI('get-account-info', {}, tokenOverride);
         if (result && result.data) {
             setAccounts(result.data);
             // Disabled Auto Select Account
@@ -2157,11 +2161,31 @@ export default function GDCCPage() {
     useEffect(() => {
         if (!selectedSubDomain) { resetDashboardData(); return; }
         fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange);
-    }, [selectedSubDomain, selectedZone, timeRange]);
+    }, [selectedSubDomain, selectedZone, timeRange, currentUser?.cloudflare_api_token]);
 
     useEffect(() => {
         const user = auth.requireAuth(router);
-        if (user) { setCurrentUser(user); loadAccounts(); }
+        if (user) {
+            setCurrentUser(user);
+
+            // Force refresh user profile to get latest token
+            getUserProfileAction(user.id).then(res => {
+                if (res.success) {
+                    setCurrentUser(res.user);
+                    // Update local storage too to keep it fresh across tabs
+                    localStorage.setItem('sdb_session', JSON.stringify(res.user));
+
+                    // Fixed: Load accounts with new token
+                    loadAccounts(res.user.cloudflare_api_token);
+                }
+            });
+
+            // Initial load (might use stale token if not passed, but let's rely on the refresh above for correctness)
+            // Or if user already has token in local storage, load immediately for speed.
+            if (user.cloudflare_api_token) {
+                loadAccounts(user.cloudflare_api_token);
+            }
+        }
 
         // Load Templates
         loadTemplate().then(tmpl => {

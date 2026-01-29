@@ -6,7 +6,14 @@ const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { action, zoneId, accountId } = body;
+        const { action, zoneId, accountId, apiToken } = body;
+
+        // Require token from body
+        const token = apiToken;
+
+        if (!token) {
+            return NextResponse.json({ success: false, message: 'Missing Cloudflare API Token' }, { status: 401 });
+        }
 
         // console.log(`🔔 API Action: ${action}`);
 
@@ -25,7 +32,7 @@ export async function POST(request) {
             // console.log(`📋 Listing Zones for Account: ${accountId || 'All'}...`);
             const response = await axios.get(url, {
                 headers: {
-                    'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 }
             });
@@ -50,7 +57,7 @@ export async function POST(request) {
 
             const response = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`, {
                 headers: {
-                    'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 }
             });
@@ -63,7 +70,7 @@ export async function POST(request) {
             // console.log(`👤 Fetching Account Info...`);
             const response = await axios.get(`${CLOUDFLARE_API_BASE}/accounts`, {
                 headers: {
-                    'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 }
             });
@@ -198,7 +205,7 @@ export async function POST(request) {
                     method: 'POST',
                     url: `${CLOUDFLARE_API_BASE}/graphql`,
                     headers: {
-                        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                     data: {
@@ -245,7 +252,7 @@ export async function POST(request) {
             console.log(`🔍 Fetching API Discovery for Zone: ${zoneId}...`);
 
             const headers = {
-                'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
             };
 
@@ -369,7 +376,7 @@ export async function POST(request) {
 
             try {
                 const headers = {
-                    'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 };
 

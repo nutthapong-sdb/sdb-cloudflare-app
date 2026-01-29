@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
+import { saveCloudflareTokenAction } from '@/app/actions/authActions';
+import Swal from 'sweetalert2';
 
 export default function UserManagementPage() {
     const router = useRouter();
@@ -13,6 +15,10 @@ export default function UserManagementPage() {
 
     // State for Reset Password Modal
     const [resetModal, setResetModal] = useState({ isOpen: false, userId: null, username: '', newPassword: '' });
+
+    // State for API Key Modal
+    const [apiKeyModal, setApiKeyModal] = useState({ isOpen: false, userId: null, username: '', currentToken: '', existingTokenPreview: '' });
+    const [isSavingToken, setIsSavingToken] = useState(false);
 
     // Load initial data and check permission
     useEffect(() => {
@@ -71,6 +77,53 @@ export default function UserManagementPage() {
 
     const openResetModal = (user) => {
         setResetModal({ isOpen: true, userId: user.id, username: user.username, newPassword: '' });
+    };
+
+    const openApiKeyModal = (user) => {
+        const token = user.cloudflare_api_token;
+        const preview = token && token.length > 8
+            ? `${token.substring(0, 4)}...${token.substring(token.length - 4)}`
+            : (token ? 'Saved (Short)' : 'Not Set');
+
+        setApiKeyModal({
+            isOpen: true,
+            userId: user.id,
+            username: user.username,
+            currentToken: '',
+            existingTokenPreview: preview
+        });
+    };
+
+    const handleSaveApiKey = async () => {
+        if (!apiKeyModal.currentToken.trim()) {
+            Swal.fire('Error', 'Please enter a valid API Token.', 'error');
+            return;
+        }
+
+        setIsSavingToken(true);
+        try {
+            const result = await saveCloudflareTokenAction(apiKeyModal.userId, apiKeyModal.currentToken.trim());
+            if (result.success) {
+                Swal.fire({
+                    title: 'Token Saved!',
+                    text: `API Token for ${apiKeyModal.username} has been updated.`,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    background: '#1f2937',
+                    color: '#fff'
+                });
+                setApiKeyModal({ isOpen: false, userId: null, username: '', currentToken: '', existingTokenPreview: '' });
+                loadUsers(); // Refresh to update local state logic if needed
+            } else {
+                Swal.fire('Error', result.message || 'Failed to save token', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            Swal.fire('Error', 'An unexpected error occurred.', 'error');
+        } finally {
+            setIsSavingToken(false);
+        }
     };
 
     const handleResetPassword = async () => {
@@ -230,6 +283,14 @@ export default function UserManagementPage() {
                                                 Reset Pwd
                                             </button>
 
+                                            <button
+                                                onClick={() => openApiKeyModal(user)}
+                                                className="text-purple-400 hover:text-purple-300 text-xs px-3 py-1.5 rounded bg-purple-900/20 hover:bg-purple-900/40 transition-colors flex items-center gap-1"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                                                API Key
+                                            </button>
+
                                             {user.role !== 'root' && user.id !== currentUser.id && (
                                                 <button
                                                     onClick={() => handleDeleteUser(user.id)}
@@ -279,6 +340,50 @@ export default function UserManagementPage() {
                                     className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 rounded-lg transition-colors"
                                 >
                                     Save Password
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* API Key Modal */}
+                {apiKeyModal.isOpen && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                        <div className="bg-gray-800 rounded-2xl border border-gray-600 p-6 max-w-sm w-full shadow-2xl">
+                            <h3 className="text-xl font-bold text-white mb-4">Manage API Key</h3>
+                            <p className="text-gray-400 mb-2 text-sm">
+                                Enter Cloudflare API Token for <span className="text-purple-400 font-bold">{apiKeyModal.username}</span>
+                            </p>
+
+                            <div className="mb-4 text-xs bg-gray-900/50 p-2 rounded border border-gray-700">
+                                <span className="text-gray-500">Current Token: </span>
+                                <span className={`font-mono font-bold ${apiKeyModal.existingTokenPreview === 'Not Set' ? 'text-red-400' : 'text-green-400'}`}>
+                                    {apiKeyModal.existingTokenPreview}
+                                </span>
+                            </div>
+
+                            <input
+                                type="text"
+                                value={apiKeyModal.currentToken}
+                                onChange={(e) => setApiKeyModal({ ...apiKeyModal, currentToken: e.target.value })}
+                                className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none mb-6 font-mono text-sm"
+                                placeholder="Enter NEW Cloudflare API Token"
+                                autoFocus
+                            />
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setApiKeyModal({ isOpen: false, userId: null, username: '', currentToken: '', existingTokenPreview: '' })}
+                                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveApiKey}
+                                    disabled={isSavingToken}
+                                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition-colors flex justify-center items-center gap-2"
+                                >
+                                    {isSavingToken ? 'Saving...' : 'Save Token'}
                                 </button>
                             </div>
                         </div>

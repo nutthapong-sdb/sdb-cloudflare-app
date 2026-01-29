@@ -6,8 +6,6 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
-      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
       - NODE_ENV=production
     volumes:
       - sdb_db_data:/app/db

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
+import { getUserProfileAction } from '@/app/actions/authActions';
 
 // Searchable Dropdown Component
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
@@ -140,7 +141,7 @@ export default function SDBPage() {
     }, 5000);
   };
 
-  const callAPI = async (action, params = {}) => {
+  const callAPI = async (action, params = {}, explicitToken = null) => {
     setLoading(true);
 
     try {
@@ -149,7 +150,11 @@ export default function SDBPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action, ...params }),
+        body: JSON.stringify({
+          action,
+          ...params,
+          apiToken: explicitToken || currentUser?.cloudflare_api_token // Pass user token
+        }),
       });
 
       const result = await response.json();
@@ -179,9 +184,9 @@ export default function SDBPage() {
     }
   };
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (tokenOverride = null) => {
     setLoading(true);
-    const result = await callAPI('get-account-info');
+    const result = await callAPI('get-account-info', {}, tokenOverride);
     if (result && result.data) {
       setAccounts(result.data);
       setAccounts(result.data);
@@ -190,12 +195,33 @@ export default function SDBPage() {
     setLoading(false);
   };
 
-  // Check Auth & Load Accounts
+  // Check Auth & Load Accounts & Refresh Token
   useEffect(() => {
     const user = auth.requireAuth(router);
     if (user) {
       setCurrentUser(user);
-      loadAccounts();
+
+      // Initial load if token exists in localStorage
+      if (user.cloudflare_api_token) {
+        loadAccounts(user.cloudflare_api_token);
+      }
+
+      // Force refresh user profile to get latest token
+      getUserProfileAction(user.id).then(res => {
+        if (res.success) {
+          console.log('🔄 User Profile Refreshed:', res.user.username);
+          const newToken = res.user.cloudflare_api_token;
+
+          // Update state
+          setCurrentUser(res.user);
+          localStorage.setItem('sdb_session', JSON.stringify(res.user));
+
+          // Load accounts with new token (if we didn't already, or just force reload to be safe)
+          // If we already loaded with same token, maybe skip? But hard to compare easily here.
+          // Just reload to be safe and fix the "missing token" bug.
+          loadAccounts(newToken);
+        }
+      });
     }
   }, []);
 

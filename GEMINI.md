@@ -19,11 +19,11 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
     npm install
     ```
 
-2.  **Set up environment variables:**
-    Create a `.env.local` file and add your Cloudflare API token and account ID:
+    Environment variables for testing are optional.
+    **Note:** Cloudflare API Tokens are now managed securely within the application's **User Management** system. You do not need to set them in `.env.local` for the application to function.
     ```env
-    CLOUDFLARE_API_TOKEN=your-api-token
-    CLOUDFLARE_ACCOUNT_ID=your-account-id
+    # Optional override for development
+    # CLOUDFLARE_API_TOKEN=
     ```
 
 3.  **Run the development server:**

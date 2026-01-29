@@ -30,7 +30,8 @@ export async function loginAction(username, password) {
                 id: user.id,
                 username: user.username,
                 role: user.role,
-                ownerName: user.owner_name
+                ownerName: user.owner_name,
+                cloudflare_api_token: user.cloudflare_api_token
             }
         };
     } catch (error) {
@@ -43,7 +44,7 @@ export async function loginAction(username, password) {
 export async function getUsersAction() {
     try {
         const db = await getDb();
-        const users = await db.all('SELECT id, username, role, owner_name as ownerName FROM users');
+        const users = await db.all('SELECT id, username, role, owner_name as ownerName, cloudflare_api_token FROM users');
         return { success: true, users };
     } catch (error) {
         return { success: false, message: error.message };
@@ -116,6 +117,44 @@ export async function resetPasswordAction(id, newPassword) {
         await db.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, id]);
 
         return { success: true, message: 'Password updated successfully' };
+    } catch (error) {
+        return { success: false, message: error.message };
+    }
+}
+
+// Save Cloudflare Token Action
+export async function saveCloudflareTokenAction(id, token) {
+    try {
+        if (!id) return { success: false, message: 'User ID required' };
+
+        const db = await getDb();
+        await db.run('UPDATE users SET cloudflare_api_token = ? WHERE id = ?', [token, id]);
+
+        return { success: true, message: 'API Token saved successfully' };
+    } catch (error) {
+        console.error('Save Token Error:', error);
+        return { success: false, message: error.message };
+    }
+}
+
+// Get Single User Profile (for refreshing session)
+export async function getUserProfileAction(id) {
+    try {
+        const db = await getDb();
+        const user = await db.get('SELECT id, username, role, owner_name, cloudflare_api_token FROM users WHERE id = ?', [id]);
+
+        if (!user) return { success: false, message: 'User not found' };
+
+        return {
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                ownerName: user.owner_name,
+                cloudflare_api_token: user.cloudflare_api_token
+            }
+        };
     } catch (error) {
         return { success: false, message: error.message };
     }
