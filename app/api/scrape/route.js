@@ -8,7 +8,7 @@ export async function POST(request) {
         const body = await request.json();
         const { action, zoneId, accountId } = body;
 
-        console.log(`🔔 API Action: ${action}`);
+        // console.log(`🔔 API Action: ${action}`);
 
         // 1. Test Connection
         if (action === 'test') {
@@ -22,7 +22,7 @@ export async function POST(request) {
                 url += `&account.id=${accountId}`;
             }
 
-            console.log(`📋 Listing Zones for Account: ${accountId || 'All'}...`);
+            // console.log(`📋 Listing Zones for Account: ${accountId || 'All'}...`);
             const response = await axios.get(url, {
                 headers: {
                     'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
@@ -46,7 +46,7 @@ export async function POST(request) {
         // 3. Get DNS Records (Subdomains)
         else if (action === 'get-dns-records') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
-            console.log(`📝 Fetching DNS for Zone: ${zoneId}...`);
+            // console.log(`📝 Fetching DNS for Zone: ${zoneId}...`);
 
             const response = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`, {
                 headers: {
@@ -60,7 +60,7 @@ export async function POST(request) {
 
         // 4. Get Account Info
         else if (action === 'get-account-info') {
-            console.log(`👤 Fetching Account Info...`);
+            // console.log(`👤 Fetching Account Info...`);
             const response = await axios.get(`${CLOUDFLARE_API_BASE}/accounts`, {
                 headers: {
                     'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
@@ -74,7 +74,7 @@ export async function POST(request) {
         // 6. Get Traffic Analytics (GraphQL) - MAIN DASHBOARD
         else if (action === 'get-traffic-analytics') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
-            console.log(`📊 Fetching GraphQL Analytics for Zone: ${zoneId}...`);
+            // console.log(`📊 Fetching GraphQL Analytics for Zone: ${zoneId}...`);
 
             // Dynamic Time Range
             const minutes = body.timeRange || 1440;
@@ -82,7 +82,7 @@ export async function POST(request) {
             const since = new Date(now.getTime() - minutes * 60 * 1000);
             const targetSubdomain = body.subdomain;
 
-            console.log(`🕒 Time Range: ${minutes}m | Subdomain: ${targetSubdomain || 'ALL'}`);
+            // console.log(`🕒 Time Range: ${minutes}m | Subdomain: ${targetSubdomain || 'ALL'}`);
 
             const query = `
                query GetZoneAnalytics($zoneTag: string, $since: String, $until: String${targetSubdomain ? ', $host: String' : ''}) {
@@ -216,7 +216,7 @@ export async function POST(request) {
                 const firewallIPs = zoneData?.firewallIPs || [];
                 const firewallSources = zoneData?.firewallSources || [];
 
-                console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs, ${firewallSources.length} Sources`);
+                // console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs, ${firewallSources.length} Sources`);
 
                 return NextResponse.json({
                     success: true,
@@ -365,7 +365,7 @@ export async function POST(request) {
         // 8. Get Zone Settings (Bot Management, Security Level, etc.)
         else if (action === 'get-zone-settings') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
-            console.log(`🔧 Fetching Zone Settings for: ${zoneId}...`);
+            // console.log(`🔧 Fetching Zone Settings for: ${zoneId}...`);
 
             try {
                 const headers = {
@@ -415,11 +415,11 @@ export async function POST(request) {
                         { headers }
                     );
                     botManagementConfig = botMgmtRes.data.result;
-                    console.log('Bot Management Response Structure:', JSON.stringify(botManagementConfig, null, 2));
+                    // console.log('Bot Management Response Structure:', JSON.stringify(botManagementConfig, null, 2));
 
                     // If fight_mode is missing, try the settings endpoint for SBFM
                     if (!botManagementConfig?.fight_mode) {
-                        console.log('fight_mode not found in bot_management, checking for Super Bot Fight Mode...');
+                        // console.log('fight_mode not found in bot_management, checking for Super Bot Fight Mode...');
                         try {
                             const sbfmRes = await axios.get(
                                 `${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/bot_fight_mode`,
@@ -427,7 +427,7 @@ export async function POST(request) {
                             );
                             console.log('SBFM Settings Response:', JSON.stringify(sbfmRes.data, null, 2));
                         } catch (sbfmErr) {
-                            console.log('SBFM endpoint not available:', sbfmErr.response?.status || sbfmErr.message);
+                            // console.log('SBFM endpoint not available:', sbfmErr.response?.status || sbfmErr.message);
                         }
                     }
                 } catch (err) {
@@ -521,11 +521,11 @@ export async function POST(request) {
                             scope: rule.scope?.type || 'unknown', // e.g., "zone", "account", "user"
                             notes: rule.notes || ''
                         }));
-                        console.log(`✓ Found ${ipAccessRulesData.length} IP Access Rules`);
+                        // console.log(`✓ Found ${ipAccessRulesData.length} IP Access Rules`);
                         const scopes = [...new Set(ipAccessRulesData.map(r => r.scope))];
-                        console.log(`Debug API: IP Access Rules Scopes found: ${scopes.join(', ')}`);
+                        // console.log(`Debug API: IP Access Rules Scopes found: ${scopes.join(', ')}`);
                         if (ipAccessRulesData.length > 0) {
-                            console.log('Debug API: First rule sample:', JSON.stringify(ipAccessRulesData[0]));
+                            // console.log('Debug API: First rule sample:', JSON.stringify(ipAccessRulesData[0]));
                         }
                     }
                 } catch (err) {
@@ -566,7 +566,7 @@ export async function POST(request) {
                 };
                 try {
                     // 1. Legacy Rate Limits
-                    console.log(`Fetching Legacy Rate Limits for ${zoneId}...`);
+                    // console.log(`Fetching Legacy Rate Limits for ${zoneId}...`);
                     const rateLimitRes = await axios.get(
                         `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rate_limits?per_page=100`,
                         { headers }
@@ -577,7 +577,7 @@ export async function POST(request) {
 
                     if (rateLimitRes && rateLimitRes.data.result) {
                         const rules = rateLimitRes.data.result;
-                        console.log(`Found ${rules.length} Legacy Rate Limits`);
+                        // console.log(`Found ${rules.length} Legacy Rate Limits`);
                         rules.forEach(r => {
                             rateLimitData.rules.push({
                                 description: r.description || 'No Description',
@@ -600,7 +600,7 @@ export async function POST(request) {
 
                     if (rateLimitRulesetRes && rateLimitRulesetRes.data.result && rateLimitRulesetRes.data.result.rules) {
                         const rules = rateLimitRulesetRes.data.result.rules;
-                        console.log(`Found ${rules.length} Ruleset Rate Limits`);
+                        // console.log(`Found ${rules.length} Ruleset Rate Limits`);
                         rules.forEach(r => {
                             // Only include if not already present (check description)
                             if (!rateLimitData.rules.some(existing => existing.description === r.description)) {
@@ -614,7 +614,7 @@ export async function POST(request) {
                         });
                     }
 
-                    console.log(`Total Rate Limits collected: ${rateLimitData.rules.length}`);
+                    // console.log(`Total Rate Limits collected: ${rateLimitData.rules.length}`);
 
                     if (rateLimitData.rules.length > 0) {
                         const anyActive = rateLimitData.rules.some(r => r.status === 'Enabled');

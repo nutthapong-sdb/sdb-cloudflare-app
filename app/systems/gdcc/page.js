@@ -1455,12 +1455,37 @@ export default function GDCCPage() {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
+        // Progress tracking
+        let progressLogs = [];
+        const updateProgress = (message, type = 'info') => {
+            const icons = { info: '📝', success: '✅', warning: '⚠️', error: '❌', step: '🔄' };
+            const icon = icons[type] || '📝';
+            progressLogs.push(`${icon} ${message}`);
+
+            // Update modal content
+            const logHtml = progressLogs.slice(-15).join('<br/>'); // Show last 15 logs
+            Swal.update({
+                html: `
+                    <div style="text-align: left; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;">
+                        ${logHtml}
+                    </div>
+                    <div class="text-sm text-gray-400 mt-4">Do not close this window.</div>
+                `
+            });
+        };
+
         // Show blocked loading popup
         Swal.fire({
             title: 'Generating Batch Reports...',
-            html: 'Please wait while we generate reports for multiple domains.<br/><span class="text-sm text-gray-400">Do not close this window.</span>',
+            html: `
+                <div style="text-align: left; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;">
+                    📝 Initializing batch report generation...
+                </div>
+                <div class="text-sm text-gray-400 mt-4">Do not close this window.</div>
+            `,
             allowOutsideClick: false,
             allowEscapeKey: false,
+            showConfirmButton: false,
             didOpen: () => {
                 Swal.showLoading();
             },
@@ -1488,7 +1513,7 @@ export default function GDCCPage() {
 
         try {
             // 0. Generate Domain Report (First Page)
-            // Requirement: Use "static-template" (Domain Template) from JSON file ONLY
+            updateProgress('Step 0: Generating Domain Report template...', 'step');
             console.log('Generating Domain Report (Template)...');
 
             // ALWAYS load from JSON file - no fallback
@@ -1499,6 +1524,7 @@ export default function GDCCPage() {
                     throw new Error('Static template file is empty or invalid');
                 }
                 domainTemplateContent = loaded;
+                updateProgress('✓ Loaded static template from JSON file', 'success');
                 console.log('✓ Loaded static template from JSON file');
             } catch (e) {
                 const errorMsg = e?.message || 'Unknown error loading template';
@@ -1518,11 +1544,7 @@ export default function GDCCPage() {
             }
 
             // Prepare basic data for Domain Report using current state/props + zoneSettings if available
-            // Note: zoneSettings might need to be fetched if not available in current scope, 
-            // but user said "Call Domain Report function".
-            // Since we are inside handleBatchReport, we might need to fetch settings fast or use what we have.
-            // User instruction: "get-zone-settings for Config values" IS allowed/implied to get "Config status"
-            // BUT "No get-traffic-analytics ALL_SUBDOMAINS".
+            updateProgress('Fetching zone settings and DNS records...', 'step');
 
             // We'll quickly fetch zone settings to ensure variables like @CUSTOM_RULES_STATUS work.
             const zoneSettingsResponse = await fetch('/api/scrape', {
@@ -1539,6 +1561,7 @@ export default function GDCCPage() {
                 body: JSON.stringify({ action: 'get-dns-records', zoneId: selectedZone })
             });
             const dnsRecords = (await dnsResponse.json()).data || [];
+            updateProgress('✓ Zone settings and DNS records fetched', 'success');
 
             const domainReportData = {
                 domain: zones.find(z => z.id === selectedZone)?.name || 'Unknown Zone',
@@ -1583,23 +1606,36 @@ export default function GDCCPage() {
             };
 
             // Process HTML
+            updateProgress('Processing domain report template...', 'step');
             const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date());
 
             // Add to combined HTML
             combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
+            updateProgress('✓ Domain Report page added', 'success');
 
 
             let processedCount = 0;
             let failedHosts = [];
 
+            updateProgress(`Starting to process ${selectedHosts.length} hosts...`, 'info');
+
             for (let i = 0; i < selectedHosts.length; i++) {
                 const host = selectedHosts[i];
-                console.log(`Processing report ${i + 1}/${selectedHosts.length}: ${host}`);
+                updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+                updateProgress(`[${i + 1}/${selectedHosts.length}] Processing: ${host}`, 'info');
+                updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+                console.log(`\n${'='.repeat(60)}`);
+                console.log(`📊 [${i + 1}/${selectedHosts.length}] Processing: ${host}`);
+                console.log(`${'='.repeat(60)}`);
 
                 try {
                     // 1. Switch Domain and Fetch Data
+                    updateProgress(`[${i + 1}] Step 1/5: Fetching traffic data...`, 'step');
+                    console.log(`🔄 Step 1/5: Switching to domain and fetching traffic data...`);
                     setSelectedSubDomain(host);
                     const stats = await fetchAndApplyTrafficData(host, selectedZone, timeRange);
+                    updateProgress(`[${i + 1}] ✓ Data fetched - Requests: ${stats?.totalRequests || 0}`, 'success');
+                    console.log(`✅ Data fetched - Total Requests: ${stats?.totalRequests || 0}`);
 
                     // Use data even if empty (show zeros instead of skipping)
                     const safeStats = stats || {
@@ -1620,22 +1656,36 @@ export default function GDCCPage() {
                     };
 
                     // 2. Wait for animations and rendering
+                    updateProgress(`[${i + 1}] Step 2/5: Waiting for render (2s)...`, 'step');
+                    console.log(`⏳ Step 2/5: Waiting for dashboard render (2s)...`);
                     await new Promise(resolve => setTimeout(resolve, 2000));
+                    updateProgress(`[${i + 1}] ✓ Render complete`, 'success');
+                    console.log(`✅ Render complete`);
 
                     // 3. Capture Screenshot
+                    updateProgress(`[${i + 1}] Step 3/5: Capturing screenshot...`, 'step');
+                    console.log(`📸 Step 3/5: Capturing screenshot...`);
                     let imgData = null;
                     if (dashboardRef.current) {
                         try {
                             imgData = await htmlToImage.toJpeg(dashboardRef.current, {
                                 quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
                             });
+                            updateProgress(`[${i + 1}] ✓ Screenshot captured`, 'success');
+                            console.log(`✅ Screenshot captured successfully`);
                         } catch (imgError) {
                             console.warn(`⚠️ Screenshot failed for ${host}:`, imgError);
-                            // Continue without screenshot
+                            updateProgress(`[${i + 1}] ⚠ Screenshot failed, continuing...`, 'warning');
+                            console.log(`⚠️ Continuing without screenshot`);
                         }
+                    } else {
+                        updateProgress(`[${i + 1}] ⚠ No dashboard ref, skipping screenshot`, 'warning');
+                        console.log(`⚠️ Dashboard ref not available, skipping screenshot`);
                     }
 
                     // 4. Prepare Data for Template
+                    updateProgress(`[${i + 1}] Step 4/5: Preparing template data...`, 'step');
+                    console.log(`📋 Step 4/5: Preparing template data...`);
                     const currentReportData = {
                         domain: host,
                         timeRange: timeRange,
@@ -1655,21 +1705,33 @@ export default function GDCCPage() {
                         topAttackers: safeStats.topAttackers,
                         zoneName: zones.find(z => z.id === selectedZone)?.name
                     };
+                    updateProgress(`[${i + 1}] ✓ Data prepared`, 'success');
+                    console.log(`✅ Data prepared`);
 
                     // 5. Generate HTML
+                    updateProgress(`[${i + 1}] Step 5/5: Generating HTML...`, 'step');
+                    console.log(`🔨 Step 5/5: Generating HTML report...`);
                     let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
 
                     // Insert Image at the top if captured
                     if (imgData) {
                         reportHtml = `<img src="${imgData}" width="600" style="width: 500px; height: auto; display: block; margin: 0 auto 20px auto;" />` + reportHtml;
+                        updateProgress(`[${i + 1}] ✓ HTML generated with screenshot`, 'success');
+                        console.log(`✅ HTML generated with screenshot`);
+                    } else {
+                        updateProgress(`[${i + 1}] ✓ HTML generated (no screenshot)`, 'success');
+                        console.log(`✅ HTML generated (no screenshot)`);
                     }
 
                     // Add to combined HTML with page break
                     combinedHtml += `<div class="${i === selectedHosts.length - 1 ? '' : 'page-break'}">${reportHtml}</div>`;
                     processedCount++;
+                    updateProgress(`[${i + 1}] ✅ Host completed successfully!`, 'success');
+                    console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed successfully!`);
 
                 } catch (hostError) {
                     console.error(`❌ Error processing ${host}:`, hostError);
+                    updateProgress(`[${i + 1}] ❌ Error: ${hostError.message}`, 'error');
                     failedHosts.push(host);
                     // Continue with next host instead of failing entire batch
                     continue;
@@ -1677,6 +1739,10 @@ export default function GDCCPage() {
             }
 
             // 6. Download the final Word document
+            updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            updateProgress(`Generating final Word document...`, 'step');
+            console.log(`\n${'='.repeat(60)}`);
+            console.log(`📥 Generating final Word document...`);
             const sourceHTML = header + combinedHtml + footer;
             const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
             const fileDownload = document.createElement("a");
@@ -1685,10 +1751,21 @@ export default function GDCCPage() {
             fileDownload.download = `batch_report_${new Date().getTime()}.doc`;
             fileDownload.click();
             document.body.removeChild(fileDownload);
+            updateProgress(`✓ File download initiated`, 'success');
+            console.log(`✅ File download initiated`);
 
 
 
             // Build success message with statistics
+            updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            updateProgress(`Summary: ${processedCount}/${selectedHosts.length} completed`, 'success');
+            console.log(`\n${'='.repeat(60)}`);
+            console.log(`📊 Batch Report Summary:`);
+            console.log(`   ✅ Processed: ${processedCount}/${selectedHosts.length}`);
+            if (failedHosts.length > 0) {
+                console.log(`   ❌ Failed: ${failedHosts.length} - [${failedHosts.join(', ')}]`);
+            }
+            console.log(`${'='.repeat(60)}\n`);
             let successMessage = `Successfully processed ${processedCount} out of ${selectedHosts.length} domains.`;
             if (failedHosts.length > 0) {
                 successMessage += `\n\nFailed ${failedHosts.length} domain(s) due to errors:\n${failedHosts.join(', ')}`;
