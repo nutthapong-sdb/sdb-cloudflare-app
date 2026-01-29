@@ -1779,6 +1779,19 @@ export default function GDCCPage() {
             }
             const hostOptions = Array.from(allHosts).sort().map(h => ({ value: h, label: h }));
 
+            // Get root domain (zone name)
+            const currentZone = zones.find(z => z.id === selectedZone);
+            const rootDomain = currentZone?.name;
+
+            // Remove root domain from the list if it exists (to avoid duplicate)
+            if (rootDomain) {
+                const idx = hostOptions.findIndex(h => h.value === rootDomain);
+                if (idx !== -1) hostOptions.splice(idx, 1);
+
+                // Add root domain at the top with label
+                hostOptions.unshift({ value: rootDomain, label: `${rootDomain} (Root Domain)` });
+            }
+
             // Add "All Subdomains" option
             hostOptions.unshift({ value: 'ALL_SUBDOMAINS', label: '--- All Subdomains (Zone Overview) ---' });
 
