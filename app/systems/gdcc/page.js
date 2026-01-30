@@ -128,6 +128,19 @@ const formatThaiDate = (date) => {
 };
 
 // --- TEMPLATE PROCESSING ---
+const formatActionName = (action) => {
+    if (!action) return '-';
+    const lower = action.toLowerCase();
+    if (lower === 'challenge') return 'Interactive Challenge';
+    if (lower === 'managed_challenge') return 'Managed Challenge';
+    if (lower === 'js_challenge' || lower === 'jschallenge') return 'JS Challenge';
+
+    // Default Title Case with space instead of underscore
+    return action.replace(/_/g, ' ').split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+};
+
 const processTemplate = (tmpl, safeData, now = new Date()) => {
     // If static template mode, return raw HTML (no replacement)
     // Mode check removed here as we pass safeData specifically for processing
@@ -276,8 +289,11 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Applies to: All websites in account</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td></tr>`;
 
             // Row 2+: IP rules
+            // Row 2+: IP rules
             accountRules.forEach(rule => {
-                const actionDisplay = rule.action.charAt(0).toUpperCase() + rule.action.slice(1); // Capitalize first letter
+                if (rule.mode === 'disable' || rule.mode === 'disabled') return;
+                const actionName = rule.mode || rule.action;
+                const actionDisplay = 'Action: ' + formatActionName(actionName);
                 ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${rule.ip}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
             });
 
@@ -289,8 +305,11 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">Applies to: This website</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td></tr>`;
 
             // Zone rules rows
+            // Zone rules rows
             zoneRules.forEach(rule => {
-                const actionDisplay = rule.action.charAt(0).toUpperCase() + rule.action.slice(1);
+                if (rule.mode === 'disable' || rule.mode === 'disabled') return;
+                const actionName = rule.mode || rule.action;
+                const actionDisplay = 'Action: ' + formatActionName(actionName);
                 ipAccessRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${rule.ip}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
             });
             console.log(`Generated ${zoneRules.length} IP Access Rule rows (zone-level) for domain report`);
@@ -307,9 +326,12 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         safeData.customRules.rules.forEach(rule => {
             // Use 8-space indent for the description
             const indent = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
-            // Show Action if Enabled, otherwise Disabled
-            const actionRaw = rule.status === 'Disabled' ? 'Disabled' : (rule.action || rule.status);
-            const actionDisplay = actionRaw.charAt(0).toUpperCase() + actionRaw.slice(1);
+            // SKIP if Filtered (Status Disabled)
+            const status = rule.status || '';
+            if (status.toLowerCase() === 'disabled') return;
+
+            const actionName = rule.action || status;
+            const actionDisplay = 'Action: ' + formatActionName(actionName);
 
             customRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
         });
@@ -322,9 +344,12 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         safeData.rateLimits.rules.forEach(rule => {
             // Use 8-space indent for the description
             const indent = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
-            // Show Action if Enabled, otherwise Disabled
-            const actionRaw = rule.status === 'Disabled' ? 'Disabled' : (rule.action || rule.status);
-            const actionDisplay = actionRaw.charAt(0).toUpperCase() + actionRaw.slice(1);
+            // SKIP if Filtered (Status Disabled)
+            const status = rule.status || '';
+            if (status.toLowerCase() === 'disabled') return;
+
+            const actionName = rule.action || status;
+            const actionDisplay = 'Action: ' + formatActionName(actionName);
 
             rateLimitRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
         });
@@ -1142,10 +1167,6 @@ const Card = ({ title, children, className = '', theme }) => {
         <div className={`border rounded-lg overflow-hidden ${cardClass} ${className} pdf-card`}>
             <div className={`${headerClass} p-3 border-b flex justify-between items-center px-4 py-2`}>
                 <h3 className={`${titleClass} text-xs font-semibold uppercase tracking-wider`}>{title}</h3>
-                <div className="flex gap-2">
-                    <Search className={`w-3 h-3 cursor-pointer ${iconClass}`} />
-                    <MoreMenuIcon className={iconClass} />
-                </div>
             </div>
             <div className="p-4">
                 {children}
@@ -1154,9 +1175,8 @@ const Card = ({ title, children, className = '', theme }) => {
     );
 };
 
-const MoreMenuIcon = ({ className = "text-gray-500 hover:text-white" }) => (
-    <svg className={`w-3 h-3 cursor-pointer ${className}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
-);
+// Icon removed
+
 
 const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) => {
     const maxValue = Math.max(...data.map(d => d[valueKey] || 0), 1);
@@ -1324,14 +1344,25 @@ export default function GDCCPage() {
 
 
             // --- AVG TTFB ---
+            let totalReqLogs = 0;
             let totalTimeSum = 0;
             filteredData.forEach(item => {
                 const count = item.count;
                 const avgTime = item.avg?.edgeTimeToFirstByteMs || 0;
-                totalReq += count;
+                totalReqLogs += count;
                 totalTimeSum += (avgTime * count);
             });
-            if (totalReq > 0) weightedAvgTime = Math.round(totalTimeSum / totalReq);
+            if (totalReqLogs > 0) weightedAvgTime = Math.round(totalTimeSum / totalReqLogs);
+
+            // --- TOTAL REQUESTS (ACCURATE) ---
+            // Use summary if available (1h/1d groups), else fallback to logs
+            if (result.totalRequestsSummary && result.totalRequestsSummary.length > 0) {
+                totalReq = result.totalRequestsSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
+                console.log(`📈 Using Summary Analytics for Total Requests: ${totalReq}`);
+            } else {
+                totalReq = totalReqLogs;
+                console.log(`📉 Fallback to Adaptive Logs for Total Requests: ${totalReq}`);
+            }
         } else {
             setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
             setTopRules([]); setTopAttackers([]);
@@ -2148,17 +2179,14 @@ export default function GDCCPage() {
             const currentZone = zones.find(z => z.id === selectedZone);
             const rootDomain = currentZone?.name;
 
-            // Remove root domain from the list if it exists (to avoid duplicate)
+            // Remove root domain from the subdomain list if it exists
             if (rootDomain) {
                 const idx = hostOptions.findIndex(h => h.value === rootDomain);
                 if (idx !== -1) hostOptions.splice(idx, 1);
-
-                // Add root domain at the top with label
-                hostOptions.unshift({ value: rootDomain, label: `${rootDomain} (Root Domain)` });
             }
 
-            // Add "All Subdomains" option
-            hostOptions.unshift({ value: 'ALL_SUBDOMAINS', label: '--- All Subdomains (Zone Overview) ---' });
+            // Add "All Subdomains" option (Rename as requested)
+            hostOptions.unshift({ value: 'ALL_SUBDOMAINS', label: '--- All Subdomains (Root Domain) ---' });
 
             setSubDomains(hostOptions);
 
@@ -2604,7 +2632,7 @@ export default function GDCCPage() {
                                                         <td className="py-1 pl-2 text-gray-500 font-mono">
                                                             {d.time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                                                         </td>
-                                                        <td className="py-1 px-2 text-orange-400 uppercase text-[10px]">{d.action}</td>
+                                                        <td className="py-1 px-2 text-orange-400 font-semibold text-[10px]">{formatActionName(d.action)}</td>
                                                         <td className="py-1 pr-2 text-right text-red-400 font-bold">{d.count}</td>
                                                     </tr>
                                                 ))}

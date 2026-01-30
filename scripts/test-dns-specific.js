@@ -7,8 +7,8 @@ const BASE_URL = 'http://localhost:8002/api/scrape';
 const DB_PATH = path.join(__dirname, '../db/sdb_users.db');
 
 // --- User Inputs ---
-const TARGET_ACCOUNT = 'BDMS Group1';
-const TARGET_ZONE = 'bdms.co.th';
+const TARGET_ACCOUNT = process.argv[2] || 'BDMS Group1';
+const TARGET_ZONE = process.argv[3] || 'bdms.co.th';
 
 // --- Colors ---
 const colors = {

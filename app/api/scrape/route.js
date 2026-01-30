@@ -169,9 +169,25 @@ export async function POST(request) {
             // console.log(`🕒 Time Range: ${minutes}m | Subdomain: ${targetSubdomain || 'ALL'}`);
 
             const query = `
-               query GetZoneAnalytics($zoneTag: string, $since: String, $until: String${targetSubdomain ? ', $host: String' : ''}) {
+               query GetZoneAnalytics($zoneTag: string, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
                  viewer {
                    zones(filter: { zoneTag: $zoneTag }) {
+                     # --- FINALIZED HYBRID LOGIC ---
+                     # Root Domain: Use 1dGroups (Accurate 30-90 days, no host filtering support)
+                     # Subdomain: Cloudflare doesn't support summaries for hostnames. Falling back to Adaptive Logs (sampled data).
+                     ${!targetSubdomain ? `
+                     totalRequestsSummary: httpRequests1dGroups(
+                        limit: 1000
+                        filter: {
+                            date_geq: $since_date, date_leq: $until_date
+                        }
+                     ) {
+                        sum {
+                          requests
+                        }
+                     }` : ''}
+                     # ------------------------------
+
                      httpRequestsAdaptiveGroups(
                        filter: {
                            datetime_geq: $since,
@@ -270,7 +286,9 @@ export async function POST(request) {
             const variables = {
                 zoneTag: zoneId,
                 since: since.toISOString(),
-                until: now.toISOString()
+                until: now.toISOString(),
+                since_date: since.toISOString().split('T')[0],
+                until_date: now.toISOString().split('T')[0],
             };
 
             if (targetSubdomain) {
@@ -305,6 +323,7 @@ export async function POST(request) {
                 return NextResponse.json({
                     success: true,
                     data: httpGroups,
+                    totalRequestsSummary: zoneData?.totalRequestsSummary || [],
                     firewallActivity,
                     firewallRules,
                     firewallIPs,
