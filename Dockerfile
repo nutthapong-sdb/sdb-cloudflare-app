@@ -45,6 +45,7 @@ RUN chown nextjs:nodejs /app
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/app/data ./app/data
 
 # Copy the database file if it exists, but usually we want to mount it
 # COPY --chown=nextjs:nodejs sdb_users.db ./sdb_users.db
