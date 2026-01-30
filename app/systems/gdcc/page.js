@@ -1678,72 +1678,103 @@ export default function GDCCPage() {
             // Prepare basic data for Domain Report using current state/props + zoneSettings if available
             updateProgress('Fetching zone configurations...', 'step');
 
-            // We'll quickly fetch zone settings to ensure variables like @CUSTOM_RULES_STATUS work.
-            const zoneSettingsResponse = await fetch('/api/scrape', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'get-zone-settings', zoneId: selectedZone })
-            });
-            const zoneSettings = (await zoneSettingsResponse.json()).data || {};
+            // --- PRE-STEP: ENSURE DATA IS LOADED ---
+            // Ensure Zone Data is loaded (DNS & Settings) for both Domain Report (Cover) and Batch Reports
+            let localDnsRecords = dnsRecords;
+            let localZoneSettings = zoneSettings;
 
-            // Also fetch DNS records for @DNS_TOTAL_ROWS
-            const dnsResponse = await fetch('/api/scrape', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'get-dns-records', zoneId: selectedZone })
-            });
-            const dnsRecords = (await dnsResponse.json()).data || [];
-            updateProgress('✓ Fetched zone configurations', 'success');
+            try {
+                if (!localDnsRecords || localDnsRecords.length === 0) {
+                    console.log('⚠️ DNS Records missing in state, fetching for report...');
+                    updateProgress('Fetching DNS Records...', 'step');
+                    const dnsRes = await callAPI('get-dns-records', { zoneId: selectedZone });
+                    if (dnsRes && dnsRes.data) {
+                        localDnsRecords = dnsRes.data;
+                    }
+                }
 
+                if (!localZoneSettings || !localZoneSettings.ipAccessRules || !localZoneSettings.customRules) {
+                    console.log('⚠️ Zone Settings missing/incomplete in state, fetching for report...');
+                    updateProgress('Fetching Zone Settings...', 'step');
+                    const settingsRes = await callAPI('get-zone-settings', { zoneId: selectedZone });
+                    if (settingsRes && settingsRes.data) {
+                        localZoneSettings = settingsRes.data;
+                    }
+                }
+            } catch (fetchErr) {
+                console.error('Error fetching report prerequisites:', fetchErr);
+            }
+
+            // Use verified LOCAL data
             const domainReportData = {
-                domain: zones.find(z => z.id === selectedZone)?.name || 'Unknown Zone',
+                domain: zones.find(z => z.id === selectedZone)?.name,
+                totalRequests: totalRequests,
+                blockedEvents: blockedEvents,
+                logEvents: logEvents,
+                avgTime: avgResponseTime,
+                topUrls: topUrls,
+                topIps: topIps,
+                topCountries: topCountries,
+                topUserAgents: topUserAgents,
+                peakTime: peakTraffic.time,
+                peakCount: peakTraffic.count,
+                peakAttack: peakAttack,
+                peakHttpStatus: peakHttpStatus,
+                topRules: topRules,
+                topAttackers: topAttackers,
+                topFirewallSources: topFirewallSources,
                 zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
                 accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
-                timeRange: timeRange, // Pass timeRange if template uses it
-                dnsRecords: dnsRecords,
-                // Add zone settings (Security Level removed)
-                botManagementEnabled: zoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
-                blockAiBots: zoneSettings?.botManagement?.blockAiBots || 'unknown',
-                definitelyAutomated: zoneSettings?.botManagement?.definitelyAutomated || 'unknown',
-                likelyAutomated: zoneSettings?.botManagement?.likelyAutomated || 'unknown',
-                verifiedBots: zoneSettings?.botManagement?.verifiedBots || 'unknown',
+                timeRange: timeRange,
+                dnsRecords: localDnsRecords,
+                // Add zone settings (using localZoneSettings)
+                botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
+                blockAiBots: localZoneSettings?.botManagement?.blockAiBots || 'unknown',
+                definitelyAutomated: localZoneSettings?.botManagement?.definitelyAutomated || 'unknown',
+                likelyAutomated: localZoneSettings?.botManagement?.likelyAutomated || 'unknown',
+                verifiedBots: localZoneSettings?.botManagement?.verifiedBots || 'unknown',
                 // SSL/TLS Settings
-                sslMode: zoneSettings?.sslMode || 'unknown',
-                minTlsVersion: zoneSettings?.minTlsVersion || 'unknown',
-                tls13: (zoneSettings?.tls13 === 'on' || zoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
+                sslMode: localZoneSettings?.sslMode || 'unknown',
+                minTlsVersion: localZoneSettings?.minTlsVersion || 'unknown',
+                tls13: (localZoneSettings?.tls13 === 'on' || localZoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
                 // DNS
-                dnsRecordsStatus: zoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
+                dnsRecordsStatus: localZoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
                 // Additional Security
-                leakedCredentials: zoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
-                browserIntegrityCheck: zoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
-                hotlinkProtection: zoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
-                zoneLockdownRules: zoneSettings?.zoneLockdownRules || '0',
+                leakedCredentials: localZoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
+                browserIntegrityCheck: localZoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
+                hotlinkProtection: localZoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
+                zoneLockdownRules: localZoneSettings?.zoneLockdownRules || '0',
                 // DDoS Protection
-                ddosProtection: zoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
+                ddosProtection: localZoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
                 httpDdosProtection: 'Always On',
                 sslTlsDdosProtection: 'Always On',
                 networkDdosProtection: 'Always On',
                 // WAF Managed Rules
-                cloudflareManaged: zoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
-                owaspCore: zoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
-                exposedCredsRuleset: zoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
-                ddosL7Ruleset: zoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
-                managedRulesCount: zoneSettings?.wafManagedRules?.managedRulesCount || '0',
-                rulesetActions: zoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
+                cloudflareManaged: localZoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
+                owaspCore: localZoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
+                exposedCredsRuleset: localZoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
+                ddosL7Ruleset: localZoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
+                managedRulesCount: localZoneSettings?.wafManagedRules?.managedRulesCount || '0',
+                rulesetActions: localZoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
                 // IP Access Rules
-                ipAccessRules: zoneSettings?.ipAccessRules || '0',
+                ipAccessRules: localZoneSettings?.ipAccessRules || '0',
                 // Custom Rules & Rate Limiting (New)
-                customRules: zoneSettings?.customRules,
-                rateLimits: zoneSettings?.rateLimits
+                customRules: localZoneSettings?.customRules,
+                rateLimits: localZoneSettings?.rateLimits
             };
+
 
             // Process HTML
             updateProgress('Filling the Document Template using zone configurations...', 'step');
             const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date());
 
+
             // Add to combined HTML
             combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
             updateProgress('✓ Filled the Document Template using zone configurations', 'success');
+
+
+
 
 
             let processedCount = 0;
@@ -1854,7 +1885,13 @@ export default function GDCCPage() {
                         peakHttpStatus: safeStats.peakHttpStatus,
                         topRules: safeStats.topRules,
                         topAttackers: safeStats.topAttackers,
-                        zoneName: zones.find(z => z.id === selectedZone)?.name
+                        zoneName: zones.find(z => z.id === selectedZone)?.name,
+
+                        // Added missing fields for Batch Report Template placeholders (using Verified Local Data)
+                        dnsRecords: localDnsRecords,
+                        ipAccessRules: localZoneSettings?.ipAccessRules,
+                        customRules: localZoneSettings?.customRules,
+                        rateLimits: localZoneSettings?.rateLimits
                     };
                     updateProgress(`Step 4/5: Data prepared`, 'success', true);
                     console.log(`✅ Data prepared`);

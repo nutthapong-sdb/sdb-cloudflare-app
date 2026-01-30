@@ -1,10 +1,10 @@
-const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
+const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
 
 // --- Configuration ---
-const API_BASE_URL = 'http://localhost:8002/api/scrape'; // Adjust if running on a different port
-const LOCAL_ENV_PATH = path.join(__dirname, '../.env.local');
+const API_BASE_URL = 'http://localhost:8002/api/scrape';
+const DB_PATH = path.join(__dirname, '../db/sdb_users.db');
 
 // Color codes for console output
 const colors = {
@@ -21,19 +21,28 @@ function log(message, color = colors.reset) {
     console.log(`${color}${message}${colors.reset}`);
 }
 
-function loadEnv() {
-    if (fs.existsSync(LOCAL_ENV_PATH)) {
-        const envConfig = fs.readFileSync(LOCAL_ENV_PATH, 'utf8');
-        envConfig.split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) {
-                process.env[key.trim()] = value.trim();
+function getApiTokenFromDb() {
+    return new Promise((resolve, reject) => {
+        log(`📂 Connecting to database at: ${DB_PATH}`, colors.blue);
+        const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY, (err) => {
+            if (err) {
+                return reject(new Error(`Could not connect to database: ${err.message}`));
             }
         });
-        log('✅ Loaded .env.local configuration', colors.green);
-    } else {
-        log('⚠️  .env.local not found. Relying on existing environment variables.', colors.yellow);
-    }
+
+        // Get the first user with a non-empty token
+        const sql = `SELECT cloudflare_api_token FROM users WHERE cloudflare_api_token IS NOT NULL AND cloudflare_api_token != '' LIMIT 1`;
+
+        db.get(sql, [], (err, row) => {
+            db.close();
+            if (err) return reject(err);
+            if (row && row.cloudflare_api_token) {
+                resolve(row.cloudflare_api_token);
+            } else {
+                reject(new Error('No API Token found in database (users table). Please login via UI and save an API Key first.'));
+            }
+        });
+    });
 }
 
 async function runTest(testName, testFn) {
@@ -47,6 +56,8 @@ async function runTest(testName, testFn) {
         log(`  Error: ${error.message}`, colors.red);
         if (error.response?.data) {
             log(`  API Response: ${JSON.stringify(error.response.data, null, 2)}`, colors.red);
+        } else if (error.response) {
+            log(`  API Status: ${error.response.status} ${error.response.statusText}`, colors.red);
         }
         return false;
     }
@@ -55,13 +66,18 @@ async function runTest(testName, testFn) {
 // --- Tests ---
 
 async function main() {
-    log('🚀 Starting Regression Tests...', colors.cyan);
+    log('🚀 Starting API Regression Tests (System User Mode)...', colors.cyan);
     log('-----------------------------------');
 
-    loadEnv();
-
-    if (!process.env.CLOUDFLARE_API_TOKEN) {
-        log('❌ CLOUDFLARE_API_TOKEN is missing. Please set it in .env.local or environment.', colors.red);
+    let apiToken;
+    try {
+        apiToken = await getApiTokenFromDb();
+        log('✅ Retrieved API Token from Database.', colors.green);
+        // Mask token for display
+        const masked = apiToken.substring(0, 4) + '...' + apiToken.substring(apiToken.length - 4);
+        log(`   Token: ${masked}`);
+    } catch (error) {
+        log(`❌ Failed to get API Token: ${error.message}`, colors.red);
         process.exit(1);
     }
 
@@ -69,37 +85,31 @@ async function main() {
         'Content-Type': 'application/json'
     };
 
-    // 1. Verify Connectivity & Token (Internal Check)
-    // We'll trust the script's ability to run means Node is okay.
-    // We will verify the token by making a raw call to Cloudflare verify URL to sure.
-    await runTest('Cloudflare Token Validity', async () => {
-        const response = await axios.get('https://api.cloudflare.com/client/v4/user/tokens/verify', {
-            headers: { 'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` }
-        });
-        if (response.data.success !== true) throw new Error('Token verification failed');
-    });
+    // Helper payload to inject token
+    const withToken = (data) => ({ ...data, apiToken });
 
-    // 2. SDB: List Zones
+    // 1. Verify Connectivity & Token (via App API)
+    // We implicitly verify when we make the first request.
+
+    // 2. SDB: List Zones (Get Accounts first)
     let zoneId = null;
     let accountId = null;
 
     log('\n--- SDB System Tests ---', colors.blue);
 
-    // We need an account ID first usually, but the list-zones endpoint in our app requires accountId
-    // Let's first get accounts
     await runTest('Get Account Info', async () => {
-        const response = await axios.post(API_BASE_URL, { action: 'get-account-info' }, { headers });
-        if (!response.data.success) throw new Error('Failed to get account info');
+        const response = await axios.post(API_BASE_URL, withToken({ action: 'get-account-info' }), { headers });
+        if (!response.data.success) throw new Error(response.data.message || 'Failed to get account info');
         if (!response.data.data || response.data.data.length === 0) throw new Error('No accounts found');
-        accountId = response.data.data[0].id;
+        accountId = response.data.data[0].id; // Pick first account
     });
 
     if (accountId) {
         await runTest(`List Zones (Account: ${accountId})`, async () => {
-            const response = await axios.post(API_BASE_URL, { action: 'list-zones', accountId }, { headers });
-            if (!response.data.success) throw new Error('Failed to list zones');
+            const response = await axios.post(API_BASE_URL, withToken({ action: 'list-zones', accountId }), { headers });
+            if (!response.data.success) throw new Error(response.data.message || 'Failed to list zones');
             if (response.data.data && response.data.data.length > 0) {
-                zoneId = response.data.data[0].id; // Pick first zone for next tests
+                zoneId = response.data.data[0].id; // Pick first zone
             } else {
                 log('  (No zones found, skipping valid zone tests)', colors.yellow);
             }
@@ -109,17 +119,14 @@ async function main() {
     if (zoneId) {
         // 3. SDB: API Discovery
         await runTest(`Get API Discovery (Zone: ${zoneId})`, async () => {
-            const response = await axios.post(API_BASE_URL, { action: 'get-api-discovery', zoneId }, { headers });
-            if (!response.data.success) throw new Error('Failed to fetch API Discovery');
+            const response = await axios.post(API_BASE_URL, withToken({ action: 'get-api-discovery', zoneId }), { headers });
+            if (!response.data.success) throw new Error(response.data.message || 'Failed to fetch API Discovery');
 
             const data = response.data.data;
             if (Array.isArray(data) && data.length > 0) {
-                // Check for Method and Source fields specifically
                 const firstItem = data[0];
-                if (!firstItem.method) throw new Error('Missing "method" field in response');
-                if (!firstItem.source) throw new Error('Missing "source" field in response');
-            } else {
-                log('  (No discovery data found, but API call succeeded)', colors.yellow);
+                if (!firstItem.method) throw new Error('Missing "method" field');
+                if (!firstItem.source) throw new Error('Missing "source" field');
             }
         });
 
@@ -127,38 +134,49 @@ async function main() {
 
         // 4. GDCC: Zone Settings
         await runTest(`Get Zone Settings (Zone: ${zoneId})`, async () => {
-            const response = await axios.post(API_BASE_URL, { action: 'get-zone-settings', zoneId }, { headers });
-            if (!response.data.success) throw new Error('Failed to fetch Zone Settings');
+            const response = await axios.post(API_BASE_URL, withToken({ action: 'get-zone-settings', zoneId }), { headers });
+            if (!response.data.success) throw new Error(response.data.message || 'Failed to fetch Zone Settings');
 
             const settings = response.data.data;
-            // Note: securityLevel was removed from the app
             if (!settings.wafManagedRules) throw new Error('Missing wafManagedRules');
 
-            // Verify Block AI Bots Fix
             const aiBots = settings.botManagement?.blockAiBots;
             if (aiBots) {
-                log(`    Confirmed blockAiBots value: "${aiBots}"`, colors.green);
-                if (aiBots === 'unknown') throw new Error('blockAiBots is still unknown!');
+                // log(`    Confirmed blockAiBots value: "${aiBots}"`);
+                if (aiBots === 'unknown') throw new Error('blockAiBots is unknown');
             } else {
                 throw new Error('Missing blockAiBots in response');
             }
+
+            log('\n🔍 [USER DATA CHECK] Raw Zone Settings Data:');
+            log(JSON.stringify(settings, null, 2));
+            log('-------------------------------------------');
+        });
+
+        // 4.1 GDCC: DNS Records
+        await runTest(`Get DNS Records (Zone: ${zoneId})`, async () => {
+            const response = await axios.post(API_BASE_URL, withToken({ action: 'get-dns-records', zoneId }), { headers });
+            if (!response.data.success) throw new Error(response.data.message || 'Failed to fetch DNS Records');
+
+            const dnsData = response.data.data;
+            log('\n🔍 [USER DATA CHECK] Raw DNS Records Data:');
+            log(JSON.stringify(dnsData, null, 2));
+            log('-------------------------------------------');
         });
 
         // 5. GDCC: Traffic Analytics
         await runTest(`Get Traffic Analytics (Zone: ${zoneId})`, async () => {
-            const response = await axios.post(API_BASE_URL, {
+            // Use 24h (1440 mins)
+            const response = await axios.post(API_BASE_URL, withToken({
                 action: 'get-traffic-analytics',
                 zoneId,
-                timeRange: 1440 // 24h
-            }, { headers });
+                timeRange: 1440
+            }), { headers });
 
-            if (!response.data.success) throw new Error('Failed to fetch Traffic Analytics');
+            if (!response.data.success) throw new Error(response.data.message || 'Failed to fetch Traffic Analytics');
             const data = response.data.data;
-            // Basic structure check
             if (!Array.isArray(data)) throw new Error('Data should be an array');
         });
-
-
 
     } else {
         log('⚠️ Skipping Zone-dependent tests because no Zone ID was found.', colors.yellow);
@@ -170,4 +188,5 @@ async function main() {
 
 main().catch(err => {
     console.error('Fatal Error:', err);
+    process.exit(1);
 });

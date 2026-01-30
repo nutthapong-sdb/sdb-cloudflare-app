@@ -50,19 +50,96 @@ export async function POST(request) {
 
         }
 
-        // 3. Get DNS Records (Subdomains)
+        // 3. Get DNS Records (Subdomains) - With Pagination
         else if (action === 'get-dns-records') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
-            // console.log(`📝 Fetching DNS for Zone: ${zoneId}...`);
 
-            const response = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
+            let allRecords = [];
+            let page = 1;
+            const perPage = 100; // Cloudflare max is usually 100
+            let hasMore = true;
+
+            console.log(`📝 Fetching ALL DNS Records for Zone: ${zoneId}...`);
+
+            try {
+                while (hasMore) {
+                    process.stdout.write(`   Fetching page ${page}... `); // Show progress in backend logs
+                    const response = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        params: {
+                            per_page: perPage,
+                            page: page
+                        }
+                    });
+
+                    const records = response.data.result;
+                    if (records && records.length > 0) {
+                        allRecords = allRecords.concat(records);
+                        console.log(`Found ${records.length} records.`);
+                        if (records.length < perPage) {
+                            hasMore = false; // Last page
+                        } else {
+                            page++;
+                        }
+                    } else {
+                        console.log('No more records.');
+                        hasMore = false;
+                    }
                 }
-            });
+            } catch (error) {
+                console.error('Error fetching DNS page:', error.message);
+                // Return what we have so far, or error
+                if (allRecords.length === 0) return NextResponse.json({ success: false, message: 'Failed to fetch DNS records' }, { status: 500 });
+            }
 
-            return NextResponse.json({ success: true, data: response.data.result });
+            // --- Fetch Load Balancers (Inject as Type: LB) ---
+            process.stdout.write(`   Fetching Load Balancers... `);
+            let lbRecords = [];
+            try {
+                const lbResponse = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/load_balancers`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (lbResponse.data.result) {
+                    lbRecords = lbResponse.data.result.map(lb => ({
+                        id: lb.id,
+                        name: lb.name,
+                        type: "LB", // Custom Type
+                        content: lb.description || "Load Balancer Activity",
+                        ttl: 1, // Dynamic
+                        proxied: true, // LBs are always proxied
+                        proxiable: true,
+                        settings: {},
+                        meta: {},
+                        created_on: lb.created_on,
+                        modified_on: lb.modified_on
+                    }));
+                    console.log(`Found ${lbRecords.length} Load Balancers.`);
+                }
+            } catch (lbError) {
+                console.warn('   ⚠️ Failed to fetch Load Balancers (might be restricted/irrelevant):', lbError.message);
+            }
+
+            // Combine: LBs on TOP
+            allRecords = [...lbRecords, ...allRecords];
+
+            // Filter: Only PROXIED records
+            const totalBefore = allRecords.length;
+            allRecords = allRecords.filter(r => r.proxied === true);
+            console.log(`   📉 Filtered DNS Only records: ${totalBefore} -> ${allRecords.length} (Proxied Only)`);
+
+            console.log(`\n🔍 [DEBUG] RAW DNS RECORDS for Zone ${zoneId}:`);
+            console.log(`Total Fetched: ${allRecords.length} (incl. ${lbRecords.length} LBs)`);
+            // console.log(JSON.stringify(allRecords, null, 2)); // Too big to log all
+            console.log('---------------------------------------------------\n');
+
+            return NextResponse.json({ success: true, data: allRecords });
         }
 
         // 4. Get Account Info
@@ -422,21 +499,8 @@ export async function POST(request) {
                         { headers }
                     );
                     botManagementConfig = botMgmtRes.data.result;
-                    // console.log('Bot Management Response Structure:', JSON.stringify(botManagementConfig, null, 2));
-
-                    // If fight_mode is missing, try the settings endpoint for SBFM
-                    if (!botManagementConfig?.fight_mode) {
-                        // console.log('fight_mode not found in bot_management, checking for Super Bot Fight Mode...');
-                        try {
-                            const sbfmRes = await axios.get(
-                                `${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/bot_fight_mode`,
-                                { headers }
-                            );
-                            console.log('SBFM Settings Response:', JSON.stringify(sbfmRes.data, null, 2));
-                        } catch (sbfmErr) {
-                            // console.log('SBFM endpoint not available:', sbfmErr.response?.status || sbfmErr.message);
-                        }
-                    }
+                    console.log(`\n🔍 [DEBUG] RAW BOT MANAGEMENT for Zone ${zoneId}:`);
+                    console.log(JSON.stringify(botManagementConfig, null, 2));
                 } catch (err) {
                     console.log('Bot Management not available (likely not Enterprise plan)');
                 }

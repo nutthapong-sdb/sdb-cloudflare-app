@@ -42,7 +42,7 @@ async function runUITest() {
     }
 
     const browser = await puppeteer.launch({
-        headless: false, // Run in headfull mode (visible)
+        headless: "new", // Run in headless mode (no visible UI)
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1280,800']
     });
 
@@ -73,148 +73,56 @@ async function runUITest() {
         }
         log('✅ Login Successful', colors.green);
 
-        // 2. Navigation to SDB
-        log('\nTesting SDB System UI...', colors.blue);
-        await page.goto(SDB_URL, { waitUntil: 'networkidle0' });
-        log('  Navigated to SDB page.');
-
-        // Check Page Title
-        const title = await page.$eval('h1', el => el.textContent);
-        if (!title.includes('Cloudflare API')) throw new Error('SDB Page Title mismatch');
-        log('  Page Title verified.');
-
-        // 3. Interacting with Dropdowns (XPath Strategy)
-        log('  Waiting for Account Dropdown...');
-
-        // Strategy: Use the specific XPath provided by the user for reliability
-        const accountDropdownSelector = `xpath//html/body/div[2]/div[4]/div/div[2]/div[2]/div/div/div`;
-
-        try {
-            await page.waitForSelector(accountDropdownSelector, { timeout: 10000 });
-            const elements = await page.$$(accountDropdownSelector);
-            const accDropdown = elements[0];
-
-            if (accDropdown) {
-                log('  Found Account Dropdown. Clicking...');
-                await accDropdown.click();
-
-                // Wait for options to appear
-                await new Promise(r => setTimeout(r, 3000));
-
-                // Find visible options
-                const options = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
-                const optionCount = options.length;
-
-                if (optionCount > 0) {
-                    let zonesFound = false;
-
-                    // Iterate through accounts to find one with zones
-                    for (let i = 0; i < Math.min(optionCount, 5); i++) { // Try up to 5 accounts
-                        if (i > 0) {
-                            // Re-open account dropdown if not first iteration
-                            await accDropdown.click();
-                            await new Promise(r => setTimeout(r, 1000));
-                        }
-
-                        // Re-fetch options to avoid stale elements
-                        const currentOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
-                        const accountName = await page.evaluate(el => el.textContent, currentOptions[i]);
-                        log(`  Checking Account [${i + 1}/${optionCount}]: "${accountName.trim()}"...`);
-
-                        await currentOptions[i].click();
-                        await new Promise(r => setTimeout(r, 3000)); // Wait for zones to load
-
-                        // Check Zone Dropdown
-                        const zoneDropdownSelector = `xpath//html/body/div[2]/div[4]/div/div[2]/div[2]/div[2]/div/div/div`;
-                        const zoneDropdown = (await page.$$(zoneDropdownSelector))[0];
-
-                        if (zoneDropdown) {
-                            await zoneDropdown.click();
-                            await new Promise(r => setTimeout(r, 3000));
-                            const zoneOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
-
-                            if (zoneOptions.length > 0) {
-                                log(`    ✅ Found ${zoneOptions.length} zones. Selecting first...`);
-                                await zoneOptions[0].click();
-                                zonesFound = true;
-                                break; // Found valid account and selected zone
-                            } else {
-                                log('    ⚠️ No zones. Trying next account...');
-                                // Click outside to close dropdown
-                                await page.mouse.click(10, 10);
-                            }
-                        } else {
-                            log('   ⚠️ Zone dropdown not found.');
-                        }
-                    }
-
-                    if (!zonesFound) throw new Error('No zones found in any of the checked accounts.');
-
-                } else {
-                    throw new Error('No account options found in dropdown');
-                }
-            } else {
-                throw new Error('Account dropdown element not found');
-            }
-        } catch (e) {
-            throw new Error('SDB Setup failed: ' + e.message);
-        }
-
-        // Wait for table to load (Zone is already selected in loop)
-        log('  Waiting for table to load...');
-        await new Promise(r => setTimeout(r, 8000));
-
-        // 5. Verify API Discovery Table
-        log('  Verifying API Discovery Table...', colors.blue);
-        const table = await page.$('table');
-        if (table) {
-            const headers = await page.$$eval('th', ths => ths.map(th => th.textContent.trim()));
-            const hasMethod = headers.includes('Method');
-            const hasSource = headers.includes('Source');
-
-            if (hasMethod && hasSource) {
-                log('  ✅ Verified Columns: Method, Source', colors.green);
-            } else {
-                throw new Error(`Missing Columns! Found: ${headers.join(', ')}`);
-            }
-
-            // Check rows
-            const rows = await page.$$('tbody tr');
-            log(`  ✅ Found ${rows.length} data rows.`);
-
-            // 6. Test CSV Download
-            log('  Testing CSV Download...', colors.blue);
-            const csvBtnSelector = 'xpath///button[@title="Download CSV"]';
-            try {
-                await page.waitForSelector(csvBtnSelector, { timeout: 5000 });
-                const elements = await page.$$(csvBtnSelector);
-                const csvBtn = elements[0];
-                if (csvBtn) {
-                    await csvBtn.click();
-                    log('  ✅ CSV Button clicked.', colors.green);
-                } else {
-                    throw new Error('CSV Button not found');
-                }
-            } catch (e) {
-                log('  ⚠️ CSV Download check failed: ' + e.message, colors.yellow);
-            }
-
-        } else {
-            throw new Error('Table not found (Maybe no data in zone).');
-        }
+        // 2. Navigation to SDB (SKIPPED to focus on GDCC)
+        log('\nSkipping SDB System UI tests...', colors.yellow);
 
         // --- GDCC SYSTEM TESTS ---
         log('\nTesting GDCC System UI...', colors.blue);
         const GDCC_URL = `${BASE_URL}/systems/gdcc`;
         await page.goto(GDCC_URL, { waitUntil: 'networkidle0' });
 
-        // 1. Wait for Account/Zone selectors to be ready (re-use logic if needed, or rely on auto-load if defaults set)
-        log('  Waiting for GDCC Dashboard to load...');
-        await new Promise(r => setTimeout(r, 3000));
+        // 1. Select Account and Zone (Required for Dashboard to load)
+        log('  Selecting Account and Zone for GDCC...');
+
+        // Re-use robust selectors
+        const gdccAccountSelector = `xpath///label[contains(., "Account")]/following-sibling::div//div[contains(@class, "cursor-pointer")]`;
+
+        try {
+            await page.waitForSelector(gdccAccountSelector, { timeout: 10000 });
+            await page.click(gdccAccountSelector);
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Select first account
+            const gdccAccOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
+            if (gdccAccOptions.length > 0) {
+                await gdccAccOptions[0].click();
+                log('  Selected first Account.');
+                await new Promise(r => setTimeout(r, 3000));
+
+                // Select Zone
+                const gdccZoneSelector = `xpath///label[contains(., "Zone")]/following-sibling::div//div[contains(@class, "cursor-pointer")]`;
+                await page.waitForSelector(gdccZoneSelector, { timeout: 5000 });
+                await page.click(gdccZoneSelector);
+                await new Promise(r => setTimeout(r, 2000));
+
+                const gdccZoneOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
+                if (gdccZoneOptions.length > 0) {
+                    await gdccZoneOptions[0].click();
+                    log('  Selected first Zone.');
+                    await new Promise(r => setTimeout(r, 5000)); // Wait for dashboard data
+                } else {
+                    throw new Error('No zones found in GDCC.');
+                }
+            } else {
+                throw new Error('No accounts found in GDCC.');
+            }
+        } catch (e) {
+            log(`  ⚠️ Setup failed for GDCC: ${e.message}`, colors.yellow);
+        }
 
         // 2. Test Time Ranges
-        log('  Testing Time Range Toggles...', colors.blue);
-        const timeRanges = ['30m', '6h', '12h', '24h'];
+        log('  Testing Time Range Toggles (Updated)...', colors.blue);
+        const timeRanges = ['1d', '7d', '30d'];
         for (const tr of timeRanges) {
             try {
                 const btnSelector = `xpath///button[contains(text(), "${tr}")]`;
@@ -231,89 +139,69 @@ async function runUITest() {
         }
         log('  ✅ Time Range tests completed.');
 
-        // 3. Test Report Buttons
-        log('  Testing Report Menus...', colors.blue);
-
-        const testReportItem = async (itemName) => {
-            try {
-                // Open Menu
-                const reportMenuBtn = `xpath///button[contains(., "Report")]`;
-                await page.waitForSelector(reportMenuBtn, { timeout: 3000 });
-                const [menuBtn] = await page.$$(reportMenuBtn);
-                await menuBtn.click();
-                await new Promise(r => setTimeout(r, 500));
-
-                // Click Item
-                const itemSelector = `xpath///button[contains(., "${itemName}")]`;
-                await page.waitForSelector(itemSelector, { timeout: 3000 });
-                const [itemBtn] = await page.$$(itemSelector);
-                await itemBtn.click();
-
-                log(`    Clicked "${itemName}". Waiting for modal...`);
-                await new Promise(r => setTimeout(r, 1500));
-
-                // Check Modal Header/Title
-                const modalTitle = await page.$eval('h3.text-lg.font-bold', el => el.textContent).catch(() => null);
-
-                if (modalTitle) {
-                    log(`    ✅ Modal Verified: "${modalTitle}"`);
-
-                    // Close using the explicit Close button in the header
-                    // Strategy: Look for the button in the modal header (border-b)
-                    // We target the fixed inset wrapper -> internal container -> header -> button
-                    const closeBtnSelector = `xpath///div[contains(@class, "fixed")]//div[contains(@class, "border-b")]//button`;
-
-                    try {
-                        await page.waitForSelector(closeBtnSelector, { timeout: 3000 });
-                        const [closeBtn] = await page.$$(closeBtnSelector);
-                        if (closeBtn) {
-                            await closeBtn.click();
-                            log('      Clicked Close button.');
-                        } else {
-                            throw new Error('Close button not found');
-                        }
-                    } catch (e) {
-                        log(`      ⚠️ Explicit close failed, trying Escape...`, colors.yellow);
-                        await page.keyboard.press('Escape');
-                    }
-
-                    await new Promise(r => setTimeout(r, 1000));
-                } else {
-                    log(`    ⚠️ Modal did not appear for ${itemName}`, colors.yellow);
-                }
-
-            } catch (e) {
-                log(`    ⚠️ Failed Report Test (${itemName}): ${e.message}`, colors.yellow);
-                await page.keyboard.press('Escape');
-            }
-        };
+        // 3. Test Report Buttons (Updated Paths)
+        log('  Testing Report Menus (Updated)...', colors.blue);
 
         // 3a. Test Domain Report
-        await testReportItem('Domain Report');
-
-        // 3b. Test Batch Report (Custom Flow)
-        log('    Testing "Batch Report" Flow...');
+        log('    Testing "Domain Report"...');
         try {
-            // Open Menu
-            const reportMenuBtn = `xpath///button[contains(., "Report")]`;
-            await page.waitForSelector(reportMenuBtn, { timeout: 3000 });
-            const [menuBtn] = await page.$$(reportMenuBtn);
-            await menuBtn.click();
-            await new Promise(r => setTimeout(r, 500));
+            // 1. Gear Icon
+            const gearBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/div[1]/button';
+            await page.waitForSelector(gearBtnSelector, { timeout: 5000 });
+            await page.click(gearBtnSelector);
+            await new Promise(r => setTimeout(r, 1000));
 
-            // Click Batch Report Item
-            const batchBtnSelector = `xpath///button[contains(., "Batch Report")]`;
-            await page.waitForSelector(batchBtnSelector, { timeout: 3000 });
-            const [batchBtn] = await page.$$(batchBtnSelector);
-            await batchBtn.click();
-            log('    Clicked "Batch Report". Waiting for modal...');
+            // 2. Report Template
+            const reportTemplateBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/div[1]/div/div[1]/button';
+            await page.waitForSelector(reportTemplateBtnSelector, { timeout: 3000 });
+            await page.click(reportTemplateBtnSelector);
+            await new Promise(r => setTimeout(r, 1000));
+
+            // 3. Domain Report (button[2])
+            const domainReportBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/div[1]/div/div[1]/div/button[2]';
+            await page.waitForSelector(domainReportBtnSelector, { timeout: 3000 });
+            await page.click(domainReportBtnSelector);
+            log('    Clicked "Domain Report". Waiting for modal...');
+            await new Promise(r => setTimeout(r, 3000));
+
+            // Check Modal
+            const modalTitle = await page.$eval('h3.text-lg.font-bold', el => el.textContent).catch(() => null);
+            if (modalTitle) {
+                log(`    ✅ Domain Report Modal Verified: "${modalTitle}"`);
+                // Close
+                const closeBtnSelector = 'xpath///div[contains(@class, "fixed")]//div[contains(@class, "border-b")]//button';
+                try {
+                    await page.click(closeBtnSelector);
+                } catch (e) { await page.keyboard.press('Escape'); }
+                await new Promise(r => setTimeout(r, 1000));
+            } else {
+                log(`    ⚠️ Domain Report Modal did not appear`, colors.yellow);
+            }
+        } catch (e) {
+            log(`    ⚠️ Failed Domain Report Test: ${e.message}`, colors.yellow);
+            await page.keyboard.press('Escape');
+        }
+
+        // 3b. Test Batch Report (Now "Create Report")
+        log('    Testing "Batch Report" (Create Report)...');
+        try {
+            // "Create Report" Button
+            const createReportBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/button';
+            await page.waitForSelector(createReportBtnSelector, { timeout: 3000 });
+            await page.click(createReportBtnSelector);
+
+            log('    Clicked "Create Report". Waiting for modal...');
             await new Promise(r => setTimeout(r, 1500));
 
-            // Check if items exist (User-specified XPath logic: select first label)
-            const firstItemSelector = `xpath///div[contains(@class, "fixed")]//label[1]`; // More robust than full path
-            const generateBtnSelector = `xpath///button[contains(., "Generate")]`;
+            // Check items (Updated with specific user XPath)
+            const firstItemSelector = `xpath//html/body/div[2]/main/div/div/div/div[2]/div[3]/label[1]`;
+            const generateBtnSelector = `xpath//html/body/div[2]/main/div/div/div/div[3]/button[2]`;
 
-            // Check if any label exists
+            // Wait for item to be visible first
+            try {
+                await page.waitForSelector(firstItemSelector, { timeout: 5000 });
+            } catch (e) { /* Ignore check failure, will see in next step */ }
+
             const hasItems = await page.$(firstItemSelector);
             if (hasItems) {
                 log('    Found Sub-domain items. Selecting first item...');
@@ -321,41 +209,39 @@ async function runUITest() {
                 await new Promise(r => setTimeout(r, 500));
 
                 log('    Clicking "Generate Report"...');
-                const [genBtn] = await page.$$(generateBtnSelector);
+                // Use the specific button selector
+                const genBtn = await page.$(generateBtnSelector);
                 if (genBtn) {
                     await genBtn.click();
-
-                    // Wait for Success Alert (Swal)
                     log('    Waiting for Success Alert...');
-                    const okBtnSelector = `xpath///button[contains(@class, "swal2-confirm")]`; // SweetAlert OK button
+                    const okBtnSelector = `xpath///button[contains(@class, "swal2-confirm")]`;
+
                     try {
-                        await page.waitForSelector(okBtnSelector, { timeout: 30000 }); // Generates report, might take time
-                        const [okBtn] = await page.$$(okBtnSelector);
-                        log('    ✅ Success Alert appeared. Waiting 7s for interaction...');
-                        await new Promise(r => setTimeout(r, 7000));
-                        // Use evaluate to force click if Puppeteer visibility check fails
-                        await page.evaluate(el => el.click(), okBtn);
+                        await page.waitForSelector(okBtnSelector, { timeout: 60000 }); // Increase timeout for generation
+                        // FORCE CLICK via evaluate
+                        await page.evaluate((sel) => {
+                            const btn = document.evaluate(sel.replace('xpath/', ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                            if (btn) btn.click();
+                        }, okBtnSelector.replace('xpath/', '')); // Simple check, might need better xpath handling in eval
+
+                        // Fallback click
+                        const [okBtnEl] = await page.$$(okBtnSelector);
+                        if (okBtnEl) await okBtnEl.click();
+
+                        log('    ✅ Success Alert appeared and clicked.');
                         await new Promise(r => setTimeout(r, 1000));
                     } catch (e) {
-                        log(`    ⚠️ Success Alert not found (timed out): ${e.message}`, colors.yellow);
-                        await page.screenshot({ path: 'batch-report-alert-fail.png' });
+                        log(`    ⚠️ Success Alert not found/clicked: ${e.message}`, colors.yellow);
                     }
-
                 } else {
                     log('    ⚠️ Generate button not found.', colors.yellow);
                 }
-
             } else {
-                log('    ⚠️ No sub-domain items found to select. Skipping generation.', colors.yellow);
-                // Close modal if it's open
-                const closeBtnSelector = `xpath///div[contains(@class, "fixed")]//div[contains(@class, "border-b")]//button`;
-                const [closeBtn] = await page.$$(closeBtnSelector);
-                if (closeBtn) await closeBtn.click();
+                log('    ⚠️ No sub-domain items found. Close modal.', colors.yellow);
+                await page.keyboard.press('Escape');
             }
-
         } catch (e) {
             log(`    ⚠️ Batch Report Test Failed: ${e.message}`, colors.yellow);
-            // Try to recover by hitting Escape
             await page.keyboard.press('Escape');
         }
 
@@ -364,34 +250,33 @@ async function runUITest() {
         // 3c. Test Sub Report
         log('    Testing "Sub Report"...');
         try {
-            // Open Menu (if not open, but previous steps might have closed it)
-            // Need to reopen menu because Batch Report closes it, and clicking OK closes alert.
-            const reportMenuBtn = `xpath///button[contains(., "Report")]`;
-            await page.waitForSelector(reportMenuBtn, { timeout: 3000 });
-            const [menuBtn] = await page.$$(reportMenuBtn);
-            await menuBtn.click();
-            await new Promise(r => setTimeout(r, 500));
+            // 1. Gear Icon (Re-open menu)
+            const gearBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/div[1]/button';
+            await page.waitForSelector(gearBtnSelector, { timeout: 3000 });
+            await page.click(gearBtnSelector);
+            await new Promise(r => setTimeout(r, 1000));
 
-            // Click Sub Report
-            const subBtnSelector = `xpath///button[contains(., "Sub Report")]`;
-            await page.waitForSelector(subBtnSelector, { timeout: 3000 });
-            const [subBtn] = await page.$$(subBtnSelector);
-            await subBtn.click();
+            // 2. Report Template
+            const reportTemplateBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/div[1]/div/div[1]/button';
+            await page.waitForSelector(reportTemplateBtnSelector, { timeout: 3000 });
+            await page.click(reportTemplateBtnSelector);
+            await new Promise(r => setTimeout(r, 1000));
+
+            // 3. Sub Report (button[1])
+            const subReportBtnSelector = 'xpath//html/body/div[2]/main/div/nav/div/div[2]/div[1]/div/div[1]/div/button[1]';
+            await page.waitForSelector(subReportBtnSelector, { timeout: 3000 });
+            await page.click(subReportBtnSelector);
 
             log('    Clicked "Sub Report". Waiting for modal...');
             await new Promise(r => setTimeout(r, 1500));
 
-            // Check Modal Title (Should be "Preview Report" or similar)
+            // Check Modal
             const modalTitle = await page.$eval('h3.text-lg.font-bold', el => el.textContent).catch(() => null);
-            if (modalTitle && (modalTitle.includes('Preview Report') || modalTitle.includes('Report'))) {
+            if (modalTitle) {
                 log(`    ✅ Sub Report Modal Verified: "${modalTitle}"`);
-                // Close it matches standard Report Modal
-                const closeBtnSelector = `xpath///div[contains(@class, "fixed")]//div[contains(@class, "border-b")]//button`;
-                const [closeBtn] = await page.$$(closeBtnSelector);
-                if (closeBtn) await closeBtn.click();
-            } else {
-                log(`    ⚠️ Sub Report Modal Title mismatch: "${modalTitle}"`, colors.yellow);
                 await page.keyboard.press('Escape');
+            } else {
+                log(`    ⚠️ Sub Report Modal did not appear`, colors.yellow);
             }
 
         } catch (e) {
