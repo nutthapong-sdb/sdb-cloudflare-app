@@ -164,19 +164,18 @@ export async function POST(request) {
             const minutes = body.timeRange || 1440;
             const now = new Date();
             const since = new Date(now.getTime() - minutes * 60 * 1000);
-            const targetSubdomain = body.subdomain;
 
-            // console.log(`🕒 Time Range: ${minutes}m | Subdomain: ${targetSubdomain || 'ALL'}`);
+            let targetSubdomain = body.subdomain;
+            if (targetSubdomain === 'ALL_SUBDOMAINS') targetSubdomain = null;
+
+            const isRoot = !targetSubdomain;
 
             const query = `
-               query GetZoneAnalytics($zoneTag: string, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
+               query GetZoneAnalytics($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
                  viewer {
                    zones(filter: { zoneTag: $zoneTag }) {
-                     # --- FINALIZED HYBRID LOGIC ---
-                     # Root Domain: Use 1dGroups (Accurate 30-90 days, no host filtering support)
-                     # Subdomain: Cloudflare doesn't support summaries for hostnames. Falling back to Adaptive Logs (sampled data).
-                     ${!targetSubdomain ? `
-                     totalRequestsSummary: httpRequests1dGroups(
+                     # Zone-wide Summary: Always fetched (1dGroups) for report total stats (no host filtering)
+                     zoneSummary: httpRequests1dGroups(
                         limit: 1000
                         filter: {
                             date_geq: $since_date, date_leq: $until_date
@@ -184,8 +183,11 @@ export async function POST(request) {
                      ) {
                         sum {
                           requests
+                          bytes
+                          cachedRequests
+                          cachedBytes
                         }
-                     }` : ''}
+                     }
                      # ------------------------------
 
                      httpRequestsAdaptiveGroups(
@@ -309,6 +311,10 @@ export async function POST(request) {
                     }
                 });
 
+                if (response.data.errors) {
+                    console.error('❌ Cloudflare GraphQL Errors:', JSON.stringify(response.data.errors, null, 2));
+                }
+
                 const zoneData = response.data?.data?.viewer?.zones?.[0];
                 const httpGroups = zoneData?.httpRequestsAdaptiveGroups || [];
 
@@ -323,7 +329,7 @@ export async function POST(request) {
                 return NextResponse.json({
                     success: true,
                     data: httpGroups,
-                    totalRequestsSummary: zoneData?.totalRequestsSummary || [],
+                    zoneSummary: zoneData?.zoneSummary || [],
                     firewallActivity,
                     firewallRules,
                     firewallIPs,

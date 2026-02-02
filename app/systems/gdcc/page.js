@@ -216,6 +216,13 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         // Rate Limiting
         '@RATE_LIMIT_RULES_STATUS': safeData.rateLimits?.status || 'None',
 
+        // --- New Traffic & Cache Stats ---
+        '@ZONE_TOTAL_REQ': (safeData.zoneTotalRequests || (safeData.totalRequests || 0).toLocaleString()),
+        '@ZONE_CACHE_HIT_REQ': safeData.zoneCacheHitRequests || '0',
+        '@ZONE_CACHE_HIT_REQ_RATIO': safeData.zoneCacheHitRequestsRatio || '0.00%',
+        '@ZONE_TOTAL_BANDWIDTH': safeData.zoneTotalDataTransfer || '0.00 GB',
+        '@ZONE_CACHE_HIT_BANDWIDTH': safeData.zoneCacheHitDataTransfer || '0.00 GB',
+        '@ZONE_CACHE_HIT_BANDWIDTH_RATIO': safeData.zoneCacheHitDataTransferRatio || '0.00%',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -356,8 +363,13 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     }
     html = html.replace(/@RATE_LIMITING_RULES_ROWS/g, rateLimitRulesHtml);
 
+    // Sort keys by length descending to prevent shorter keys from partial matching longer ones
+    // Example: @ZONE_CACHE_HIT_REQ vs @ZONE_CACHE_HIT_REQ_RATIO
+    const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
+
     // Now do simple text replacements
-    for (const [key, val] of Object.entries(replacements)) {
+    for (const key of sortedKeys) {
+        const val = replacements[key];
         html = html.split(key).join(val);
     }
 
@@ -713,7 +725,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     '@PEAK_TIME', '@PEAK_COUNT', '@PEAK_ATTACK_TIME', '@PEAK_ATTACK_COUNT', '@PEAK_HTTP_TIME', '@PEAK_HTTP_COUNT',
                                                     '@TOP_UA_AGENT', '@TOP_UA_COUNT',
                                                     '@TOP_URLS_LIST', '@TOP_IPS_LIST',
-                                                    '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST', '@TOP_SOURCES_LIST'].map(v => (
+                                                    '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST', '@TOP_SOURCES_LIST',
+                                                    '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO',
+                                                    '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'].map(v => (
                                                         <button
                                                             key={v}
                                                             onClick={() => editorRef.current?.insertContent(v)}
@@ -733,7 +747,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         ข้อมูลพื้นฐาน
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME', '@DNS_RECORDS'].map(v => (
+                                                        {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME', '@DNS_RECORDS'
+                                                            , '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO'
+                                                            , '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'
+                                                        ].map(v => (
                                                             <button
                                                                 key={v}
                                                                 onClick={() => editorRef.current?.insertContent(v)}
@@ -1257,6 +1274,17 @@ export default function GDCCPage() {
     const [selectedSubDomain, setSelectedSubDomain] = useState('');
     const [timeRange, setTimeRange] = useState(1440); // Default 1d
 
+    // Additional Traffic Stats (Current View)
+    const [totalDataTransfer, setTotalDataTransfer] = useState(0);
+    const [cacheHitRequests, setCacheHitRequests] = useState(0);
+    const [cacheHitDataTransfer, setCacheHitDataTransfer] = useState(0);
+
+    // Zone-wide Stats (Always Root Domain)
+    const [zoneWideRequests, setZoneWideRequests] = useState(0);
+    const [zoneWideDataTransfer, setZoneWideDataTransfer] = useState(0);
+    const [zoneWideCacheRequests, setZoneWideCacheRequests] = useState(0);
+    const [zoneWideCacheDataTransfer, setZoneWideCacheDataTransfer] = useState(0);
+
     const fetchAndApplyTrafficData = async (subdomain, zoneId, timeRange) => {
         setLoadingStats(true);
         const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
@@ -1354,18 +1382,39 @@ export default function GDCCPage() {
             });
             if (totalReqLogs > 0) weightedAvgTime = Math.round(totalTimeSum / totalReqLogs);
 
-            // --- TOTAL REQUESTS (ACCURATE) ---
-            // Use summary if available (1h/1d groups), else fallback to logs
-            if (result.totalRequestsSummary && result.totalRequestsSummary.length > 0) {
-                totalReq = result.totalRequestsSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
-                console.log(`📈 Using Summary Analytics for Total Requests: ${totalReq}`);
-            } else {
+            // --- TOTAL REQUESTS & DATA TRANSFER (ACCURATE) ---
+            // --- ZONE-WIDE STATS (ACCURATE 1d SUMMARY) ---
+            if (result.zoneSummary && result.zoneSummary.length > 0) {
+                const zReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
+                const zBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.bytes || 0), 0);
+                const zCacheReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedRequests || 0), 0);
+                const zCacheBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedBytes || 0), 0);
+
+                setZoneWideRequests(zReq);
+                setZoneWideDataTransfer(zBytes);
+                setZoneWideCacheRequests(zCacheReq);
+                setZoneWideCacheDataTransfer(zCacheBytes);
+
+                // If currently viewing ALL_SUBDOMAINS, also update display states
+                if (isAllSubdomains) {
+                    totalReq = zReq;
+                    setTotalDataTransfer(zBytes);
+                    setCacheHitRequests(zCacheReq);
+                    setCacheHitDataTransfer(zCacheBytes);
+                }
+            }
+
+            if (!isAllSubdomains) {
                 totalReq = totalReqLogs;
-                console.log(`📉 Fallback to Adaptive Logs for Total Requests: ${totalReq}`);
+                setTotalDataTransfer(0);
+                setCacheHitRequests(0);
+                setCacheHitDataTransfer(0);
             }
         } else {
             setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
             setTopRules([]); setTopAttackers([]);
+            setTotalDataTransfer(0); setCacheHitRequests(0); setCacheHitDataTransfer(0);
+            setZoneWideRequests(0); setZoneWideDataTransfer(0); setZoneWideCacheRequests(0); setZoneWideCacheDataTransfer(0);
         }
 
         setRawData(filteredData);
@@ -1791,7 +1840,15 @@ export default function GDCCPage() {
                 ipAccessRules: localZoneSettings?.ipAccessRules || '0',
                 // Custom Rules & Rate Limiting (New)
                 customRules: localZoneSettings?.customRules,
-                rateLimits: localZoneSettings?.rateLimits
+                rateLimits: localZoneSettings?.rateLimits,
+
+                // --- New Traffic & Cache Stats (Always Zone-Wide) ---
+                zoneTotalRequests: zoneWideRequests.toLocaleString(),
+                zoneCacheHitRequests: zoneWideCacheRequests.toLocaleString(),
+                zoneCacheHitRequestsRatio: zoneWideRequests > 0 ? ((zoneWideCacheRequests / zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
+                zoneTotalDataTransfer: (zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' GB',
+                zoneCacheHitDataTransfer: (zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' GB',
+                zoneCacheHitDataTransferRatio: zoneWideDataTransfer > 0 ? ((zoneWideCacheDataTransfer / zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%'
             };
 
 
@@ -2364,10 +2421,15 @@ export default function GDCCPage() {
         peakAttack: peakAttack,
         peakHttpStatus: peakHttpStatus,
         topRules: topRules,
-        peakHttpStatus: peakHttpStatus,
-        topRules: topRules,
         topAttackers: topAttackers,
-        topFirewallSources: topFirewallSources
+        topFirewallSources: topFirewallSources,
+        // Added New Traffic & Cache Stats (Always Zone-Wide)
+        zoneTotalRequests: zoneWideRequests.toLocaleString(),
+        zoneCacheHitRequests: zoneWideCacheRequests.toLocaleString(),
+        zoneCacheHitRequestsRatio: zoneWideRequests > 0 ? ((zoneWideCacheRequests / zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
+        zoneTotalDataTransfer: (zoneWideRequests > 0 ? (zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+        zoneCacheHitDataTransfer: (zoneWideRequests > 0 ? (zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+        zoneCacheHitDataTransferRatio: zoneWideDataTransfer > 0 ? ((zoneWideCacheDataTransfer / zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%'
     };
 
     const isActionDisabled = !selectedSubDomain || loadingStats;
