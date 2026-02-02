@@ -4,7 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 
 // --- Configuration ---
 const API_BASE_URL = 'http://localhost:8002/api/scrape';
-const DB_PATH = path.join(__dirname, '../db/sdb_users.db');
+const DB_PATH = path.join(__dirname, '../../db/sdb_users.db');
 
 // Color codes for console output
 const colors = {

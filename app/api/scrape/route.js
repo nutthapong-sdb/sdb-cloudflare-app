@@ -186,6 +186,11 @@ export async function POST(request) {
                           bytes
                           cachedRequests
                           cachedBytes
+                          countryMap {
+                            clientCountryName
+                            requests
+                            bytes
+                          }
                         }
                      }
                      # ------------------------------

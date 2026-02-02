@@ -11,19 +11,25 @@ description: Run regression tests to verify SDB and GDCC system functionality
 2. Run the API regression test script (Uses System User Token).
    // turbo
    ```bash
-   node scripts/test-api.js
+   node scripts/regression_test/test-api.js
    ```
 
-3. Review the API test output.
-   - Look for "PASS" in green.
-   - Ensure "Cloudflare Token Verification" and API calls succeed.
-
-4. Run the Full UI regression test script (Puppeteer).
+3. Run the Traffic Analytics validation script (Total Requests).
    // turbo
    ```bash
-   node scripts/test-all-ui.js
+   node scripts/total_requests/test-total-requests.js
    ```
 
-5. Review the UI test output.
+4. Review the API and Traffic test output.
+   - Look for "PASS" in green and ensure total requests are displayed.
+   - Ensure "Cloudflare Token Verification" and API calls succeed.
+
+5. Run the Full UI regression test script (Puppeteer).
+   // turbo
+   ```bash
+   node scripts/regression_test/test-all-ui.js
+   ```
+
+6. Review the UI test output.
    - Look for "Login Successful" and "Tests Completed".
    - If failed, check `regression-failure.png`.

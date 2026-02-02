@@ -128,6 +128,28 @@ const formatThaiDate = (date) => {
 };
 
 // --- TEMPLATE PROCESSING ---
+const formatCompactNumber = (num) => {
+    if (!num || isNaN(num)) return '0';
+    if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
+    if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(2) + 'k';
+    return num.toLocaleString();
+};
+
+const formatEventCount = (num) => {
+    return formatCompactNumber(num);
+};
+
+const getCountryName = (code) => {
+    try {
+        if (!code || code === 'T1' || code === 'XX' || code === 'Unknown' || code === 'Tor') return code || 'Unknown';
+        const displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+        return displayNames.of(code) || code;
+    } catch (e) {
+        return code;
+    }
+};
+
 const formatActionName = (action) => {
     if (!action) return '-';
     const lower = action.toLowerCase();
@@ -135,7 +157,6 @@ const formatActionName = (action) => {
     if (lower === 'managed_challenge') return 'Managed Challenge';
     if (lower === 'js_challenge' || lower === 'jschallenge') return 'JS Challenge';
 
-    // Default Title Case with space instead of underscore
     return action.replace(/_/g, ' ').split(' ').map(word =>
         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
@@ -223,6 +244,12 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@ZONE_TOTAL_BANDWIDTH': safeData.zoneTotalDataTransfer || '0.00 GB',
         '@ZONE_CACHE_HIT_BANDWIDTH': safeData.zoneCacheHitDataTransfer || '0.00 GB',
         '@ZONE_CACHE_HIT_BANDWIDTH_RATIO': safeData.zoneCacheHitDataTransferRatio || '0.00%',
+        // --- New Firewall Event Stats ---
+        '@FW_TOTAL_EVENTS': formatEventCount(safeData.fwEvents?.total || 0),
+        '@FW_MANAGED_EVENTS': formatEventCount(safeData.fwEvents?.managed || 0),
+        '@FW_CUSTOM_EVENTS': formatEventCount(safeData.fwEvents?.custom || 0),
+        '@FW_BIC_EVENTS': formatEventCount(safeData.fwEvents?.bic || 0),
+        '@FW_ACCESS_EVENTS': formatEventCount(safeData.fwEvents?.access || 0),
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -382,7 +409,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             { label: 'รายการ (URL)', width: '70%' },
             { label: 'จำนวน (Count)', width: '20%', align: 'right' }
         ],
-        (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, item.count.toLocaleString()])
+        (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, formatCompactNumber(item.count)])
     );
     html = html.replace('@TOP_URLS_LIST', topUrlsHtml);
 
@@ -392,7 +419,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             { label: 'Client IP', width: '70%' },
             { label: 'จำนวน (Count)', width: '30%', align: 'right' }
         ],
-        (safeData.topIps || []).slice(0, 3).map(item => [item.ip, item.count.toLocaleString()])
+        (safeData.topIps || []).slice(0, 3).map(item => [item.ip, formatCompactNumber(item.count)])
     );
     html = html.replace('@TOP_IPS_LIST', topIpsHtml);
 
@@ -402,7 +429,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             { label: 'Rule Name (ID)', width: '70%' },
             { label: 'จำนวน (Count)', width: '30%', align: 'right' }
         ],
-        (safeData.topRules || []).slice(0, 3).map(item => [item.rule, item.count.toLocaleString()])
+        (safeData.topRules || []).slice(0, 3).map(item => [item.rule, formatCompactNumber(item.count)])
     );
     html = html.replace('@TOP_RULES_LIST', topRulesHtml);
 
@@ -414,7 +441,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             { label: 'จำนวน (Count)', align: 'right' },
             { label: 'ประเภท (Type)' }
         ],
-        (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, item.country, item.count.toLocaleString(), item.type])
+        (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, getCountryName(item.country), formatCompactNumber(item.count), item.type])
     );
     html = html.replace('@TOP_ATTACKERS_LIST', topAttackersHtml);
 
@@ -427,6 +454,25 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         (safeData.topFirewallSources || []).slice(0, 5).map(item => [item.source, item.count.toLocaleString()])
     );
     html = html.replace('@TOP_SOURCES_LIST', topSourcesHtml);
+
+    const zoneTopCountriesReqHtml = (safeData.zoneTopCountriesReq || []).length > 0
+        ? `<ul style="list-style-type: none; padding-left: 0;">` +
+        (safeData.zoneTopCountriesReq || []).map((item, idx) =>
+            `<li style="margin-bottom: 5px;">${idx + 1}. ${getCountryName(item.name)} จำนวน Request <strong>${formatCompactNumber(item.requests)}</strong></li>`
+        ).join('') +
+        `</ul>`
+        : '-';
+    html = html.replace('@ZONE_TOP_COUNTRIES_REQ', zoneTopCountriesReqHtml);
+
+    // Top Countries (Zone) - Data Transfer List
+    const zoneTopCountriesBytesHtml = (safeData.zoneTopCountriesBytes || []).length > 0
+        ? `<ul style="list-style-type: none; padding-left: 0;">` +
+        (safeData.zoneTopCountriesBytes || []).map((item, idx) =>
+            `<li style="margin-bottom: 5px;">${idx + 1}. ${getCountryName(item.name)} จำนวน Transfer <strong>${(item.bytes / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB</strong></li>`
+        ).join('') +
+        `</ul>`
+        : '-';
+    html = html.replace('@ZONE_TOP_COUNTRIES_BYTES', zoneTopCountriesBytesHtml);
 
     // 3. Cleanup Empty Rows (Remove rows with no text content)
     if (typeof DOMParser !== 'undefined') {
@@ -629,7 +675,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-7xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-[95%] shadow-2xl overflow-hidden flex flex-col h-[90vh]">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 flex-shrink-0">
                     <div className="flex items-center gap-2">
@@ -712,32 +758,35 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     </div>
                                 </div>
                                 {/* Variables Section - Right */}
-                                <div className="w-80 flex-shrink-0 flex flex-col bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="w-[28rem] flex-shrink-0 flex flex-col bg-gray-50 rounded-lg p-4 border border-gray-200">
                                     <div className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2 sticky top-0 bg-gray-50 pb-2 border-b border-gray-300">
                                         <span className="bg-blue-500 text-white px-2 py-1 rounded">Variables</span>
                                         <span className="text-xs text-gray-500">Click to insert</span>
                                     </div>
                                     <div className="overflow-y-auto pr-2 space-y-4">
                                         {mode === 'report' ? (
-                                            // Report Mode Variables
-                                            <>
-                                                {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@time_range', '@DOMAIN', '@ACCOUNT_NAME', '@ZONE_NAME', '@TOTAL_REQ', '@AVG_TIME', '@BLOCK_PCT', '@LOG_PCT',
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {[
+                                                    '@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@time_range', '@DOMAIN', '@ACCOUNT_NAME', '@ZONE_NAME', '@TOTAL_REQ', '@AVG_TIME', '@BLOCK_PCT', '@LOG_PCT',
                                                     '@PEAK_TIME', '@PEAK_COUNT', '@PEAK_ATTACK_TIME', '@PEAK_ATTACK_COUNT', '@PEAK_HTTP_TIME', '@PEAK_HTTP_COUNT',
                                                     '@TOP_UA_AGENT', '@TOP_UA_COUNT',
                                                     '@TOP_URLS_LIST', '@TOP_IPS_LIST',
                                                     '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST', '@TOP_SOURCES_LIST',
                                                     '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO',
-                                                    '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'].map(v => (
-                                                        <button
-                                                            key={v}
-                                                            onClick={() => editorRef.current?.insertContent(v)}
-                                                            className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 mr-2 mb-2"
-                                                            title={`Insert ${v}`}
-                                                        >
-                                                            {v}
-                                                        </button>
-                                                    ))}
-                                            </>
+                                                    '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO',
+                                                    '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES',
+                                                    '@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS'
+                                                ].map(v => (
+                                                    <button
+                                                        key={v}
+                                                        onClick={() => editorRef.current?.insertContent(v)}
+                                                        className="px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate w-full"
+                                                        title={`Insert ${v}`}
+                                                    >
+                                                        {v}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         ) : (
                                             // Static Template Mode - Grouped by Category
                                             <>
@@ -746,7 +795,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <div className="text-xs font-semibold text-gray-600 mb-2 pb-1 border-b border-gray-300">
                                                         ข้อมูลพื้นฐาน
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME', '@DNS_RECORDS'
                                                             , '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO'
                                                             , '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'
@@ -754,7 +803,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                             <button
                                                                 key={v}
                                                                 onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95"
+                                                                className="px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate"
                                                                 title={`Insert ${v}`}
                                                             >
                                                                 {v}
@@ -768,7 +817,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <div className="text-xs font-semibold text-blue-700 mb-2 pb-1 border-b border-blue-300">
                                                         1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         {['@SECURITY_LEVEL', '@BOT_MANAGEMENT_STATUS', '@BLOCK_AI_BOTS',
                                                             '@DEFINITELY_AUTOMATED', '@LIKELY_AUTOMATED', '@VERIFIED_BOTS',
                                                             '@CLOUDFLARE_MANAGED_RULESET', '@OWASP_CORE_RULESET',
@@ -776,7 +825,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                                 <button
                                                                     key={v}
                                                                     onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-blue-200 rounded text-xs font-mono text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm active:scale-95"
+                                                                    className="px-2 py-1 bg-white border border-blue-200 rounded text-[10px] font-mono text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate"
                                                                     title={`Insert ${v}`}
                                                                 >
                                                                     {v}
@@ -790,13 +839,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <div className="text-xs font-semibold text-green-700 mb-2 pb-1 border-b border-green-300">
                                                         2. ลดความเสี่ยงช่องโหว่ทางเทคนิค
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         {['@SSL_MODE', '@MIN_TLS_VERSION', '@TLS_1_3',
                                                             '@LEAKED_CREDENTIALS', '@BROWSER_INTEGRITY_CHECK', '@HOTLINK_PROTECTION'].map(v => (
                                                                 <button
                                                                     key={v}
                                                                     onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-green-200 rounded text-xs font-mono text-green-700 hover:bg-green-50 hover:border-green-400 transition-all shadow-sm active:scale-95"
+                                                                    className="px-2 py-1 bg-white border border-green-200 rounded text-[10px] font-mono text-green-700 hover:bg-green-50 hover:border-green-400 transition-all shadow-sm active:scale-95 text-left truncate"
                                                                     title={`Insert ${v}`}
                                                                 >
                                                                     {v}
@@ -810,13 +859,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <div className="text-xs font-semibold text-red-700 mb-2 pb-1 border-b border-red-300">
                                                         3. ป้องกัน DDoS และการโจมตีอื่นๆ
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         {['@DDOS_PROTECTION', '@HTTP_DDOS_PROTECTION', '@SSL_TLS_DDOS_PROTECTION', '@NETWORK_DDOS_PROTECTION',
                                                         ].map(v => (
                                                             <button
                                                                 key={v}
                                                                 onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-red-200 rounded text-xs font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95"
+                                                                className="px-2 py-1 bg-white border border-red-200 rounded text-[10px] font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95 text-left truncate"
                                                                 title={`Insert ${v}`}
                                                             >
                                                                 {v}
@@ -830,13 +879,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <div className="text-xs font-semibold text-purple-700 mb-2 pb-1 border-b border-purple-300">
                                                         4. Custom Rules & Rulesets
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         {['@CUSTOM_RULES_STATUS', '@RULE_BYPASSWAF', '@RULE_BYPASS_EMAIL', '@RULE_BLOCK_URL',
                                                             '@RATE_LIMIT_RULES_STATUS', '@RULE_LOG_1000_REQ'].map(v => (
                                                                 <button
                                                                     key={v}
                                                                     onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-purple-200 rounded text-xs font-mono text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all shadow-sm active:scale-95"
+                                                                    className="px-2 py-1 bg-white border border-purple-200 rounded text-[10px] font-mono text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all shadow-sm active:scale-95 text-left truncate"
                                                                     title={`Insert ${v}`}
                                                                 >
                                                                     {v}
@@ -845,17 +894,36 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     </div>
                                                 </div>
 
-                                                {/* 5. Table Variables */}
+                                                {/* 5. สถิติความปลอดภัย (Firewall Stats) */}
                                                 <div>
-                                                    <div className="text-xs font-semibold text-teal-700 mb-2 pb-1 border-b border-teal-300">
-                                                        5. Table Variables
+                                                    <div className="text-xs font-semibold text-orange-700 mb-2 pb-1 border-b border-orange-300">
+                                                        5. สถิติความปลอดภัย (Firewall Stats)
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {['@IP_ACCESS_RULES_ROWS', '@DNS_TOTAL_ROWS'].map(v => (
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {['@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS'].map(v => (
                                                             <button
                                                                 key={v}
                                                                 onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-teal-200 rounded text-xs font-mono text-teal-700 hover:bg-teal-50 hover:border-teal-400 transition-all shadow-sm active:scale-95"
+                                                                className="px-2 py-1 bg-white border border-orange-200 rounded text-[10px] font-mono text-orange-700 hover:bg-orange-50 hover:border-orange-400 transition-all shadow-sm active:scale-95 text-left truncate"
+                                                                title={`Insert ${v}`}
+                                                            >
+                                                                {v}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* 6. Table Variables */}
+                                                <div>
+                                                    <div className="text-xs font-semibold text-teal-700 mb-2 pb-1 border-b border-teal-300">
+                                                        6. Table Variables
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {['@IP_ACCESS_RULES_ROWS', '@DNS_TOTAL_ROWS', '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES'].map(v => (
+                                                            <button
+                                                                key={v}
+                                                                onClick={() => editorRef.current?.insertContent(v)}
+                                                                className="px-2 py-1 bg-white border border-teal-200 rounded text-[10px] font-mono text-teal-700 hover:bg-teal-50 hover:border-teal-400 transition-all shadow-sm active:scale-95 text-left truncate"
                                                                 title={`Insert ${v}`}
                                                             >
                                                                 {v}
@@ -1252,9 +1320,9 @@ export default function GDCCPage() {
 
     // --- DEFAULT CONFIG ---
     const DEFAULT_CONFIG = {
-        accountName: "Cloudflare Training2",
-        zoneName: "skeepmenot2.online",
-        subDomain: "skeepmenot2.online"
+        accountName: "BDMS Group1",
+        zoneName: "bdms.co.th",
+        subDomain: "ALL_SUBDOMAINS"
     };
 
     // Selector States
@@ -1284,11 +1352,16 @@ export default function GDCCPage() {
     const [zoneWideDataTransfer, setZoneWideDataTransfer] = useState(0);
     const [zoneWideCacheRequests, setZoneWideCacheRequests] = useState(0);
     const [zoneWideCacheDataTransfer, setZoneWideCacheDataTransfer] = useState(0);
+    const [zoneWideTopCountriesReq, setZoneWideTopCountriesReq] = useState([]);
+    const [zoneWideTopCountriesBytes, setZoneWideTopCountriesBytes] = useState([]);
+    const [fwEvents, setFwEvents] = useState({ total: 0, managed: 0, custom: 0, bic: 0, access: 0 });
 
     const fetchAndApplyTrafficData = async (subdomain, zoneId, timeRange) => {
-        setLoadingStats(true);
         const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
         console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (Range: ${timeRange}m)`);
+
+        let zReq = 0, zBytes = 0, zCacheReq = 0, zCacheBytes = 0;
+        let zTopReq = [], zTopBytes = [];
 
         const result = await callAPI('get-traffic-analytics', {
             zoneId: zoneId,
@@ -1384,16 +1457,33 @@ export default function GDCCPage() {
 
             // --- TOTAL REQUESTS & DATA TRANSFER (ACCURATE) ---
             // --- ZONE-WIDE STATS (ACCURATE 1d SUMMARY) ---
+            // --- TOTAL REQUESTS & DATA TRANSFER (ACCURATE) ---
+            // --- ZONE-WIDE STATS (ACCURATE 1d SUMMARY) ---
             if (result.zoneSummary && result.zoneSummary.length > 0) {
-                const zReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
-                const zBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.bytes || 0), 0);
-                const zCacheReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedRequests || 0), 0);
-                const zCacheBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedBytes || 0), 0);
+                zReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
+                zBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.bytes || 0), 0);
+                zCacheReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedRequests || 0), 0);
+                zCacheBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedBytes || 0), 0);
 
                 setZoneWideRequests(zReq);
                 setZoneWideDataTransfer(zBytes);
                 setZoneWideCacheRequests(zCacheReq);
                 setZoneWideCacheDataTransfer(zCacheBytes);
+
+                // Aggregate Countries from Summary (Accurate Zone-wide)
+                const agg = {};
+                result.zoneSummary.forEach(day => {
+                    (day.sum?.countryMap || []).forEach(c => {
+                        const name = c.clientCountryName || 'Unknown';
+                        if (!agg[name]) agg[name] = { name, requests: 0, bytes: 0 };
+                        agg[name].requests += (c.requests || 0);
+                        agg[name].bytes += (c.bytes || 0);
+                    });
+                });
+                zTopReq = Object.values(agg).sort((a, b) => b.requests - a.requests).slice(0, 5);
+                zTopBytes = Object.values(agg).sort((a, b) => b.bytes - a.bytes).slice(0, 5);
+                setZoneWideTopCountriesReq(zTopReq);
+                setZoneWideTopCountriesBytes(zTopBytes);
 
                 // If currently viewing ALL_SUBDOMAINS, also update display states
                 if (isAllSubdomains) {
@@ -1415,6 +1505,7 @@ export default function GDCCPage() {
             setTopRules([]); setTopAttackers([]);
             setTotalDataTransfer(0); setCacheHitRequests(0); setCacheHitDataTransfer(0);
             setZoneWideRequests(0); setZoneWideDataTransfer(0); setZoneWideCacheRequests(0); setZoneWideCacheDataTransfer(0);
+            setZoneWideTopCountriesReq([]); setZoneWideTopCountriesBytes([]);
         }
 
         setRawData(filteredData);
@@ -1607,10 +1698,29 @@ export default function GDCCPage() {
 
         // 8. Top Firewall Sources (Categories like WAF, Security Level)
         const sourceMap = new Map();
+        let fwTotal = 0, fwManaged = 0, fwCustom = 0, fwBic = 0, fwAccess = 0;
+
         (result.firewallSources || []).forEach(item => {
             const source = item.dimensions.source || 'Unknown';
-            sourceMap.set(source, (sourceMap.get(source) || 0) + item.count);
+            const count = item.count;
+            fwTotal += count;
+
+            const lowerSource = source.toLowerCase();
+            // Expanded mapping based on Cloudflare firewall event sources
+            if (lowerSource === 'waf' || lowerSource === 'firewallmanaged' || lowerSource.includes('managed_rules') || lowerSource === 'managedrules') {
+                fwManaged += count;
+            } else if (lowerSource === 'firewallrules' || lowerSource === 'filterbasedfirewall' || lowerSource.includes('custom_rules') || lowerSource === 'firewallcustom' || lowerSource === 'firewall_rules' || lowerSource === 'customrules') {
+                fwCustom += count;
+            } else if (lowerSource === 'bic' || lowerSource === 'browser_integrity_check') {
+                fwBic += count;
+            } else if (lowerSource === 'accessrules' || lowerSource === 'ip_access_rules' || lowerSource === 'ip' || lowerSource === 'country' || lowerSource === 'asn' || lowerSource === 'ipaddress' || lowerSource === 'ip_access_rule') {
+                fwAccess += count;
+            }
+
+            sourceMap.set(source, (sourceMap.get(source) || 0) + count);
         });
+
+        setFwEvents({ total: fwTotal, managed: fwManaged, custom: fwCustom, bic: fwBic, access: fwAccess });
         const topSourcesSorted = Array.from(sourceMap.entries())
             .map(([source, count]) => ({ source, count }))
             .sort((a, b) => b.count - a.count);
@@ -1633,7 +1743,14 @@ export default function GDCCPage() {
             topIps: toArray(ipCounts, 'ip'),
             topCountries: toArray(countryCounts, 'name'),
             topUserAgents: toArray(uaCounts, 'agent'),
-            // raw: result // optional
+            // Zone-wide Stats
+            zoneWideRequests: zReq,
+            zoneWideDataTransfer: zBytes,
+            zoneWideCacheRequests: zCacheReq,
+            zoneWideCacheDataTransfer: zCacheBytes,
+            zoneWideTopCountriesReq: zTopReq,
+            zoneWideTopCountriesBytes: zTopBytes,
+            fwEvents: { total: fwTotal, managed: fwManaged, custom: fwCustom, bic: fwBic, access: fwAccess }
         };
 
         setLoadingStats(false);
@@ -1843,12 +1960,15 @@ export default function GDCCPage() {
                 rateLimits: localZoneSettings?.rateLimits,
 
                 // --- New Traffic & Cache Stats (Always Zone-Wide) ---
-                zoneTotalRequests: zoneWideRequests.toLocaleString(),
-                zoneCacheHitRequests: zoneWideCacheRequests.toLocaleString(),
-                zoneCacheHitRequestsRatio: zoneWideRequests > 0 ? ((zoneWideCacheRequests / zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
-                zoneTotalDataTransfer: (zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' GB',
-                zoneCacheHitDataTransfer: (zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' GB',
-                zoneCacheHitDataTransferRatio: zoneWideDataTransfer > 0 ? ((zoneWideCacheDataTransfer / zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%'
+                zoneTotalRequests: stats.zoneWideRequests.toLocaleString(),
+                zoneCacheHitRequests: stats.zoneWideCacheRequests.toLocaleString(),
+                zoneCacheHitRequestsRatio: stats.zoneWideRequests > 0 ? ((stats.zoneWideCacheRequests / stats.zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
+                zoneTotalDataTransfer: (stats.zoneWideRequests > 0 ? (stats.zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                zoneCacheHitDataTransfer: (stats.zoneWideRequests > 0 ? (stats.zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                zoneCacheHitDataTransferRatio: stats.zoneWideDataTransfer > 0 ? ((stats.zoneWideCacheDataTransfer / stats.zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
+                zoneTopCountriesReq: stats.zoneWideTopCountriesReq,
+                zoneTopCountriesBytes: stats.zoneWideTopCountriesBytes,
+                fwEvents: stats.fwEvents
             };
 
 
@@ -2175,11 +2295,10 @@ export default function GDCCPage() {
         const result = await callAPI('get-account-info', {}, tokenOverride);
         if (result && result.data) {
             setAccounts(result.data);
-            // Disabled Auto Select Account
-            /* const defaultAcc = result.data.find(a => a.name.toLowerCase() === DEFAULT_CONFIG.accountName.toLowerCase());
+            const defaultAcc = result.data.find(a => a.name.toLowerCase() === DEFAULT_CONFIG.accountName.toLowerCase());
             if (defaultAcc) {
                 handleAccountChange(defaultAcc.id, true);
-            } */
+            }
         }
     };
 
@@ -2196,13 +2315,12 @@ export default function GDCCPage() {
         const result = await callAPI('list-zones', { accountId });
         if (result && result.data) {
             setZones(result.data);
-            // Disabled Auto Select Zone
-            /* if (isAuto) {
-                 const defaultZone = result.data.find(z => z.name.toLowerCase() === DEFAULT_CONFIG.zoneName.toLowerCase());
-                 if (defaultZone) {
-                     setSelectedZone(defaultZone.id);
-                 }
-             } */
+            if (isAuto) {
+                const defaultZone = result.data.find(z => z.name.toLowerCase() === DEFAULT_CONFIG.zoneName.toLowerCase());
+                if (defaultZone) {
+                    setSelectedZone(defaultZone.id);
+                }
+            }
         }
         setLoadingZones(false);
     };
@@ -2429,7 +2547,10 @@ export default function GDCCPage() {
         zoneCacheHitRequestsRatio: zoneWideRequests > 0 ? ((zoneWideCacheRequests / zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
         zoneTotalDataTransfer: (zoneWideRequests > 0 ? (zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
         zoneCacheHitDataTransfer: (zoneWideRequests > 0 ? (zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
-        zoneCacheHitDataTransferRatio: zoneWideDataTransfer > 0 ? ((zoneWideCacheDataTransfer / zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%'
+        zoneCacheHitDataTransferRatio: zoneWideDataTransfer > 0 ? ((zoneWideCacheDataTransfer / zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
+        zoneTopCountriesReq: zoneWideTopCountriesReq,
+        zoneTopCountriesBytes: zoneWideTopCountriesBytes,
+        fwEvents: fwEvents
     };
 
     const isActionDisabled = !selectedSubDomain || loadingStats;
