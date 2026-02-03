@@ -1,71 +1,71 @@
 const axios = require('axios');
-const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { getApiToken, colors, log } = require('../helpers');
 
-// --- Configuration ---
-const API_BASE_URL = 'http://localhost:8002/api/scrape';
-const DB_PATH = path.join(__dirname, '../../db/sdb_users.db');
-
-const TARGET_CONFIG = {
-    accountName: "BDMS Group1",
-    zoneName: "bdms.co.th",
-    timeRange: 43200 // 30 days
-};
-
-async function getApiTokenFromDb() {
-    return new Promise((resolve, reject) => {
-        const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY);
-        const sql = `SELECT cloudflare_api_token FROM users WHERE cloudflare_api_token IS NOT NULL LIMIT 1`;
-        db.get(sql, [], (err, row) => {
-            db.close();
-            if (err) return reject(err);
-            resolve(row.cloudflare_api_token);
-        });
-    });
-}
+const BASE_URL = 'http://localhost:8002/api/scrape';
 
 async function main() {
-    console.log('🚀 Inspecting Firewall Rules Data...');
-    const apiToken = await getApiTokenFromDb();
+    log('🔍 Inspecting Firewall Rules...', colors.cyan);
+    log('═══════════════════════════════════════');
 
-    // 1. Get Zone ID
-    const accRes = await axios.post(API_BASE_URL, { action: 'get-account-info', apiToken });
-    const account = accRes.data.data.find(a => a.name.includes(TARGET_CONFIG.accountName));
+    const apiToken = getApiToken();
+    log(`✅ Token: ${apiToken.substring(0, 4)}...${apiToken.slice(-4)}`, colors.green);
 
-    const zoneRes = await axios.post(API_BASE_URL, { action: 'list-zones', accountId: account.id, apiToken });
-    const zone = zoneRes.data.data.find(z => z.name === TARGET_CONFIG.zoneName);
+    const zoneName = process.argv[2] || 'bdms.co.th';
+    log(`📍 Zone: ${zoneName}`, colors.blue);
 
-    console.log(`Debug: Zone ID = ${zone.id}`);
+    try {
+        // Fetch traffic analytics
+        const response = await axios.post(BASE_URL, {
+            action: 'get-traffic-analytics',
+            zoneId: zoneName,
+            timeRange: 1440,
+            subdomain: null,
+            apiToken
+        });
 
-    // 2. Fetch Traffic Analytics (which includes firewallRules)
-    const res = await axios.post(API_BASE_URL, {
-        action: 'get-traffic-analytics',
-        zoneId: zone.id,
-        timeRange: TARGET_CONFIG.timeRange,
-        apiToken
-    });
+        if (!response.data.success) {
+            throw new Error(response.data.error || 'Failed to fetch data');
+        }
 
-    if (!res.data.success) {
-        console.error('API Failed:', res.data.message);
-        return;
-    }
+        const data = response.data.data;
+        const firewallRules = data?.firewallRules || [];
+        const firewallSources = data?.firewallSources || [];
 
-    const { firewallRules, firewallSources } = res.data.data;
+        log(`\n📊 Firewall Rules: ${firewallRules.length}`, colors.blue);
+        log(`📊 Firewall Sources: ${firewallSources.length}`, colors.blue);
 
-    console.log(`\n📦 Found ${firewallRules.length} Rule Groups`);
+        // Group by source
+        const sourceGroups = {};
+        firewallRules.forEach(rule => {
+            const source = rule.dimensions?.source || 'unknown';
+            if (!sourceGroups[source]) {
+                source Groups[source] = [];
+            }
+            sourceGroups[source].push(rule);
+        });
 
-    console.log('\n--- Top 10 Rules ---');
-    firewallRules.slice(0, 10).forEach((r, i) => {
-        console.log(`#${i + 1} [${r.dimensions.source}] ${r.dimensions.description} (IDs: ${r.dimensions.ruleId}) - Count: ${r.count}`);
-    });
+        log('\n🔹 Rules by Source:', colors.cyan);
+        Object.keys(sourceGroups).forEach(source => {
+            log(`   ${source}: ${sourceGroups[source].length} rules`, colors.yellow);
+        });
 
-    console.log('\n--- Sources Summary ---');
-    // Note: firewallSources might be empty if not requested in GraphQL? Let's check logic.
-    // Actually firewallSources is fetched in route.js
-    if (firewallSources && firewallSources.length > 0) {
-        firewallSources.forEach(s => console.log(`Source: ${s.dimensions.source}, Count: ${s.count}`));
-    } else {
-        console.log('No firewallSources data returned.');
+        log('\n🔹 Top 10 Rules (by count):', colors.cyan);
+        const sorted = firewallRules
+            .sort((a, b) => (b.count || 0) - (a.count || 0))
+            .slice(0, 10);
+
+        sorted.forEach((rule, idx) => {
+            const desc = rule.dimensions?.description || 'No description';
+            const source = rule.dimensions?.source || 'unknown';
+            const count = rule.count || 0;
+            log(`   ${idx + 1}. [${source}] ${desc}: ${count.toLocaleString()}`, colors.reset);
+        });
+
+        log('\n═══════════════════════════════════════\n');
+
+    } catch (error) {
+        log(`\n❌ Error: ${error.message}`, colors.red);
+        process.exit(1);
     }
 }
 

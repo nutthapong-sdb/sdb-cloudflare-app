@@ -1,49 +1,8 @@
 const axios = require('axios');
-const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { getApiToken, colors, log } = require('../helpers');
 
 // --- Configuration ---
 const API_BASE_URL = 'http://localhost:8002/api/scrape';
-const DB_PATH = path.join(__dirname, '../../db/sdb_users.db');
-
-// Color codes for console output
-const colors = {
-    reset: '\x1b[0m',
-    green: '\x1b[32m',
-    red: '\x1b[31m',
-    yellow: '\x1b[33m',
-    blue: '\x1b[34m',
-    cyan: '\x1b[36m'
-};
-
-// --- Helper Functions ---
-function log(message, color = colors.reset) {
-    console.log(`${color}${message}${colors.reset}`);
-}
-
-function getApiTokenFromDb() {
-    return new Promise((resolve, reject) => {
-        log(`📂 Connecting to database at: ${DB_PATH}`, colors.blue);
-        const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY, (err) => {
-            if (err) {
-                return reject(new Error(`Could not connect to database: ${err.message}`));
-            }
-        });
-
-        // Get the first user with a non-empty token
-        const sql = `SELECT cloudflare_api_token FROM users WHERE cloudflare_api_token IS NOT NULL AND cloudflare_api_token != '' LIMIT 1`;
-
-        db.get(sql, [], (err, row) => {
-            db.close();
-            if (err) return reject(err);
-            if (row && row.cloudflare_api_token) {
-                resolve(row.cloudflare_api_token);
-            } else {
-                reject(new Error('No API Token found in database (users table). Please login via UI and save an API Key first.'));
-            }
-        });
-    });
-}
 
 async function runTest(testName, testFn) {
     process.stdout.write(`Testing ${testName}... `);
@@ -66,20 +25,14 @@ async function runTest(testName, testFn) {
 // --- Tests ---
 
 async function main() {
-    log('🚀 Starting API Regression Tests (System User Mode)...', colors.cyan);
+    log('🚀 Starting API Regression Tests...', colors.cyan);
     log('-----------------------------------');
 
-    let apiToken;
-    try {
-        apiToken = await getApiTokenFromDb();
-        log('✅ Retrieved API Token from Database.', colors.green);
-        // Mask token for display
-        const masked = apiToken.substring(0, 4) + '...' + apiToken.substring(apiToken.length - 4);
-        log(`   Token: ${masked}`);
-    } catch (error) {
-        log(`❌ Failed to get API Token: ${error.message}`, colors.red);
-        process.exit(1);
-    }
+    // Get API Token from .env.local
+    const apiToken = getApiToken();
+    log('✅ Using API Token from .env.local', colors.green);
+    const masked = apiToken.substring(0, 4) + '...' + apiToken.substring(apiToken.length - 4);
+    log(`   Token: ${masked}`);
 
     const headers = {
         'Content-Type': 'application/json'
@@ -142,7 +95,6 @@ async function main() {
 
             const aiBots = settings.botManagement?.blockAiBots;
             if (aiBots) {
-                // log(`    Confirmed blockAiBots value: "${aiBots}"`);
                 if (aiBots === 'unknown') throw new Error('blockAiBots is unknown');
             } else {
                 throw new Error('Missing blockAiBots in response');

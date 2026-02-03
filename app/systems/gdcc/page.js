@@ -1424,6 +1424,8 @@ export default function GDCCPage() {
         let processedRules = [];
         let sortedAttackers = [];
         let firewallSourcesData = [];
+        let customList = [];
+        let managedList = [];
 
         if (result && result.success) {
             // console.log('✅ Traffic Data Received:', result.data); // Debug Header
@@ -1467,7 +1469,7 @@ export default function GDCCPage() {
             setTopRules(processedRules);
 
             // Extract Custom Rules
-            const customList = firewallRulesData
+            customList = firewallRulesData
                 .filter(g => {
                     const src = (g.dimensions?.source || '').toLowerCase();
                     const isCustom = src.includes('custom');
@@ -1482,7 +1484,7 @@ export default function GDCCPage() {
             setCustomRulesList(customList);
 
             // Extract Managed Rules
-            const managedList = firewallRulesData
+            managedList = firewallRulesData
                 .filter(g => {
                     const src = (g.dimensions?.source || '').toLowerCase();
                     return src.includes('managed') || src.includes('waf') || src === 'bic' || src === 'owasp';

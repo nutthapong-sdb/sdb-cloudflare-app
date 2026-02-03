@@ -26,17 +26,24 @@ description: เรียก workflow นี้ทุกครั้งที่
    node scripts/debug/test-template-variables.js
    ```
 
-5. Review the API and Data test output.
+5. Run the DNS check script (Default: BDMS Group1 / bdms.co.th).
+   // turbo
+   ```bash
+   node scripts/dns_check/test-dns-specific.js
+   ```
+
+6. Review the API and Data test output.
    - Look for "PASS" in green and ensure total requests are displayed.
    - Review the "TEMPLATE VARIABLE DATA STATUS" report to ensure key variables are loaded.
    - Ensure "Cloudflare Token Verification" and API calls succeed.
+   - DNS check should display total records by type and proxy status.
 
-6. Run the Full UI regression test script (Puppeteer).
+7. Run the Full UI regression test script (Puppeteer).
    // turbo
    ```bash
    node scripts/regression_test/test-all-ui.js
    ```
 
-7. Review the UI test output.
+8. Review the UI test output.
    - Look for "Login Successful" and "Tests Completed".
    - If failed, check `regression-failure.png`.

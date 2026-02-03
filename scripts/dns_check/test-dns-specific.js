@@ -1,57 +1,21 @@
 const axios = require('axios');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { getApiToken, colors, log } = require('../helpers');
 
 // --- Configuration ---
 const BASE_URL = 'http://localhost:8002/api/scrape';
-const DB_PATH = path.join(__dirname, '../../db/sdb_users.db');
 
 // --- User Inputs ---
 const TARGET_ACCOUNT = process.argv[2] || 'BDMS Group1';
 const TARGET_ZONE = process.argv[3] || 'bdms.co.th';
 
-// --- Colors ---
-const colors = {
-    reset: '\x1b[0m',
-    green: '\x1b[32m',
-    red: '\x1b[31m',
-    yellow: '\x1b[33m',
-    blue: '\x1b[34m',
-    cyan: '\x1b[36m'
-};
-
-function log(msg, color = colors.reset) {
-    console.log(`${color}${msg}${colors.reset}`);
-}
-
-async function getApiTokenFromDb() {
-    return new Promise((resolve, reject) => {
-        const db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READONLY, (err) => {
-            if (err) return reject(err);
-        });
-
-        db.get("SELECT cloudflare_api_token FROM users WHERE cloudflare_api_token IS NOT NULL LIMIT 1", (err, row) => {
-            if (err) reject(err);
-            else if (row) resolve(row.cloudflare_api_token);
-            else reject(new Error('No user found in database'));
-            db.close();
-        });
-    });
-}
-
-function withToken(data, token) {
-    if (!token) throw new Error("API Token is missing!");
-    return { ...data, apiToken: token };
-}
-
 async function main() {
     try {
         log(`🚀 Starting DNS Test for: [${TARGET_ACCOUNT}] -> [${TARGET_ZONE}]`, colors.cyan);
 
-        // 1. Get Token
-        log('1. Fetching System Token...', colors.blue);
-        const token = await getApiTokenFromDb();
-        log(`   Token found: ${token.substring(0, 4)}...${token.slice(-4)}`, colors.green);
+        // 1. Get Token from .env.local
+        log('1. Getting API Token from .env.local...', colors.blue);
+        const token = getApiToken();
+        log(`   Token: ${token.substring(0, 4)}...${token.slice(-4)}`, colors.green);
 
         // 2. Find Account ID
         log(`2. Finding Account ID for "${TARGET_ACCOUNT}"...`, colors.blue);
