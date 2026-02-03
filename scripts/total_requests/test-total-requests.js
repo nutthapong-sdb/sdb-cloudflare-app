@@ -13,14 +13,45 @@ async function main() {
         const apiToken = getApiToken();
         log(`✅ Token: ${apiToken.substring(0, 4)}...${apiToken.slice(-4)}`, colors.green);
 
-        const zoneName = process.argv[2] || DEFAULT_ZONE;
-        log(`📍 Zone: ${zoneName}`, colors.blue);
+        const zoneName = process.argv[3] || DEFAULT_ZONE;
+        const accountName = process.argv[2] || DEFAULT_ACCOUNT;
 
-        // Fetch traffic analytics
-        log('\n📊 Fetching Traffic Analytics (24h)...', colors.blue);
+        log(`📍 Target: ${accountName} > ${zoneName}`, colors.blue);
+
+        // 1. Get Account & Zone ID first (Cloudflare Analytics requires UUID, not domain name)
+        log('\n1️⃣ Finding Zone ID...', colors.blue);
+
+        // Get Account Info
+        const accountRes = await axios.post(BASE_URL, {
+            action: 'get-account-info',
+            apiToken
+        });
+
+        if (!accountRes.data.success) throw new Error('Failed to fetch account info');
+
+        const account = accountRes.data.data.find(a => a.name === accountName);
+        if (!account) throw new Error(`Account '${accountName}' not found`);
+
+        // Get Zones
+        const zoneRes = await axios.post(BASE_URL, {
+            action: 'list-zones',
+            accountId: account.id,
+            apiToken
+        });
+
+        if (!zoneRes.data.success) throw new Error('Failed to list zones');
+
+        const zone = zoneRes.data.data.find(z => z.name === zoneName);
+        if (!zone) throw new Error(`Zone '${zoneName}' not found`);
+
+        const zoneId = zone.id;
+        log(`   ✅ Found Zone ID: ${zoneId}`, colors.green);
+
+        // 2. Fetch traffic analytics
+        log('\n2️⃣ Fetching Traffic Analytics (24h)...', colors.blue);
         const response = await axios.post(BASE_URL, {
             action: 'get-traffic-analytics',
-            zoneId: zoneName,
+            zoneId: zoneId, // Use the fetched UUID
             timeRange: 1440,
             subdomain: null,
             apiToken
