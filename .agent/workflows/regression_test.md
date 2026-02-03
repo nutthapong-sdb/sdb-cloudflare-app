@@ -1,5 +1,5 @@
 ---
-description: Run regression tests to verify SDB and GDCC system functionality
+description: เรียก workflow นี้ทุกครั้งที่ต้องการทดสอบระบบทั้งหมด (API, UI, และ Traffic Analytics)
 ---
 
 1. Start the development server in the background (if not already running).
@@ -20,16 +20,23 @@ description: Run regression tests to verify SDB and GDCC system functionality
    node scripts/total_requests/test-total-requests.js
    ```
 
-4. Review the API and Traffic test output.
+4. Run the Template Variable validation script.
+   // turbo
+   ```bash
+   node scripts/debug/test-template-variables.js
+   ```
+
+5. Review the API and Data test output.
    - Look for "PASS" in green and ensure total requests are displayed.
+   - Review the "TEMPLATE VARIABLE DATA STATUS" report to ensure key variables are loaded.
    - Ensure "Cloudflare Token Verification" and API calls succeed.
 
-5. Run the Full UI regression test script (Puppeteer).
+6. Run the Full UI regression test script (Puppeteer).
    // turbo
    ```bash
    node scripts/regression_test/test-all-ui.js
    ```
 
-6. Review the UI test output.
+7. Review the UI test output.
    - Look for "Login Successful" and "Tests Completed".
    - If failed, check `regression-failure.png`.

@@ -42,12 +42,18 @@ async function runUITest() {
     }
 
     const browser = await puppeteer.launch({
-        headless: "new", // Run in headless mode (no visible UI)
+        headless: true, // Run in headful mode (visible UI)
+        slowMo: 50,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1280,800']
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
+
+    // Enable console logging from browser
+    page.on('console', msg => log(`[BROWSER] ${msg.type().toUpperCase()}: ${msg.text()}`, colors.yellow));
+    page.on('pageerror', err => log(`[BROWSER ERROR] ${err.toString()}`, colors.red));
+    page.on('requestfailed', req => log(`[BROWSER NETWORK FAIL] ${req.url()} - ${req.failure().errorText}`, colors.red));
 
     try {
         // 1. Login Flow
@@ -77,47 +83,56 @@ async function runUITest() {
         log('\nSkipping SDB System UI tests...', colors.yellow);
 
         // --- GDCC SYSTEM TESTS ---
-        log('\nTesting GDCC System UI...', colors.blue);
+        log('  Navigating to GDCC System...');
         const GDCC_URL = `${BASE_URL}/systems/gdcc`;
-        await page.goto(GDCC_URL, { waitUntil: 'networkidle0' });
+        await page.goto(GDCC_URL, { waitUntil: 'domcontentloaded' });
+        log('  Page Loaded (DOM Content Loaded). Waiting for React hydration...');
 
-        // 1. Select Account and Zone (Required for Dashboard to load)
-        log('  Selecting Account and Zone for GDCC...');
-
-        // Re-use robust selectors
-        const gdccAccountSelector = `xpath///label[contains(., "Account")]/following-sibling::div//div[contains(@class, "cursor-pointer")]`;
-
+        // 1. Smart Account/Zone Selection (Auto vs Manual)
+        log('  Checking for Dashboard load (Auto-selection)...');
         try {
-            await page.waitForSelector(gdccAccountSelector, { timeout: 10000 });
-            await page.click(gdccAccountSelector);
-            await new Promise(r => setTimeout(r, 2000));
+            // Check if dashboard is already loaded (look for "Total Requests" card)
+            const dashboardIndicator = `xpath///h3[contains(text(), "Total Requests")] | //div[contains(text(), "Total Requests")]`;
+            await page.waitForSelector(dashboardIndicator, { timeout: 10000 });
+            log('  ✅ Dashboard loaded via Auto-selection. Skipping manual selection.', colors.green);
+        } catch (e) {
+            log('  ⚠️ Dashboard not loaded automatically. Performing manual selection...', colors.yellow);
 
-            // Select first account
-            const gdccAccOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
-            if (gdccAccOptions.length > 0) {
-                await gdccAccOptions[0].click();
-                log('  Selected first Account.');
-                await new Promise(r => setTimeout(r, 3000));
+            // Re-use robust selectors
+            const gdccAccountSelector = `xpath///label[contains(., "Account")]/following-sibling::div//div[contains(@class, "cursor-pointer")]`;
 
-                // Select Zone
-                const gdccZoneSelector = `xpath///label[contains(., "Zone")]/following-sibling::div//div[contains(@class, "cursor-pointer")]`;
-                await page.waitForSelector(gdccZoneSelector, { timeout: 5000 });
-                await page.click(gdccZoneSelector);
+            try {
+                await page.waitForSelector(gdccAccountSelector, { timeout: 5000 });
+                await page.click(gdccAccountSelector);
                 await new Promise(r => setTimeout(r, 2000));
 
-                const gdccZoneOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
-                if (gdccZoneOptions.length > 0) {
-                    await gdccZoneOptions[0].click();
-                    log('  Selected first Zone.');
-                    await new Promise(r => setTimeout(r, 5000)); // Wait for dashboard data
+                // Select first account
+                const gdccAccOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
+                if (gdccAccOptions.length > 0) {
+                    await gdccAccOptions[0].click();
+                    log('  Selected first Account.');
+                    await new Promise(r => setTimeout(r, 3000));
+
+                    // Select Zone
+                    const gdccZoneSelector = `xpath///label[contains(., "Zone")]/following-sibling::div//div[contains(@class, "cursor-pointer")]`;
+                    await page.waitForSelector(gdccZoneSelector, { timeout: 5000 });
+                    await page.click(gdccZoneSelector);
+                    await new Promise(r => setTimeout(r, 2000));
+
+                    const gdccZoneOptions = await page.$$('xpath///div[contains(@class, "absolute")]//div[contains(@class, "cursor-pointer")]');
+                    if (gdccZoneOptions.length > 0) {
+                        await gdccZoneOptions[0].click();
+                        log('  Selected first Zone.');
+                        await new Promise(r => setTimeout(r, 5000)); // Wait for dashboard data
+                    } else {
+                        throw new Error('No zones found in GDCC.');
+                    }
                 } else {
-                    throw new Error('No zones found in GDCC.');
+                    throw new Error('No accounts found in GDCC.');
                 }
-            } else {
-                throw new Error('No accounts found in GDCC.');
+            } catch (manualErr) {
+                log(`  ❌ Manual Setup failed: ${manualErr.message}`, colors.red);
             }
-        } catch (e) {
-            log(`  ⚠️ Setup failed for GDCC: ${e.message}`, colors.yellow);
         }
 
         // 2. Test Time Ranges

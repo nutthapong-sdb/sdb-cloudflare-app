@@ -157,6 +157,7 @@ export async function POST(request) {
 
         // 6. Get Traffic Analytics (GraphQL) - MAIN DASHBOARD
         else if (action === 'get-traffic-analytics') {
+            console.log('🔹 API: Traffic Request Received for Zone:', zoneId);
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
             // console.log(`📊 Fetching GraphQL Analytics for Zone: ${zoneId}...`);
 
@@ -251,6 +252,7 @@ export async function POST(request) {
                         dimensions {
                           description
                           ruleId
+                          source
                         }
                      }
 
@@ -331,14 +333,17 @@ export async function POST(request) {
 
                 // console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs, ${firewallSources.length} Sources`);
 
+                console.log('🔹 API: Sending Traffic Response...');
                 return NextResponse.json({
                     success: true,
-                    data: httpGroups,
-                    zoneSummary: zoneData?.zoneSummary || [],
-                    firewallActivity,
-                    firewallRules,
-                    firewallIPs,
-                    firewallSources
+                    data: {
+                        httpRequestsAdaptiveGroups: httpGroups,
+                        zoneSummary: zoneData?.zoneSummary || [],
+                        firewallActivity,
+                        firewallRules,
+                        firewallIPs,
+                        firewallSources
+                    }
                 });
 
             } catch (gqlError) {

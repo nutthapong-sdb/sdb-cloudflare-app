@@ -175,7 +175,8 @@ async function main() {
 
             if (!response.data.success) throw new Error(response.data.message || 'Failed to fetch Traffic Analytics');
             const data = response.data.data;
-            if (!Array.isArray(data)) throw new Error('Data should be an array');
+            if (typeof data !== 'object') throw new Error('Data should be an object');
+            if (!Array.isArray(data.httpRequestsAdaptiveGroups)) throw new Error('Missing httpRequestsAdaptiveGroups array');
         });
 
     } else {

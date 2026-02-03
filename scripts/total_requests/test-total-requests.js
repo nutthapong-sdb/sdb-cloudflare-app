@@ -91,8 +91,8 @@ async function main() {
         log(`Debug Analytics Data: ${JSON.stringify(analytics, null, 2)}`); // View if needed
 
         const body = analyticsRes.data;
-        const httpGroups = body.data || [];
-        const summary = body.totalRequestsSummary || [];
+        const httpGroups = body.data?.httpRequestsAdaptiveGroups || [];
+        const summary = body.data?.zoneSummary || [];
 
         let totalRequests = 0;
         let dataSource = 'Adaptive Logs';

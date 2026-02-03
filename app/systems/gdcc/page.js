@@ -250,6 +250,11 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@FW_CUSTOM_EVENTS': formatEventCount(safeData.fwEvents?.custom || 0),
         '@FW_BIC_EVENTS': formatEventCount(safeData.fwEvents?.bic || 0),
         '@FW_ACCESS_EVENTS': formatEventCount(safeData.fwEvents?.access || 0),
+        // --- Single Value Stats ---
+        '@TOP_IP_VAL': safeData.topIps && safeData.topIps.length > 0 ? safeData.topIps[0].ip : '-',
+        '@TOP_UA_VAL': safeData.topUserAgents && safeData.topUserAgents.length > 0 ? safeData.topUserAgents[0].agent : '-',
+        '@TOP_COUNTRY_VAL': safeData.topCountries && safeData.topCountries.length > 0 ? getCountryName(safeData.topCountries[0].name) : '-',
+        '@TOP_HOST_VAL': safeData.topHosts && safeData.topHosts.length > 0 ? safeData.topHosts[0].host : '-',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -298,7 +303,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         console.log('No DNS records found for domain report');
     }
 
-    html = html.replace(/@DNS_TOTAL_ROWS/g, dnsRowsHtml);
+    html = html.replace(/@DNS_TOTAL_ROWS(@)?/g, dnsRowsHtml);
 
     // IP Access Rules - Real data from API
     // Format according to user requirements:
@@ -352,7 +357,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         console.log('No IP Access Rules found for domain report');
     }
 
-    html = html.replace(/@IP_ACCESS_RULES_ROWS/g, ipAccessRulesHtml);
+    html = html.replace(/@IP_ACCESS_RULES_ROWS(@)?/g, ipAccessRulesHtml);
 
     // Custom Rules - Real data from API
     let customRulesHtml = '';
@@ -370,7 +375,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             customRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
         });
     }
-    html = html.replace(/@CUSTOM_RULES_ROWS/g, customRulesHtml);
+    html = html.replace(/@CUSTOM_RULES_ROWS(@)?/g, customRulesHtml);
 
     // Rate Limiting Rules - Real data from API
     let rateLimitRulesHtml = '';
@@ -388,7 +393,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             rateLimitRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
         });
     }
-    html = html.replace(/@RATE_LIMITING_RULES_ROWS/g, rateLimitRulesHtml);
+    html = html.replace(/@RATE_LIMITING_RULES_ROWS(@)?/g, rateLimitRulesHtml);
 
     // Sort keys by length descending to prevent shorter keys from partial matching longer ones
     // Example: @ZONE_CACHE_HIT_REQ vs @ZONE_CACHE_HIT_REQ_RATIO
@@ -397,7 +402,9 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     // Now do simple text replacements
     for (const key of sortedKeys) {
         const val = replacements[key];
-        html = html.split(key).join(val);
+        // Support @VARIABLE and @VARIABLE@
+        const regex = new RegExp(key + '(@)?', 'g');
+        html = html.replace(regex, val);
     }
 
     // 2. Table Generators
@@ -411,7 +418,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         ],
         (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, formatCompactNumber(item.count)])
     );
-    html = html.replace('@TOP_URLS_LIST', topUrlsHtml);
+    html = html.replace(/@TOP_URLS_LIST(@)?/g, topUrlsHtml);
 
     // Top IPs Table
     const topIpsHtml = generateHtmlTable(
@@ -421,7 +428,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         ],
         (safeData.topIps || []).slice(0, 3).map(item => [item.ip, formatCompactNumber(item.count)])
     );
-    html = html.replace('@TOP_IPS_LIST', topIpsHtml);
+    html = html.replace(/@TOP_IPS_LIST(@)?/g, topIpsHtml);
 
     // Top Rules Table
     const topRulesHtml = generateHtmlTable(
@@ -431,7 +438,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         ],
         (safeData.topRules || []).slice(0, 3).map(item => [item.rule, formatCompactNumber(item.count)])
     );
-    html = html.replace('@TOP_RULES_LIST', topRulesHtml);
+    html = html.replace(/@TOP_RULES_LIST(@)?/g, topRulesHtml);
 
     // Top Attackers Table
     const topAttackersHtml = generateHtmlTable(
@@ -443,7 +450,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         ],
         (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, getCountryName(item.country), formatCompactNumber(item.count), item.type])
     );
-    html = html.replace('@TOP_ATTACKERS_LIST', topAttackersHtml);
+    html = html.replace(/@TOP_ATTACKERS_LIST(@)?/g, topAttackersHtml);
 
     // Top Sources Table
     const topSourcesHtml = generateHtmlTable(
@@ -453,28 +460,57 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         ],
         (safeData.topFirewallSources || []).slice(0, 5).map(item => [item.source, item.count.toLocaleString()])
     );
-    html = html.replace('@TOP_SOURCES_LIST', topSourcesHtml);
+    html = html.replace(/@TOP_SOURCES_LIST(@)?/g, topSourcesHtml);
 
     const zoneTopCountriesReqHtml = (safeData.zoneTopCountriesReq || []).length > 0
-        ? `<ul style="list-style-type: none; padding-left: 0;">` +
+        ? '<ol style="margin: 0; padding-left: 20px;">' +
         (safeData.zoneTopCountriesReq || []).map((item, idx) =>
-            `<li style="margin-bottom: 5px;">${idx + 1}. ${getCountryName(item.name)} จำนวน Request <strong>${formatCompactNumber(item.requests)}</strong></li>`
+            `<li style="margin: 0; padding: 0;">${getCountryName(item.name)} จำนวน Request <strong>${formatCompactNumber(item.requests)}</strong></li>`
         ).join('') +
-        `</ul>`
+        '</ol>'
         : '-';
-    html = html.replace('@ZONE_TOP_COUNTRIES_REQ', zoneTopCountriesReqHtml);
+    html = html.replace(/@ZONE_TOP_COUNTRIES_REQ(@)?/g, zoneTopCountriesReqHtml);
 
     // Top Countries (Zone) - Data Transfer List
     const zoneTopCountriesBytesHtml = (safeData.zoneTopCountriesBytes || []).length > 0
-        ? `<ul style="list-style-type: none; padding-left: 0;">` +
+        ? '<ol style="margin: 0; padding-left: 20px;">' +
         (safeData.zoneTopCountriesBytes || []).map((item, idx) =>
-            `<li style="margin-bottom: 5px;">${idx + 1}. ${getCountryName(item.name)} จำนวน Transfer <strong>${(item.bytes / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB</strong></li>`
+            `<li style="margin: 0; padding: 0;">${getCountryName(item.name)} จำนวน Transfer <strong>${(item.bytes / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB</strong></li>`
         ).join('') +
-        `</ul>`
+        '</ol>'
         : '-';
-    html = html.replace('@ZONE_TOP_COUNTRIES_BYTES', zoneTopCountriesBytesHtml);
+    html = html.replace(/@ZONE_TOP_COUNTRIES_BYTES(@)?/g, zoneTopCountriesBytesHtml);
+
+    // New Top 5 Lists as requested
+    const topPathsListHtml = (safeData.topUrls || []).slice(0, 5).length > 0
+        ? '<ol type="a" style="margin: 0; padding-left: 20px; list-style-type: lower-alpha;">' +
+        (safeData.topUrls || []).slice(0, 5).map((item, idx) =>
+            `<li style="margin: 0; padding: 0;">${item.path}</li>`
+        ).join('') +
+        '</ol>'
+        : '-';
+    html = html.replace(/@TOP_PATHS_LIST(@)?/g, topPathsListHtml);
+
+    const topCustomRulesListHtml = (safeData.topCustomRules || []).length > 0
+        ? '<ol type="a" style="margin: 0; padding-left: 20px; list-style-type: lower-alpha;">' +
+        (safeData.topCustomRules || []).map((item, idx) =>
+            `<li style="margin: 0; padding: 0;">${item.rule} จำนวน <strong>${formatCompactNumber(item.count)}</strong></li>`
+        ).join('') +
+        '</ol>'
+        : '-';
+    html = html.replace(/@TOP_CUSTOM_RULES_LIST(@)?/g, topCustomRulesListHtml);
+
+    const topManagedRulesListHtml = (safeData.topManagedRules || []).length > 0
+        ? '<ol type="a" style="margin: 0; padding-left: 20px; list-style-type: lower-alpha;">' +
+        (safeData.topManagedRules || []).map((item, idx) =>
+            `<li style="margin: 0; padding: 0;">${item.rule} จำนวน <strong>${formatCompactNumber(item.count)}</strong></li>`
+        ).join('') +
+        '</ol>'
+        : '-';
+    html = html.replace(/@TOP_MANAGED_RULES_LIST(@)?/g, topManagedRulesListHtml);
 
     // 3. Cleanup Empty Rows (Remove rows with no text content)
+    /* Cleanup Logic Disabled to prevent content truncation
     if (typeof DOMParser !== 'undefined') {
         try {
             const parser = new DOMParser();
@@ -503,6 +539,7 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             console.error("Error cleaning empty rows:", e);
         }
     }
+    */
 
     return html;
 };
@@ -603,7 +640,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "h1 { font-size: 24pt; font-weight: bold; margin-bottom: 0.5em; }" +
             "h2 { font-size: 18pt; font-weight: bold; margin-bottom: 0.5em; }" +
             "h3 { font-size: 14pt; font-weight: bold; margin-bottom: 0.5em; }" +
-            "ul, ol { list-style-type: disc; padding-left: 20px; margin-bottom: 0px; }" +
+            "ul { list-style-type: disc; padding-left: 20px; margin-bottom: 0px; }" +
+            "ol { list-style-type: decimal; padding-left: 20px; margin-bottom: 0px; }" +
             "li { margin-bottom: 0px; }" +
             "div, table { margin-top: 0px; margin-bottom: 0px; }" +
             "</style>" +
@@ -641,7 +679,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             // 2. Remove any gap between lists and tables (Aggressive)
             // Matches </ul> or </ol>, followed by ANYTHING (non-greedy), followed by <table or <div
             // AND specifically target the table start
-            cleanHTML = cleanHTML.replace(/(<\/ul>|<\/ol>)[\s\S]*?(<table|<div)/gi, '$1$2');
+            // cleanHTML = cleanHTML.replace(/(<\/ul>|<\/ol>)[\s\S]*?(<table|<div)/gi, '$1$2');
 
             // 3. Fix Image alignment
             // TinyMCE uses `style="display: block; margin-left: auto; margin-right: auto;"` for center.
@@ -775,7 +813,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO',
                                                     '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO',
                                                     '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES',
-                                                    '@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS'
+                                                    '@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS',
+                                                    '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL',
+                                                    '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST'
                                                 ].map(v => (
                                                     <button
                                                         key={v}
@@ -799,6 +839,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME', '@DNS_RECORDS'
                                                             , '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO'
                                                             , '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'
+                                                            , '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL'
                                                         ].map(v => (
                                                             <button
                                                                 key={v}
@@ -919,16 +960,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         6. Table Variables
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
-                                                        {['@IP_ACCESS_RULES_ROWS', '@DNS_TOTAL_ROWS', '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES'].map(v => (
-                                                            <button
-                                                                key={v}
-                                                                onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-teal-200 rounded text-[10px] font-mono text-teal-700 hover:bg-teal-50 hover:border-teal-400 transition-all shadow-sm active:scale-95 text-left truncate"
-                                                                title={`Insert ${v}`}
-                                                            >
-                                                                {v}
-                                                            </button>
-                                                        ))}
+                                                        {['@IP_ACCESS_RULES_ROWS', '@DNS_TOTAL_ROWS', '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES',
+                                                            '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST'].map(v => (
+                                                                <button
+                                                                    key={v}
+                                                                    onClick={() => editorRef.current?.insertContent(v)}
+                                                                    className="px-2 py-1 bg-white border border-teal-200 rounded text-[10px] font-mono text-teal-700 hover:bg-teal-50 hover:border-teal-400 transition-all shadow-sm active:scale-95 text-left truncate"
+                                                                    title={`Insert ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ))}
                                                     </div>
                                                 </div>
                                             </>
@@ -1295,6 +1337,13 @@ const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) 
     );
 };
 
+// --- DEFAULT CONFIG FOR AUTO-SELECT ---
+const DEFAULT_CONFIG = {
+    accountName: "BDMS Group1",
+    zoneName: "bdms.co.th",
+    subDomain: "ALL_SUBDOMAINS"
+};
+
 // --- MAIN COMPONENT ---
 
 export default function GDCCPage() {
@@ -1318,13 +1367,6 @@ export default function GDCCPage() {
     const [currentTheme, setCurrentTheme] = useState('dark');
     const theme = THEMES[currentTheme] || THEMES.dark;
 
-    // --- DEFAULT CONFIG ---
-    const DEFAULT_CONFIG = {
-        accountName: "BDMS Group1",
-        zoneName: "bdms.co.th",
-        subDomain: "ALL_SUBDOMAINS"
-    };
-
     // Selector States
     const [loading, setLoading] = useState(false);
     const [accounts, setAccounts] = useState([]);
@@ -1334,6 +1376,8 @@ export default function GDCCPage() {
     const [topRules, setTopRules] = useState([]);
     const [topAttackers, setTopAttackers] = useState([]);
     const [topFirewallSources, setTopFirewallSources] = useState([]);
+    const [customRulesList, setCustomRulesList] = useState([]);
+    const [managedRulesList, setManagedRulesList] = useState([]);
     const [zoneSettings, setZoneSettings] = useState(null);
     const [dnsRecords, setDnsRecords] = useState([]);
 
@@ -1379,12 +1423,18 @@ export default function GDCCPage() {
         let topActions = [];
         let processedRules = [];
         let sortedAttackers = [];
+        let firewallSourcesData = [];
 
-        if (result && result.data) {
-            filteredData = result.data;
-            const firewallActivity = result.firewallActivity || [];
-            const firewallRulesData = result.firewallRules || [];
-            const firewallIPsData = result.firewallIPs || [];
+        if (result && result.success) {
+            // console.log('✅ Traffic Data Received:', result.data); // Debug Header
+            filteredData = result.data?.httpRequestsAdaptiveGroups || [];
+            // console.log('   - Adaptive Groups:', filteredData.length);
+
+            const firewallActivity = result.data?.firewallActivity || [];
+            const firewallRulesData = result.data?.firewallRules || [];
+            // console.log('   - Firewall Rules:', firewallRulesData.length);
+            const firewallIPsData = result.data?.firewallIPs || [];
+            firewallSourcesData = result.data?.firewallSources || [];
 
             // --- 1. FIREWALL SUMMARY (From Activity: Minute x Action) ---
             blockedCount = firewallActivity
@@ -1416,6 +1466,33 @@ export default function GDCCPage() {
             })).sort((a, b) => b.count - a.count).slice(0, 5);
             setTopRules(processedRules);
 
+            // Extract Custom Rules
+            const customList = firewallRulesData
+                .filter(g => {
+                    const src = (g.dimensions?.source || '').toLowerCase();
+                    const isCustom = src.includes('custom');
+                    if (isCustom) console.log('🔴 FOUND CUSTOM RULE:', g.dimensions?.description, '| Source:', src, '| Count:', g.count);
+                    return isCustom;
+                })
+                .map(g => ({
+                    rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
+                    count: g.count
+                })).sort((a, b) => b.count - a.count).slice(0, 5);
+
+            setCustomRulesList(customList);
+
+            // Extract Managed Rules
+            const managedList = firewallRulesData
+                .filter(g => {
+                    const src = (g.dimensions?.source || '').toLowerCase();
+                    return src.includes('managed') || src.includes('waf') || src === 'bic' || src === 'owasp';
+                })
+                .map(g => ({
+                    rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
+                    count: g.count
+                })).sort((a, b) => b.count - a.count).slice(0, 5);
+            setManagedRulesList(managedList);
+
 
             // --- 3. TOP ATTACKERS (From IPs: IP x Country) ---
             // Filter only mitigation actions if desired.
@@ -1443,6 +1520,13 @@ export default function GDCCPage() {
                 .map(a => ({ ...a, type: Array.from(a.types).join(', ') }));
             setTopAttackers(sortedAttackers);
 
+            // --- 4. TOP SOURCES ---
+            const sourcesList = firewallSourcesData.map(s => ({
+                source: s.dimensions?.source || 'Unknown',
+                count: s.count
+            })).sort((a, b) => b.count - a.count).slice(0, 5);
+            setTopFirewallSources(sourcesList);
+
 
             // --- AVG TTFB ---
             let totalReqLogs = 0;
@@ -1459,11 +1543,14 @@ export default function GDCCPage() {
             // --- ZONE-WIDE STATS (ACCURATE 1d SUMMARY) ---
             // --- TOTAL REQUESTS & DATA TRANSFER (ACCURATE) ---
             // --- ZONE-WIDE STATS (ACCURATE 1d SUMMARY) ---
-            if (result.zoneSummary && result.zoneSummary.length > 0) {
-                zReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
-                zBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.bytes || 0), 0);
-                zCacheReq = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedRequests || 0), 0);
-                zCacheBytes = result.zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedBytes || 0), 0);
+            // --- ZONE-WIDE STATS (ACCURATE 1d SUMMARY) ---
+            const zoneSummary = result.data?.zoneSummary || [];
+
+            if (zoneSummary.length > 0) {
+                zReq = zoneSummary.reduce((acc, day) => acc + (day.sum?.requests || 0), 0);
+                zBytes = zoneSummary.reduce((acc, day) => acc + (day.sum?.bytes || 0), 0);
+                zCacheReq = zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedRequests || 0), 0);
+                zCacheBytes = zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedBytes || 0), 0);
 
                 setZoneWideRequests(zReq);
                 setZoneWideDataTransfer(zBytes);
@@ -1472,7 +1559,7 @@ export default function GDCCPage() {
 
                 // Aggregate Countries from Summary (Accurate Zone-wide)
                 const agg = {};
-                result.zoneSummary.forEach(day => {
+                zoneSummary.forEach(day => {
                     (day.sum?.countryMap || []).forEach(c => {
                         const name = c.clientCountryName || 'Unknown';
                         if (!agg[name]) agg[name] = { name, requests: 0, bytes: 0 };
@@ -1506,6 +1593,7 @@ export default function GDCCPage() {
             setTotalDataTransfer(0); setCacheHitRequests(0); setCacheHitDataTransfer(0);
             setZoneWideRequests(0); setZoneWideDataTransfer(0); setZoneWideCacheRequests(0); setZoneWideCacheDataTransfer(0);
             setZoneWideTopCountriesReq([]); setZoneWideTopCountriesBytes([]);
+            setCustomRulesList([]); setManagedRulesList([]);
         }
 
         setRawData(filteredData);
@@ -1513,7 +1601,7 @@ export default function GDCCPage() {
         setAvgResponseTime(weightedAvgTime);
 
         // --- DATA PROCESSING FOR CHARTS ---
-        const urlCounts = {}; const ipCounts = {}; const countryCounts = {}; const uaCounts = {};
+        const urlCounts = {}; const ipCounts = {}; const countryCounts = {}; const uaCounts = {}; const hostCounts = {};
         const statusTotals = {};
 
         // 1. Time Buckets Generation (4 Hours for 24h view)
@@ -1557,12 +1645,14 @@ export default function GDCCPage() {
             const path = dims.clientRequestPath || 'Unknown';
             const ip = dims.clientIP || 'Unknown';
             const country = dims.clientCountryName || 'Unknown';
+            const host = dims.clientRequestHTTPHost || 'Unknown';
             const ua = dims.userAgent || 'Unknown';
 
             urlCounts[path] = (urlCounts[path] || 0) + count;
             ipCounts[ip] = (ipCounts[ip] || 0) + count;
             countryCounts[country] = (countryCounts[country] || 0) + count;
             uaCounts[ua] = (uaCounts[ua] || 0) + count;
+            hostCounts[host] = (hostCounts[host] || 0) + count;
 
             // Time Series
             if (dims.datetimeMinute) {
@@ -1691,16 +1781,15 @@ export default function GDCCPage() {
         setTopUrls(toArray(urlCounts, 'path'));
         setTopIps(toArray(ipCounts, 'ip'));
         setTopCountries(toArray(countryCounts, 'name'));
-        setTopUrls(toArray(urlCounts, 'path'));
-        setTopIps(toArray(ipCounts, 'ip'));
-        setTopCountries(toArray(countryCounts, 'name'));
         setTopUserAgents(toArray(uaCounts, 'agent'));
+        setTopHosts(toArray(hostCounts, 'host'));
 
+        // Process Firewall Rules (Separate Managed and Custom)
         // 8. Top Firewall Sources (Categories like WAF, Security Level)
         const sourceMap = new Map();
         let fwTotal = 0, fwManaged = 0, fwCustom = 0, fwBic = 0, fwAccess = 0;
 
-        (result.firewallSources || []).forEach(item => {
+        (firewallSourcesData || []).forEach(item => {
             const source = item.dimensions.source || 'Unknown';
             const count = item.count;
             fwTotal += count;
@@ -1743,6 +1832,9 @@ export default function GDCCPage() {
             topIps: toArray(ipCounts, 'ip'),
             topCountries: toArray(countryCounts, 'name'),
             topUserAgents: toArray(uaCounts, 'agent'),
+            topHosts: toArray(hostCounts, 'host'),
+            topCustomRules: customList,
+            topManagedRules: managedList,
             // Zone-wide Stats
             zoneWideRequests: zReq,
             zoneWideDataTransfer: zBytes,
@@ -1919,6 +2011,9 @@ export default function GDCCPage() {
                 peakHttpStatus: peakHttpStatus,
                 topRules: topRules,
                 topAttackers: topAttackers,
+                topHosts: topHosts,
+                topCustomRules: customRulesList,
+                topManagedRules: managedRulesList,
                 topFirewallSources: topFirewallSources,
                 zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
                 accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
@@ -2093,6 +2188,9 @@ export default function GDCCPage() {
                         peakHttpStatus: safeStats.peakHttpStatus,
                         topRules: safeStats.topRules,
                         topAttackers: safeStats.topAttackers,
+                        topHosts: safeStats.topHosts,
+                        topCustomRules: safeStats.topCustomRules,
+                        topManagedRules: safeStats.topManagedRules,
                         zoneName: zones.find(z => z.id === selectedZone)?.name,
 
                         // Added missing fields for Batch Report Template placeholders (using Verified Local Data)
@@ -2200,6 +2298,8 @@ export default function GDCCPage() {
                 background: '#111827',
                 color: '#fff'
             });
+            // Re-enable the button if an error occurs
+            setIsGeneratingReport(false);
         } finally {
             setIsGeneratingReport(false);
         }
@@ -2234,6 +2334,9 @@ export default function GDCCPage() {
     const [topIps, setTopIps] = useState([]);
     const [topCountries, setTopCountries] = useState([]);
     const [topUserAgents, setTopUserAgents] = useState([]);
+    const [topHosts, setTopHosts] = useState([]);
+    // topCustomRules moved to top
+    // topManagedRules moved to top
     const [topFirewallActions, setTopFirewallActions] = useState([]);
 
     // New Data for Report
@@ -2246,7 +2349,11 @@ export default function GDCCPage() {
             const response = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...params, apiToken: explicitToken || currentUser?.cloudflare_api_token }),
+                body: JSON.stringify({
+                    action,
+                    ...params,
+                    apiToken: explicitToken || currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
+                }),
             });
             const result = await response.json();
 
@@ -2295,15 +2402,19 @@ export default function GDCCPage() {
         const result = await callAPI('get-account-info', {}, tokenOverride);
         if (result && result.data) {
             setAccounts(result.data);
-            const defaultAcc = result.data.find(a => a.name.toLowerCase() === DEFAULT_CONFIG.accountName.toLowerCase());
+            const defaultAcc = result.data.find(a => (a.name || '').trim().toLowerCase() === DEFAULT_CONFIG.accountName.trim().toLowerCase());
             if (defaultAcc) {
-                handleAccountChange(defaultAcc.id, true);
+                console.log('✅ Auto-selecting Account (Config Match):', defaultAcc.name);
+                handleAccountChange(defaultAcc.id, true, tokenOverride);
+            } else if (result.data.length > 0) {
+                console.log('⚠️ Default account not found, falling back to first available account:', result.data[0].name);
+                handleAccountChange(result.data[0].id, true, tokenOverride);
             }
         }
     };
 
     // 2. Account Change -> Load Zones
-    const handleAccountChange = async (accountId, isAuto = false) => {
+    const handleAccountChange = async (accountId, isAuto = false, tokenOverride = null) => {
         setSelectedAccount(accountId);
         if (!isAuto) {
             setSelectedZone(''); setZones([]); setSelectedSubDomain(''); setSubDomains([]); resetDashboardData();
@@ -2312,13 +2423,17 @@ export default function GDCCPage() {
         if (!accountId) return;
 
         setLoadingZones(true);
-        const result = await callAPI('list-zones', { accountId });
+        const result = await callAPI('list-zones', { accountId }, tokenOverride);
         if (result && result.data) {
             setZones(result.data);
-            if (isAuto) {
-                const defaultZone = result.data.find(z => z.name.toLowerCase() === DEFAULT_CONFIG.zoneName.toLowerCase());
+            if (isAuto && result.data.length > 0) {
+                const defaultZone = result.data.find(z => (z.name || '').trim().toLowerCase() === DEFAULT_CONFIG.zoneName.trim().toLowerCase());
                 if (defaultZone) {
+                    console.log('✅ Auto-selecting Zone (Config Match):', defaultZone.name);
                     setSelectedZone(defaultZone.id);
+                } else {
+                    console.log('⚠️ Default zone not found, falling back to first available zone:', result.data[0].name);
+                    setSelectedZone(result.data[0].id);
                 }
             }
         }
@@ -2365,10 +2480,13 @@ export default function GDCCPage() {
 
             setSubDomains(hostOptions);
 
-            const defaultSub = hostOptions.find(h => h.value.toLowerCase() === DEFAULT_CONFIG.subDomain.toLowerCase());
-            // Default to 'ALL_SUBDOMAINS' if no config match, or keep the config match
-            if (defaultSub) setSelectedSubDomain(defaultSub.value);
-            else setSelectedSubDomain('ALL_SUBDOMAINS');
+            const defaultSub = hostOptions.find(h => (h.value || '').trim().toLowerCase() === DEFAULT_CONFIG.subDomain.trim().toLowerCase());
+            if (defaultSub) {
+                console.log('✅ Auto-selecting Subdomain:', defaultSub.value);
+                setSelectedSubDomain(defaultSub.value);
+            } else {
+                setSelectedSubDomain('ALL_SUBDOMAINS');
+            }
 
             setLoadingStats(false);
         };
@@ -2404,28 +2522,31 @@ export default function GDCCPage() {
     }, [selectedSubDomain, selectedZone, timeRange, currentUser?.cloudflare_api_token]);
 
     useEffect(() => {
-        const user = auth.requireAuth(router);
-        if (user) {
-            setCurrentUser(user);
+        const init = async () => {
+            const user = auth.requireAuth(router);
+            if (user) {
+                setCurrentUser(user);
 
-            // Force refresh user profile to get latest token
-            getUserProfileAction(user.id).then(res => {
-                if (res.success) {
-                    setCurrentUser(res.user);
-                    // Update local storage too to keep it fresh across tabs
-                    localStorage.setItem('sdb_session', JSON.stringify(res.user));
+                // Try to get fresh profile but don't block initial load if possible
+                getUserProfileAction(user.id).then(res => {
+                    if (res.success) {
+                        setCurrentUser(res.user);
+                        localStorage.setItem('sdb_session', JSON.stringify(res.user));
+                        // If token changed, we might need to reload, but usually it's the same
+                        if (res.user.cloudflare_api_token !== user.cloudflare_api_token) {
+                            loadAccounts(res.user.cloudflare_api_token);
+                        }
+                    }
+                });
 
-                    // Fixed: Load accounts with new token
-                    loadAccounts(res.user.cloudflare_api_token);
+                if (user.cloudflare_api_token) {
+                    loadAccounts(user.cloudflare_api_token);
+                } else {
+                    console.log('⚠️ No API Token found in session, waiting for profile refresh...');
                 }
-            });
-
-            // Initial load (might use stale token if not passed, but let's rely on the refresh above for correctness)
-            // Or if user already has token in local storage, load immediately for speed.
-            if (user.cloudflare_api_token) {
-                loadAccounts(user.cloudflare_api_token);
             }
-        }
+        };
+        init();
 
         // Load Templates
         loadTemplate().then(tmpl => {
@@ -2539,6 +2660,8 @@ export default function GDCCPage() {
         peakAttack: peakAttack,
         peakHttpStatus: peakHttpStatus,
         topRules: topRules,
+        topCustomRules: customRulesList,
+        topManagedRules: managedRulesList,
         topAttackers: topAttackers,
         topFirewallSources: topFirewallSources,
         // Added New Traffic & Cache Stats (Always Zone-Wide)
