@@ -39,7 +39,7 @@ async function main() {
         firewallRules.forEach(rule => {
             const source = rule.dimensions?.source || 'unknown';
             if (!sourceGroups[source]) {
-                source Groups[source] = [];
+                sourceGroups[source] = [];
             }
             sourceGroups[source].push(rule);
         });

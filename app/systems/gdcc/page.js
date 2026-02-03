@@ -2657,6 +2657,7 @@ export default function GDCCPage() {
         topIps: topIps,
         topCountries: topCountries,
         topUserAgents: topUserAgents,
+        topHosts: topHosts,
         peakTime: peakTraffic.time,
         peakCount: peakTraffic.count,
         peakAttack: peakAttack,

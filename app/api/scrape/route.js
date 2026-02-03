@@ -477,7 +477,18 @@ export async function POST(request) {
 
             } catch (error) {
                 console.error('Discovery API Error:', error.response?.data || error.message);
-                return NextResponse.json({ success: false, message: 'Discovery API Failed' }, { status: 500 });
+                console.warn('⚠️ API Discovery not available - this could be due to:');
+                console.warn('   - Token lacks API Gateway permissions');
+                console.warn('   - Zone does not have API Gateway Discovery enabled');
+                console.warn('   - Feature not available on this plan');
+                console.warn('→ Returning empty discoveries list');
+
+                // Return empty array instead of error (graceful degradation)
+                return NextResponse.json({
+                    success: true,
+                    data: [],
+                    message: 'API Discovery not available for this zone'
+                });
             }
         }
 

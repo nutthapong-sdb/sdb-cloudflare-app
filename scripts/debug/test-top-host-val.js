@@ -40,11 +40,55 @@ async function testTopHostVal() {
         log(`   Token: ${apiToken.substring(0, 4)}...${apiToken.slice(-4)}`, colors.green);
         console.log('');
 
-        // 2. Call Traffic Analytics API
-        console.log('📌 Step 2: Fetching Traffic Analytics...');
+        // 2. Get Zone ID from zone name
+        console.log('📌 Step 2: Getting Zone ID...');
+        const accountRes = await axios.post(BASE_URL, {
+            action: 'get-account-info',
+            apiToken
+        });
+
+        if (!accountRes.data.success) {
+            throw new Error('Failed to get account info');
+        }
+
+        const accounts = accountRes.data.data;
+        const targetAccount = accounts.find(a => a.name === accountName);
+
+        if (!targetAccount) {
+            log(`❌ Account "${accountName}" not found`, colors.red);
+            return;
+        }
+
+        log(`   ✅ Account: ${targetAccount.name}`, colors.green);
+
+        // Get zones for this account
+        const zoneRes = await axios.post(BASE_URL, {
+            action: 'list-zones',
+            accountId: targetAccount.id,
+            apiToken
+        });
+
+        if (!zoneRes.data.success) {
+            throw new Error('Failed to list zones');
+        }
+
+        const zones = zoneRes.data.data;
+        const targetZone = zones.find(z => z.name === zoneName);
+
+        if (!targetZone) {
+            log(`❌ Zone "${zoneName}" not found`, colors.red);
+            return;
+        }
+
+        const zoneId = targetZone.id;
+        log(`   ✅ Zone ID: ${zoneId}`, colors.green);
+        console.log('');
+
+        // 3. Call Traffic Analytics API with Zone ID
+        console.log('📌 Step 3: Fetching Traffic Analytics...');
         const response = await axios.post(BASE_URL, {
             action: 'get-traffic-analytics',
-            zoneId: zoneName,
+            zoneId: zoneId, // Use Zone ID, not zone name!
             timeRange: 1440, // 24 hours (matching web interface)
             subdomain: null, // ALL_SUBDOMAINS
             apiToken: apiToken
@@ -61,8 +105,8 @@ async function testTopHostVal() {
         console.log('   → httpRequestsAdaptiveGroups:', data?.httpRequestsAdaptiveGroups?.length || 0);
         console.log('');
 
-        // 3. Extract TOP_HOST_VAL data
-        console.log('📌 Step 3: Processing Top Host Value...');
+        // 4. Extract TOP_HOST_VAL data
+        console.log('📌 Step 4: Processing Top Host Value...');
 
         const httpRequests = data?.httpRequestsAdaptiveGroups || [];
         console.log(`   → Found ${httpRequests.length} HTTP request groups`);
