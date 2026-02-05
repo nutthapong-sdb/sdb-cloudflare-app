@@ -48,7 +48,7 @@ export default function PortalPage() {
 
                     {/* Card: SDB Dashboard */}
                     <div
-                        onClick={() => router.push('/systems/sdb')}
+                        onClick={() => router.push('/systems/api_discovery')}
                         className="group bg-gray-800/50 hover:bg-gradient-to-br hover:from-orange-900/40 hover:to-amber-900/40 border border-gray-700 hover:border-orange-500/50 rounded-2xl p-6 cursor-pointer transition-all duration-300 relative overflow-hidden"
                     >
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">

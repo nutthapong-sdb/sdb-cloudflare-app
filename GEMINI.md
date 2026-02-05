@@ -9,8 +9,8 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 *   **Zone & DNS Management:** View and manage Cloudflare zones and DNS records.
 *   **Traffic Analytics:** Real-time visualization of traffic volume, top URLs, client IPs, and countries using Recharts.
 *   **Security Monitoring:** Track WAF events, blocked attacks, and HTTP status code distributions.
-*   **API Discovery:** Discover and manage API endpoints associated with your zones.
-*   **Batch Reporting:** Automatically generate comprehensive reports for multiple sub-domains. This feature captures dashboard snapshots and aggregates data into a single downloadable Word document.
+*   **API Discovery:** Discover and manage API endpoints associated with your zones. Handles permissions gracefully (graceful degradation if feature is unavailable).
+*   **Batch Reporting:** Automatically generate comprehensive reports for multiple sub-domains. This feature captures dashboard snapshots and aggregates data into a single downloadable Word document using Template Variables (e.g., `@TOP_HOST_VAL@`).
 
 # Building and Running
 
@@ -19,11 +19,11 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
     npm install
     ```
 
-    Environment variables for testing are optional.
-    **Note:** Cloudflare API Tokens are now managed securely within the application's **User Management** system. You do not need to set them in `.env.local` for the application to function.
+2.  **Environment Setup (Debugging):**
+    While the App manages tokens via its User Management system, for **Script Debugging** and **Regression Testing**, you must configure `.env.local`:
     ```env
-    # Optional override for development
-    # CLOUDFLARE_API_TOKEN=
+    # Required for scripts/debug/*.js
+    CLOUDFLARE_API_TOKEN=your_token_here
     ```
 
 3.  **Run the development server:**
@@ -47,15 +47,20 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 *   **Styling:** The project uses Tailwind CSS for styling.
 *   **API:** The backend API is built with Next.js API Routes. The main endpoint is `/api/scrape`, which handles various actions related to the Cloudflare API.
 *   **Authentication:** User authentication is handled by Next.js Server Actions and session management using `localStorage`.
-*   **Linting:** The project uses ESLint for code linting. Run `npm run lint` to check for linting errors.
+*   **Debug Scripts:**
+    *   Located in `scripts/debug/` and `scripts/total_requests/`.
+    *   **MUST** use `scripts/helpers.js` for consistent token retrieval and output formatting.
+    *   **MUST** first fetch the **Zone ID (UUID)** using the Account/Zone Name before querying Traffic Analytics endpoints, matching the frontend logic (avoid using Zone Name directly).
+    *   Output should be directed to the terminal with color-coded logs.
 
 # Key Files
 
 *   `app/page.js`: The main portal page with links to different systems.
-*   `app/systems/gdcc/page.js`: The GDCC Analytics dashboard, featuring traffic visualization and the batch reporting engine.
-*   `app/systems/sdb/page.js`: The SDB Cloudflare API dashboard for zone and API discovery management.
-*   `app/api/scrape/route.js`: The core of the backend, handling all interactions with the Cloudflare API.
+*   `app/systems/gdcc/page.js`: The GDCC Analytics dashboard. Handles data visualization, report generation logic, and processing of template variables (like `@TOP_HOST_VAL@`).
+*   `app/systems/api_discovery/page.js`: The SDB Cloudflare API dashboard for zone and API discovery management.
+*   `app/api/scrape/route.js`: The core of the backend, handling all interactions with the Cloudflare API (Proxy to Cloudflare).
 *   `app/utils/auth.js`: Handles user authentication and session management.
 *   `app/actions/authActions.js`: Contains the Next.js Server Actions for authentication and user management.
+*   `scripts/helpers.js`: Shared utility module for debug scripts (API Token loading, Logger).
+*   `scripts/debug/test-template-variables.js`: regression script to verify all report template variables are populating correctly.
 *   `package.json`: Defines the project's dependencies and scripts.
-*   `README.md`: Provides a detailed overview of the project, including setup instructions and API documentation.

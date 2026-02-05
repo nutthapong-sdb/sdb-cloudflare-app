@@ -7,7 +7,7 @@ puppeteer.use(StealthPlugin());
 
 // --- Configuration ---
 const BASE_URL = 'http://localhost:8002';
-const SDB_URL = `${BASE_URL}/systems/sdb`;
+const SDB_URL = `${BASE_URL}/systems/api_discovery`;
 const LOGIN_URL = `${BASE_URL}/login`;
 
 // User Credentials (Root User for testing)

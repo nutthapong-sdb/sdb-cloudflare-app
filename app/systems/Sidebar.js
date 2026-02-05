@@ -11,7 +11,7 @@ export default function Sidebar() {
 
     const menuItems = [
         { name: 'Portal Home', icon: Home, path: '/', color: 'text-blue-400' },
-        { name: 'SDB Discovery', icon: LayoutDashboard, path: '/systems/sdb', color: 'text-orange-400' },
+        { name: 'SDB Discovery', icon: LayoutDashboard, path: '/systems/api_discovery', color: 'text-orange-400' },
         { name: 'GDCC Analytics', icon: Cloud, path: '/systems/gdcc', color: 'text-purple-400' },
     ];
 
