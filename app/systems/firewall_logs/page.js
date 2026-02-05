@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import {
     Search, Shield, AlertTriangle, ChevronDown, ChevronRight,
-    Globe, Server, User, Activity, Clock, Database, Hash
+    Globe, Server, User, Activity, Clock, Database, Hash, Download
 } from 'lucide-react';
 import { auth } from '../../utils/auth';
 
@@ -240,6 +240,57 @@ export default function FirewallLogs() {
         });
     };
 
+    const downloadCSV = () => {
+        if (!logs || logs.length === 0) return;
+
+        // Define Headers
+        const headers = [
+            'datetime',
+            'clientIP',
+            'action',
+            'ruleId',
+            'source',
+            'country',
+            'userAgent',
+            'rayId',
+            'hostname',
+            'path',
+            'count'
+        ];
+
+        // Map Data
+        const csvRows = logs.map(log => [
+            `"${log.datetime}"`,
+            `"${log.clientIP}"`,
+            `"${log.action}"`,
+            `"${log.ruleId}"`,
+            `"${log.source}"`,
+            `"${log.clientCountryName}"`,
+            `"${log.userAgent ? log.userAgent.replace(/"/g, '""') : ''}"`, // Escape quotes
+            `"${log.rayName}"`,
+            `"${log.clientRequestHTTPHost}"`,
+            `"${log.clientRequestPath}"`,
+            "1" // count
+        ]);
+
+        // Combine Header and Data
+        const csvContent = [
+            headers.join(','),
+            ...csvRows.map(row => row.join(','))
+        ].join('\n');
+
+        // Trigger Download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `firewall_logs_${selectedZone}_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // --- 4. RENDER ---
     return (
         <div className={`flex min-h-screen ${THEME.bg} ${THEME.text} font-sans`}>
@@ -248,16 +299,27 @@ export default function FirewallLogs() {
                 <div className="max-w-7xl mx-auto space-y-6">
 
                     {/* Header */}
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                            <Shield className="w-8 h-8 text-blue-400" />
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                                <Shield className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                                    Firewall Log Explorer
+                                </h1>
+                                <p className="text-sm text-gray-400">Deep dive into firewall events by Rule ID</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                                Firewall Log Explorer
-                            </h1>
-                            <p className="text-sm text-gray-400">Deep dive into firewall events by Rule ID</p>
-                        </div>
+                        {logs.length > 0 && (
+                            <button
+                                onClick={downloadCSV}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-green-900/20"
+                            >
+                                <Download className="w-4 h-4" />
+                                Download CSV
+                            </button>
+                        )}
                     </div>
 
                     {/* Controls Card */}
@@ -343,6 +405,7 @@ export default function FirewallLogs() {
                                             <th className="px-6 py-4 font-semibold">IP Address</th>
                                             <th className="px-6 py-4 font-semibold">Service</th>
                                             <th className="px-6 py-4 font-semibold">Method</th>
+                                            <th className="px-6 py-4 font-semibold">Protocol</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-800/50">
@@ -381,6 +444,9 @@ export default function FirewallLogs() {
                                                         <td className="px-6 py-4 text-sm font-mono text-purple-400">
                                                             {log.clientRequestHTTPMethod}
                                                         </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-500 font-mono">
+                                                            {log.clientRequestHTTPProtocol}
+                                                        </td>
                                                     </tr>
 
                                                     {/* EXPANDED ROW DETAIL */}
@@ -396,31 +462,34 @@ export default function FirewallLogs() {
                                                                         <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest border-b border-gray-800 pb-2">Matched Service</h3>
                                                                         <div className="grid grid-cols-2 gap-y-3 text-sm">
                                                                             <span className="text-gray-500">Service</span>
-                                                                            <span className="text-gray-200">{log.source}</span>
+                                                                            <span className="text-white font-medium">{log.source}</span>
 
-                                                                            <span className="text-gray-500">Action taken</span>
-                                                                            <span className="text-gray-200">{log.action}</span>
+                                                                            <span className="text-gray-500">Activity</span>
+                                                                            <span className="text-white">{log.action}</span>
 
                                                                             <span className="text-gray-500">Rule ID</span>
                                                                             <span className="font-mono text-yellow-400 text-xs">{log.ruleId}</span>
                                                                         </div>
 
                                                                         <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest border-b border-gray-800 pb-2 pt-4">Request Analyses</h3>
-                                                                        <div className="grid grid-cols-2 gap-y-3 text-sm">
+                                                                        <div className="grid grid-cols-[140px_1fr] gap-y-3 text-sm">
                                                                             <span className="text-gray-500">WAF Attack Score</span>
-                                                                            <span className="text-red-400 font-bold">{log.wafAttackScore || '-'}</span>
+                                                                            <span className="text-orange-400 font-mono">{log.wafAttackScore ?? '-'}</span>
 
-                                                                            <span className="text-gray-500">WAF SQLi Score</span>
-                                                                            <span className="text-orange-400">{log.wafSqlInjectionAttackScore || '-'}</span>
+                                                                            <span className="text-gray-500">WAF SQLi Attack Score</span>
+                                                                            <span className="text-orange-400 font-mono">{log.wafSqliAttackScore ?? '-'}</span>
 
-                                                                            <span className="text-gray-500">WAF XSS Score</span>
-                                                                            <span className="text-orange-400">{log.wafXssAttackScore || '-'}</span>
+                                                                            <span className="text-gray-500">WAF XSS Attack Score</span>
+                                                                            <span className="text-orange-400 font-mono">{log.wafXssAttackScore ?? '-'}</span>
+
+                                                                            <span className="text-gray-500">WAF RCE Attack Score</span>
+                                                                            <span className="text-orange-400 font-mono">{log.wafRceAttackScore ?? '-'}</span>
 
                                                                             <span className="text-gray-500">Bot Score</span>
-                                                                            <span className="text-blue-400 font-bold">{log.botScore || '-'}</span>
+                                                                            <span className="text-blue-400 font-bold font-mono">{log.botScore ?? '-'}</span>
 
                                                                             <span className="text-gray-500">Bot Source</span>
-                                                                            <span className="text-gray-300">{log.botScoreSrcName || '-'}</span>
+                                                                            <span className="text-gray-300">{log.botScoreSrcName ?? '-'}</span>
                                                                         </div>
                                                                     </div>
 
@@ -465,8 +534,8 @@ export default function FirewallLogs() {
 
                                                                 {/* Technical Details (JA3/JA4) - Optional Footer */}
                                                                 <div className="mt-8 pt-4 border-t border-gray-800 flex flex-wrap gap-6 text-xs text-gray-500 font-mono">
-                                                                    <span>JA3: {log.ja3Hash || 'N/A'}</span>
-                                                                    <span>JA4: {log.ja4 || 'N/A'}</span>
+                                                                    <span>JA3: {log.ja3Hash ?? '-'}</span>
+                                                                    <span>JA4: {log.ja4 ?? '-'}</span>
                                                                 </div>
                                                             </td>
                                                         </tr>

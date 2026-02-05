@@ -532,12 +532,21 @@ export async function POST(request) {
                                 source
                                 ruleId
                                 rayName
+                                clientRequestHTTPProtocol
                                 clientRequestHTTPMethod: clientRequestHTTPMethodName
                                 clientRequestHTTPHost
                                 clientRequestPath
                                 clientRequestQuery
+                                userAgent
                                 # Analysis Scores
                                 wafAttackScore
+                                wafSqliAttackScore
+                                wafXssAttackScore
+                                wafRceAttackScore
+                                botScore
+                                botScoreSrcName
+                                ja3Hash
+                                ja4
                             }
                         }
                     }
