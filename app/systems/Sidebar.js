@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Home, LayoutDashboard, Cloud, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { Home, LayoutDashboard, Cloud, ChevronLeft, ChevronRight, LogOut, Shield } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 
@@ -12,6 +12,7 @@ export default function Sidebar() {
     const menuItems = [
         { name: 'Portal Home', icon: Home, path: '/', color: 'text-blue-400' },
         { name: 'SDB Discovery', icon: LayoutDashboard, path: '/systems/api_discovery', color: 'text-orange-400' },
+        { name: 'Firewall Logs', icon: Shield, path: '/systems/firewall_logs', color: 'text-red-400' },
         { name: 'GDCC Analytics', icon: Cloud, path: '/systems/gdcc', color: 'text-purple-400' },
     ];
 

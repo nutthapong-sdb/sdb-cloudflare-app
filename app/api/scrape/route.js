@@ -492,6 +492,96 @@ export async function POST(request) {
             }
         }
 
+        // 7.1 Get Firewall Logs by Rule ID (NEW SYSTEM)
+        else if (action === 'get-firewall-logs') {
+            const { ruleId, zoneId, timeRange } = body;
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+            // Rule ID is optional (if empty, fetch recent logs for zone)
+
+            console.log(`🔍 Fetching Firewall Logs for Zone: ${zoneId}, Rule: ${ruleId || 'ALL'}...`);
+
+            // Time Range Calculation
+            const minutes = timeRange || 360; // Default 6 hours
+            const now = new Date();
+            const since = new Date(now.getTime() - minutes * 60 * 1000);
+
+            const query = `
+                query GetFirewallEvents($zoneTag: String, $since: String, $until: String, $ruleId: String) {
+                    viewer {
+                        zones(filter: { zoneTag: $zoneTag }) {
+                            firewallEventsAdaptive(
+                                filter: {
+                                    datetime_geq: $since,
+                                    datetime_leq: $until
+                                    ${ruleId ? ', ruleId: $ruleId' : ''}
+                                }
+                                limit: 50
+                                orderBy: [datetime_DESC]
+                            ) {
+                                datetime
+                                action
+                                clientCountryName
+                                clientIP
+                                clientAsn
+                                clientASNDescription
+                                userAgent
+                                source
+                                ruleId
+                                rayName
+                                clientRequestHTTPProtocol
+                                clientRequestHTTPMethod
+                                clientRequestHTTPHost
+                                clientRequestPath
+                                clientRequestQuery
+                                # Analysis Scores
+                                wafAttackScore
+                                wafRceAttackScore
+                                wafSqlInjectionAttackScore
+                                wafXssAttackScore
+                                botScore
+                                botScoreSrcName
+                                ja3Hash
+                                ja4
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const variables = {
+                zoneTag: zoneId,
+                since: since.toISOString(),
+                until: now.toISOString(),
+                ruleId: ruleId || undefined
+            };
+
+            try {
+                const response = await axios({
+                    method: 'POST',
+                    url: `${CLOUDFLARE_API_BASE}/graphql`,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    data: { query, variables }
+                });
+
+                if (response.data.errors) {
+                    console.error('❌ Cloudflare User API GraphQL Errors:', response.data.errors);
+                    return NextResponse.json({ success: false, message: 'GraphQL Error', error: response.data.errors }, { status: 500 });
+                }
+
+                const logs = response.data.data.viewer.zones[0].firewallEventsAdaptive || [];
+                // console.log(`✅ Found ${logs.length} firewall logs`);
+
+                return NextResponse.json({ success: true, data: logs });
+
+            } catch (error) {
+                console.error('Firewall Logs API Error:', error.response?.data || error.message);
+                return NextResponse.json({ success: false, message: 'Failed to fetch logs' }, { status: 500 });
+            }
+        }
+
         // 8. Get Zone Settings (Bot Management, Security Level, etc.)
         else if (action === 'get-zone-settings') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });

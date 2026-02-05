@@ -59,8 +59,29 @@ export default function PortalPage() {
                             <div className="bg-orange-600 w-12 h-12 rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
                                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-orange-300 transition-colors">SDB Dashboard</h3>
-                            <p className="text-gray-400 text-sm group-hover:text-gray-300">Cloudflare API Discovery & Management Tool</p>
+                            <h3 className="text-xl font-bold bg-gradient-to-r from-orange-400 to-amber-200 bg-clip-text text-transparent mb-2 group-hover:from-orange-300 group-hover:to-white transition-all">SDB System</h3>
+                            <p className="text-gray-400 text-sm leading-relaxed mb-4">API Discovery & Zone Management. Explore and secure your API endpoints.</p>
+                            <div className="flex items-center text-orange-400 text-sm font-medium group-hover:text-amber-300">
+                                Launch Discovery <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Card: Firewall Logs (NEW) */}
+                    <div
+                        onClick={() => router.push('/systems/firewall_logs')}
+                        className="group bg-gray-800/50 hover:bg-gradient-to-br hover:from-red-900/40 hover:to-pink-900/40 border border-gray-700 hover:border-red-500/50 rounded-2xl p-6 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+                            <svg className="w-24 h-24 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.21a4.002 4.002 0 00-5.58-5.58L12 5.42l-1.03-1.03a4.002 4.002 0 00-5.58 5.58L12 18.58l6.618-6.618a4.002 4.002 0 000-5.58z"></path></svg>
+                        </div>
+                        <div className="bg-red-500/10 w-fit p-3 rounded-xl mb-4 group-hover:scale-110 transition-transform duration-300 border border-red-500/20">
+                            <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.21a4.002 4.002 0 00-5.58-5.58L12 5.42l-1.03-1.03a4.002 4.002 0 00-5.58 5.58L12 18.58l6.618-6.618a4.002 4.002 0 000-5.58z"></path></svg>
+                        </div>
+                        <h3 className="text-xl font-bold bg-gradient-to-r from-red-400 to-pink-200 bg-clip-text text-transparent mb-2 group-hover:from-red-300 group-hover:to-white transition-all">Firewall Logs</h3>
+                        <p className="text-gray-400 text-sm leading-relaxed mb-4">Deep dive into firewall events by Rule ID. Debug blocked requests and WAF rules.</p>
+                        <div className="flex items-center text-red-400 text-sm font-medium group-hover:text-pink-300">
+                            Launch Explorer <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                         </div>
                     </div>
 
