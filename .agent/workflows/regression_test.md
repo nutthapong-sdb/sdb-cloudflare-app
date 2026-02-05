@@ -32,18 +32,25 @@ description: เรียก workflow นี้ทุกครั้งที่
    node scripts/dns_check/test-dns-specific.js
    ```
 
-6. Review the API and Data test output.
+6. Run the Firewall Logs regression test (Account: Siam Cement).
+   // turbo
+   ```bash
+   node scripts/regression_test/test-firewall-logs.js
+   ```
+
+7. Review the API and Data test output.
    - Look for "PASS" in green and ensure total requests are displayed.
    - Review the "TEMPLATE VARIABLE DATA STATUS" report to ensure key variables are loaded.
    - Ensure "Cloudflare Token Verification" and API calls succeed.
    - DNS check should display total records by type and proxy status.
+   - Firewall Logs check should display "found" for Account and Zone, and fetch logs successfully.
 
-7. Run the Full UI regression test script (Puppeteer).
+8. Run the Full UI regression test script (Puppeteer).
    // turbo
    ```bash
    node scripts/regression_test/test-all-ui.js
    ```
 
-8. Review the UI test output.
+9. Review the UI test output.
    - Look for "Login Successful" and "Tests Completed".
    - If failed, check `regression-failure.png`.

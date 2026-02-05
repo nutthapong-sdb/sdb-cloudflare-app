@@ -6,10 +6,14 @@ const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
 export async function POST(request) {
     try {
         const body = await request.json();
-        const { action, zoneId, accountId, apiToken } = body;
+        const { action, zoneId, accountId, apiToken, useFirewallToken } = body;
 
-        // Require token from body
-        const token = apiToken;
+        // Determine which token to use
+        let token = apiToken;
+        if (useFirewallToken && process.env.CLOUDFLARE_FIREWALL_API_TOKEN) {
+            token = process.env.CLOUDFLARE_FIREWALL_API_TOKEN;
+            // console.log('🔥 Using Firewall Specific Token');
+        }
 
         if (!token) {
             return NextResponse.json({ success: false, message: 'Missing Cloudflare API Token' }, { status: 401 });
@@ -528,20 +532,12 @@ export async function POST(request) {
                                 source
                                 ruleId
                                 rayName
-                                clientRequestHTTPProtocol
-                                clientRequestHTTPMethod
+                                clientRequestHTTPMethod: clientRequestHTTPMethodName
                                 clientRequestHTTPHost
                                 clientRequestPath
                                 clientRequestQuery
                                 # Analysis Scores
                                 wafAttackScore
-                                wafRceAttackScore
-                                wafSqlInjectionAttackScore
-                                wafXssAttackScore
-                                botScore
-                                botScoreSrcName
-                                ja3Hash
-                                ja4
                             }
                         }
                     }

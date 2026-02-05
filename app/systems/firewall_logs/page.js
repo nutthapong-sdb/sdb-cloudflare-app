@@ -22,6 +22,87 @@ const THEME = {
     cardBg: 'bg-[#13161c]'
 };
 
+const SearchableDropdown = ({ options, value, onChange, placeholder, label, loading, icon }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const dropdownRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredOptions = options.filter(option =>
+        option.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (option.subtitle && option.subtitle.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    const selectedOption = options.find(opt => opt.value === value);
+
+    const handleSelect = (optionValue) => {
+        onChange(optionValue);
+        setIsOpen(false);
+        setSearchTerm('');
+    };
+
+    return (
+        <div className="space-y-2 relative" ref={dropdownRef}>
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-1">
+                {icon} {label}
+            </label>
+            <div className="relative">
+                <div
+                    onClick={() => !loading && setIsOpen(!isOpen)}
+                    className={`w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center justify-between bg-[#0a0c10] border border-gray-800 ${isOpen ? 'ring-2 ring-blue-500/50 border-blue-500' : 'hover:opacity-80'}`}
+                >
+                    {isOpen ? (
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            // OnBlur handled by click outside ref
+                            placeholder="Search..."
+                            className="w-full bg-transparent outline-none text-sm text-white placeholder-gray-500"
+                            autoFocus
+                        />
+                    ) : (
+                        <span className={`text-sm ${selectedOption ? 'text-white' : 'text-gray-500'}`}>
+                            {selectedOption ? selectedOption.label : placeholder}
+                        </span>
+                    )}
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} text-gray-500`} />
+                </div>
+
+                {isOpen && (
+                    <div className="absolute z-[100] w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        {loading ? (
+                            <div className="p-3 text-center text-xs text-gray-400">Loading...</div>
+                        ) : filteredOptions.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-gray-400">No results found</div>
+                        ) : (
+                            filteredOptions.map((option) => (
+                                <div
+                                    key={option.value}
+                                    onMouseDown={() => handleSelect(option.value)}
+                                    className={`px-4 py-2 cursor-pointer transition-colors text-sm ${value === option.value ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-300'}`}
+                                >
+                                    <div className="font-medium">{option.label}</div>
+                                    {option.subtitle && <div className="text-xs opacity-60">{option.subtitle}</div>}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 export default function FirewallLogs() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState(null);
@@ -33,7 +114,7 @@ export default function FirewallLogs() {
     const [selectedAccount, setSelectedAccount] = useState('');
     const [zones, setZones] = useState([]);
     const [selectedZone, setSelectedZone] = useState('');
-    const [ruleIdInput, setRuleIdInput] = useState('');
+    const [ruleIdInput, setRuleIdInput] = useState('18e96f1b9dc044daa9f5a3d302bda61d'); // Default Rule ID
 
     // Data States
     const [logs, setLogs] = useState([]);
@@ -58,6 +139,7 @@ export default function FirewallLogs() {
             const response = await axios.post('/api/scrape', {
                 action,
                 apiToken: token,
+                useFirewallToken: true,
                 ...payload
             });
             return response.data;
@@ -73,12 +155,21 @@ export default function FirewallLogs() {
             // Need to pass token manually as currentUser might not be set yet inside useEffect
             const response = await axios.post('/api/scrape', {
                 action: 'get-account-info',
-                apiToken: token
+                apiToken: token,
+                useFirewallToken: true
             });
             if (response.data.success) {
                 setAccounts(response.data.data);
-                // Auto-select first account if available
-                if (response.data.data.length > 0) {
+
+                // Auto-select match 'Siam Cement Public Company Limited (SCG)' or fallback to first
+                const targetAccount = response.data.data.find(a =>
+                    a.name === 'Siam Cement Public Company Limited (SCG)' ||
+                    a.name.includes('(SCG)')
+                );
+                if (targetAccount) {
+                    setSelectedAccount(targetAccount.id);
+                    loadZones(targetAccount.id, token);
+                } else if (response.data.data.length > 0) {
                     const firstAcc = response.data.data[0];
                     setSelectedAccount(firstAcc.id);
                     loadZones(firstAcc.id, token);
@@ -96,11 +187,17 @@ export default function FirewallLogs() {
         const response = await axios.post('/api/scrape', {
             action: 'list-zones',
             accountId: accountId,
-            apiToken: token
+            apiToken: token,
+            useFirewallToken: true
         });
         if (response.data.success) {
             setZones(response.data.data);
-            if (response.data.data.length > 0) {
+
+            // Auto-select 'scg.com' or fallback to first
+            const targetZone = response.data.data.find(z => z.name === 'scg.com');
+            if (targetZone) {
+                setSelectedZone(targetZone.id);
+            } else if (response.data.data.length > 0) {
                 setSelectedZone(response.data.data[0].id);
             }
         } else {
@@ -109,8 +206,7 @@ export default function FirewallLogs() {
         }
     };
 
-    const handleAccountChange = (e) => {
-        const accId = e.target.value;
+    const handleAccountChange = (accId) => {
         setSelectedAccount(accId);
         loadZones(accId);
     };
@@ -168,39 +264,27 @@ export default function FirewallLogs() {
                     <div className={`${THEME.cardBg} border ${THEME.border} rounded-xl p-6 shadow-xl`}>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
 
-                            {/* Account Select */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Account</label>
-                                <div className="relative">
-                                    <select
-                                        value={selectedAccount}
-                                        onChange={handleAccountChange}
-                                        className={`w-full ${THEME.inputBg} border ${THEME.border} rounded-lg px-4 py-2.5 text-sm appearance-none focus:ring-2 focus:ring-blue-500/50 outline-none transition-all`}
-                                        disabled={loading}
-                                    >
-                                        <option value="" disabled>Select Account</option>
-                                        {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
-                                </div>
-                            </div>
+                            {/* Account Select (Live Search) */}
+                            <SearchableDropdown
+                                icon={<Server className="w-4 h-4 text-blue-400" />}
+                                label="Account"
+                                placeholder={loading ? "Loading..." : "Select Account"}
+                                options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
+                                value={selectedAccount}
+                                onChange={handleAccountChange}
+                                loading={loading}
+                            />
 
-                            {/* Zone Select */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Zone</label>
-                                <div className="relative">
-                                    <select
-                                        value={selectedZone}
-                                        onChange={(e) => setSelectedZone(e.target.value)}
-                                        className={`w-full ${THEME.inputBg} border ${THEME.border} rounded-lg px-4 py-2.5 text-sm appearance-none focus:ring-2 focus:ring-blue-500/50 outline-none transition-all`}
-                                        disabled={!selectedAccount || loading}
-                                    >
-                                        <option value="" disabled>Select Zone</option>
-                                        {zones.map(zone => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
-                                </div>
-                            </div>
+                            {/* Zone Select (Live Search) */}
+                            <SearchableDropdown
+                                icon={<Globe className="w-4 h-4 text-green-400" />}
+                                label="Zone"
+                                placeholder={!selectedAccount ? "Select Account First" : "Select Zone"}
+                                options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))}
+                                value={selectedZone}
+                                onChange={setSelectedZone}
+                                loading={loading}
+                            />
 
                             {/* Rule ID Input */}
                             <div className="space-y-2 md:col-span-1">
