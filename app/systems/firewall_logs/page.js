@@ -7,6 +7,7 @@ import {
     Search, Shield, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft,
     Globe, Server, User, Activity, Clock, Database, Hash, Download, X
 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { auth } from '../../utils/auth';
 
 // --- THEME & CONFIG ---
@@ -176,7 +177,7 @@ export default function FirewallLogs() {
             const response = await axios.post('/api/scrape', {
                 action,
                 apiToken: token,
-                useFirewallToken: true,
+                apiToken: token,
                 ...payload
             });
             return response.data;
@@ -193,7 +194,7 @@ export default function FirewallLogs() {
             const response = await axios.post('/api/scrape', {
                 action: 'get-account-info',
                 apiToken: token,
-                useFirewallToken: true
+                apiToken: token
             });
             if (response.data.success) {
                 setAccounts(response.data.data);
@@ -203,6 +204,7 @@ export default function FirewallLogs() {
                     a.name === 'Siam Cement Public Company Limited (SCG)' ||
                     a.name.includes('(SCG)')
                 );
+
                 if (targetAccount) {
                     setSelectedAccount(targetAccount.id);
                     loadZones(targetAccount.id, token);
@@ -210,10 +212,21 @@ export default function FirewallLogs() {
                     const firstAcc = response.data.data[0];
                     setSelectedAccount(firstAcc.id);
                     loadZones(firstAcc.id, token);
+                } else {
+                    // Success but empty accounts list? Try loading zones directly
+                    console.warn('No accounts found. Attempting to load zones directly...');
+                    loadZones(null, token);
                 }
+            } else {
+                // Failed to load accounts (e.g. 403 Forbidden on /accounts)
+                console.warn('Failed to load accounts (Permission?); Attempting to load zones directly...');
+                loadZones(null, token);
             }
         } catch (error) {
             console.error('Failed to load accounts:', error);
+            // Fallback on error too
+            console.warn('Error loading accounts; Attempting to load zones directly...');
+            loadZones(null, token);
         } finally {
             setLoading(false);
         }
@@ -224,8 +237,8 @@ export default function FirewallLogs() {
         const response = await axios.post('/api/scrape', {
             action: 'list-zones',
             accountId: accountId,
-            apiToken: token,
-            useFirewallToken: true
+            accountId: accountId,
+            apiToken: token
         });
         if (response.data.success) {
             setZones(response.data.data);
@@ -266,8 +279,27 @@ export default function FirewallLogs() {
 
         if (result.success) {
             setLogs(result.data);
+
+            // Show alert if Rule ID search yields no results
+            if (result.data.length === 0 && ruleIdInput.trim()) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'No Logs Found',
+                    text: `No firewall events matches Rule ID: ${ruleIdInput}`,
+                    background: '#1a1d24',
+                    color: '#fff',
+                    confirmButtonColor: '#3b82f6'
+                });
+            }
         } else {
-            alert('Failed to fetch logs: ' + (result.message || 'Unknown error'));
+            Swal.fire({
+                icon: 'error',
+                title: 'Error Fetching Logs',
+                text: result.message || 'Unknown error occurred',
+                background: '#1a1d24',
+                color: '#fff',
+                confirmButtonColor: '#ef4444'
+            });
         }
         setSearching(false);
     };
@@ -644,7 +676,7 @@ export default function FirewallLogs() {
                         {logs.length > 0 && (
                             <div className="border-t border-gray-800 p-4 bg-[#0a0c10] flex flex-col md:flex-row items-center justify-between text-sm gap-4">
                                 <div className="text-gray-400">
-                                    Showing <span className="text-white font-mono">{((currentPage - 1) * rowsPerPage) + 1}</span> to <span className="text-white font-mono">{Math.min(currentPage * rowsPerPage, filteredLogs.length)}</span> of <span className="text-white font-mono">{filteredLogs.length}</span> entries
+                                    Showing <span className="text-white font-mono">{((currentPage - 1) * rowsPerPage) + 1}</span> to <span className="text-white font-mono">{Math.min(currentPage * rowsPerPage, displayLogs.length)}</span> of <span className="text-white font-mono">{displayLogs.length}</span> displayed entries <span className="text-xs text-gray-500">(Total found: {filteredLogs.length})</span>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <select
