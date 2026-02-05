@@ -4,8 +4,8 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 
 import {
-    Search, Shield, AlertTriangle, ChevronDown, ChevronRight,
-    Globe, Server, User, Activity, Clock, Database, Hash, Download
+    Search, Shield, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft,
+    Globe, Server, User, Activity, Clock, Database, Hash, Download, X
 } from 'lucide-react';
 import { auth } from '../../utils/auth';
 
@@ -120,6 +120,43 @@ export default function FirewallLogs() {
     const [logs, setLogs] = useState([]);
     const [expandedRow, setExpandedRow] = useState(null);
 
+    // Filter & Pagination States
+    const [timeRange, setTimeRange] = useState(1440); // Default 1 Day
+    const [rowsPerPage, setRowsPerPage] = useState(20);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [liveSearch, setLiveSearch] = useState('');
+
+    // Computed Logs
+    // 1. Filter ALL fetched logs (for CSV and Search)
+    const filteredLogs = logs.filter(log => {
+        if (!liveSearch) return true;
+        const searchLower = liveSearch.toLowerCase();
+        return (
+            log.clientIP.toLowerCase().includes(searchLower) ||
+            (log.clientCountryName && log.clientCountryName.toLowerCase().includes(searchLower)) ||
+            log.action.toLowerCase().includes(searchLower) ||
+            log.ruleId.toLowerCase().includes(searchLower) ||
+            (log.clientRequestPath && log.clientRequestPath.toLowerCase().includes(searchLower)) ||
+            (log.userAgent && log.userAgent.toLowerCase().includes(searchLower)) ||
+            (log.source && log.source.toLowerCase().includes(searchLower))
+        );
+    });
+
+    // 2. Limit logs ONLY for Web Display (Max 100)
+    const displayLogs = filteredLogs.slice(0, 100);
+
+    // 3. Pagination based on Display Logs (Limited to 100)
+    const totalPages = Math.ceil(displayLogs.length / rowsPerPage);
+    const paginatedLogs = displayLogs.slice(
+        (currentPage - 1) * rowsPerPage,
+        currentPage * rowsPerPage
+    );
+
+    // Reset pagination
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [logs, liveSearch, rowsPerPage]);
+
     // --- 1. INITIALIZATION ---
     useEffect(() => {
         const user = auth.getCurrentUser();
@@ -211,17 +248,20 @@ export default function FirewallLogs() {
         loadZones(accId);
     };
 
-    // --- 2. SEARCH LOGS ---
     const handleSearch = async () => {
         if (!selectedZone) return;
         setSearching(true);
         setLogs([]);
         setExpandedRow(null);
 
+        // ALWAYS Fetch 10,000 records regardless of time range
+        const limit = 10000;
+
         const result = await callAPI('get-firewall-logs', {
             zoneId: selectedZone,
             ruleId: ruleIdInput.trim() || undefined,
-            timeRange: 1440 // 24 Hours
+            timeRange: timeRange,
+            limit: limit
         });
 
         if (result.success) {
@@ -241,7 +281,11 @@ export default function FirewallLogs() {
     };
 
     const downloadCSV = () => {
-        if (!logs || logs.length === 0) return;
+        // Use 'logs' to download ALL fetched data (10,000 records)
+        // Or use 'filteredLogs' if you want search terms to apply to CSV too (but generally full dump is preferred)
+        const dataToExport = logs;
+
+        if (!dataToExport || dataToExport.length === 0) return;
 
         // Define Headers
         const headers = [
@@ -254,12 +298,11 @@ export default function FirewallLogs() {
             'userAgent',
             'rayId',
             'hostname',
-            'path',
-            'count'
+            'path'
         ];
 
         // Map Data
-        const csvRows = logs.map(log => [
+        const csvRows = dataToExport.map(log => [
             `"${log.datetime}"`,
             `"${log.clientIP}"`,
             `"${log.action}"`,
@@ -269,8 +312,7 @@ export default function FirewallLogs() {
             `"${log.userAgent ? log.userAgent.replace(/"/g, '""') : ''}"`, // Escape quotes
             `"${log.rayName}"`,
             `"${log.clientRequestHTTPHost}"`,
-            `"${log.clientRequestPath}"`,
-            "1" // count
+            `"${log.clientRequestPath}"`
         ]);
 
         // Combine Header and Data
@@ -317,39 +359,43 @@ export default function FirewallLogs() {
                                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-green-900/20"
                             >
                                 <Download className="w-4 h-4" />
-                                Download CSV
+                                Download CSV ({logs.length})
                             </button>
                         )}
                     </div>
 
                     {/* Controls Card */}
                     <div className={`${THEME.cardBg} border ${THEME.border} rounded-xl p-6 shadow-xl`}>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
 
-                            {/* Account Select (Live Search) */}
-                            <SearchableDropdown
-                                icon={<Server className="w-4 h-4 text-blue-400" />}
-                                label="Account"
-                                placeholder={loading ? "Loading..." : "Select Account"}
-                                options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
-                                value={selectedAccount}
-                                onChange={handleAccountChange}
-                                loading={loading}
-                            />
+                            {/* Account Select (Live Search) - Span 4 */}
+                            <div className="md:col-span-4">
+                                <SearchableDropdown
+                                    icon={<Server className="w-4 h-4 text-blue-400" />}
+                                    label="Account"
+                                    placeholder={loading ? "Loading..." : "Select Account"}
+                                    options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
+                                    value={selectedAccount}
+                                    onChange={handleAccountChange}
+                                    loading={loading}
+                                />
+                            </div>
 
-                            {/* Zone Select (Live Search) */}
-                            <SearchableDropdown
-                                icon={<Globe className="w-4 h-4 text-green-400" />}
-                                label="Zone"
-                                placeholder={!selectedAccount ? "Select Account First" : "Select Zone"}
-                                options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))}
-                                value={selectedZone}
-                                onChange={setSelectedZone}
-                                loading={loading}
-                            />
+                            {/* Zone Select (Live Search) - Span 3 */}
+                            <div className="md:col-span-3">
+                                <SearchableDropdown
+                                    icon={<Globe className="w-4 h-4 text-green-400" />}
+                                    label="Zone"
+                                    placeholder={!selectedAccount ? "Select Account First" : "Select Zone"}
+                                    options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))}
+                                    value={selectedZone}
+                                    onChange={setSelectedZone}
+                                    loading={loading}
+                                />
+                            </div>
 
-                            {/* Rule ID Input */}
-                            <div className="space-y-2 md:col-span-1">
+                            {/* Rule ID Input - Span 3 */}
+                            <div className="space-y-2 md:col-span-3">
                                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Rule ID (Optional)</label>
                                 <div className="relative">
                                     <input
@@ -363,11 +409,29 @@ export default function FirewallLogs() {
                                 </div>
                             </div>
 
-                            {/* Search Button */}
+                            {/* Time Range - Span 2 */}
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-orange-400" /> Range
+                                </label>
+                                <select
+                                    value={timeRange}
+                                    onChange={(e) => setTimeRange(Number(e.target.value))}
+                                    className={`w-full ${THEME.inputBg} border ${THEME.border} rounded-lg px-4 py-2.5 text-sm outline-none cursor-pointer hover:bg-white/5 transition-colors`}
+                                >
+                                    <option value={1440}>Last 24 Hours</option>
+                                    <option value={10080}>Last 7 Days</option>
+                                    <option value={43200}>Last 30 Days</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Fetch Button Row */}
+                        <div className="mt-4 flex justify-end">
                             <button
                                 onClick={handleSearch}
                                 disabled={searching || !selectedZone}
-                                className={`${THEME.button} px-6 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed`}
+                                className={`${THEME.button} w-full md:w-auto px-8 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                                 {searching ? (
                                     <span className="animate-pulse">Searching...</span>
@@ -379,6 +443,34 @@ export default function FirewallLogs() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Stats & Filter Bar */}
+                    {logs.length > 0 && (
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#13161c] p-4 rounded-xl border border-gray-800">
+                            <div className="flex items-center gap-4 text-sm text-gray-400">
+                                <span>Total Logs Fetched: <span className="text-white font-bold">{logs.length}</span></span>
+                                {liveSearch && <span>Filtered: <span className="text-blue-400 font-bold">{filteredLogs.length}</span></span>}
+                            </div>
+                            <div className="relative w-full md:w-64">
+                                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
+                                <input
+                                    type="text"
+                                    placeholder="Filter logs (IP, Action,...)"
+                                    value={liveSearch}
+                                    onChange={(e) => setLiveSearch(e.target.value)}
+                                    className={`w-full pl-9 pr-4 py-2 ${THEME.inputBg} border ${THEME.border} rounded-lg text-sm focus:ring-1 focus:ring-blue-500 outline-none`}
+                                />
+                                {liveSearch && (
+                                    <button
+                                        onClick={() => setLiveSearch('')}
+                                        className="absolute right-3 top-2.5 text-gray-500 hover:text-white"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Logs Table */}
                     <div className={`${THEME.cardBg} border ${THEME.border} rounded-xl overflow-hidden shadow-xl min-h-[400px]`}>
@@ -409,7 +501,7 @@ export default function FirewallLogs() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-800/50">
-                                        {logs.map((log, index) => {
+                                        {paginatedLogs.map((log, index) => {
                                             const isExpanded = expandedRow === index;
                                             return (
                                                 <React.Fragment key={index}>
@@ -545,6 +637,43 @@ export default function FirewallLogs() {
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+
+                        {/* Pagination Footer */}
+                        {logs.length > 0 && (
+                            <div className="border-t border-gray-800 p-4 bg-[#0a0c10] flex flex-col md:flex-row items-center justify-between text-sm gap-4">
+                                <div className="text-gray-400">
+                                    Showing <span className="text-white font-mono">{((currentPage - 1) * rowsPerPage) + 1}</span> to <span className="text-white font-mono">{Math.min(currentPage * rowsPerPage, filteredLogs.length)}</span> of <span className="text-white font-mono">{filteredLogs.length}</span> entries
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <select
+                                        value={rowsPerPage}
+                                        onChange={(e) => setRowsPerPage(Number(e.target.value))}
+                                        className={`bg-[#13161c] border border-gray-800 rounded px-2 py-1 outline-none text-gray-300 cursor-pointer focus:border-blue-500 transition-colors`}
+                                    >
+                                        <option value={20}>20 per page</option>
+                                        <option value={50}>50 per page</option>
+                                        <option value={100}>100 per page</option>
+                                    </select>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                            className="p-1.5 hover:bg-gray-800 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            <ChevronLeft className="w-5 h-5" />
+                                        </button>
+                                        <span className="text-gray-300">Page <span className="text-white font-bold">{currentPage}</span> of {totalPages || 1}</span>
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage === totalPages || totalPages === 0}
+                                            className="p-1.5 hover:bg-gray-800 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            <ChevronRight className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

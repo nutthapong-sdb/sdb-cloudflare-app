@@ -496,9 +496,8 @@ export async function POST(request) {
             }
         }
 
-        // 7.1 Get Firewall Logs by Rule ID (NEW SYSTEM)
         else if (action === 'get-firewall-logs') {
-            const { ruleId, zoneId, timeRange } = body;
+            const { ruleId, zoneId, timeRange, limit } = body;
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
             // Rule ID is optional (if empty, fetch recent logs for zone)
 
@@ -510,7 +509,7 @@ export async function POST(request) {
             const since = new Date(now.getTime() - minutes * 60 * 1000);
 
             const query = `
-                query GetFirewallEvents($zoneTag: String, $since: String, $until: String, $ruleId: String) {
+                query GetFirewallEvents($zoneTag: String, $since: String, $until: String, $ruleId: String, $limit: Int) {
                     viewer {
                         zones(filter: { zoneTag: $zoneTag }) {
                             firewallEventsAdaptive(
@@ -519,7 +518,7 @@ export async function POST(request) {
                                     datetime_leq: $until
                                     ${ruleId ? ', ruleId: $ruleId' : ''}
                                 }
-                                limit: 50
+                                limit: $limit
                                 orderBy: [datetime_DESC]
                             ) {
                                 datetime
@@ -557,7 +556,8 @@ export async function POST(request) {
                 zoneTag: zoneId,
                 since: since.toISOString(),
                 until: now.toISOString(),
-                ruleId: ruleId || undefined
+                ruleId: ruleId || undefined,
+                limit: limit || 5000
             };
 
             try {
