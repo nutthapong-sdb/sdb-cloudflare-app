@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8002"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - sdb_db_data:/app/db
+      - sdb_report_data:/app/app/data
+    restart: always
+
+volumes:
+  sdb_db_data:
+  sdb_report_data:
