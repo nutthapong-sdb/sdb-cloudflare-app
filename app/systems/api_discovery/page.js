@@ -64,7 +64,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
           )}
         </div>
 
-        {/* Dropdown list - ใช้ z-index สูงและ fixed positioning */}
+        {/* Dropdown list */}
         {isOpen && (
           <div className="absolute z-[100] w-full mt-2 bg-gray-800 border-2 border-gray-600 rounded-xl shadow-2xl max-h-80 overflow-y-auto">
             {loading ? (
@@ -106,7 +106,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
   );
 }
 
-export default function SDBPage() {
+export default function APIDiscoveryPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -123,6 +123,11 @@ export default function SDBPage() {
   const [discoveryData, setDiscoveryData] = useState([]);
   const [rawDiscoveryData, setRawDiscoveryData] = useState(null);
   const [loadingDiscovery, setLoadingDiscovery] = useState(false);
+
+  // Feature: Subdomain Expansion
+  const [expandedItems, setExpandedItems] = useState({}); // { [rowId]: boolean }
+  const [subdomainCache, setSubdomainCache] = useState({}); // { [key]: Array }
+  const [loadingSubdomains, setLoadingSubdomains] = useState({}); // { [rowId]: boolean }
 
   // State for Filtering & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -141,8 +146,8 @@ export default function SDBPage() {
     }, 5000);
   };
 
-  const callAPI = async (action, params = {}, explicitToken = null) => {
-    setLoading(true);
+  const callAPI = async (action, params = {}, explicitToken = null, skipLoading = false) => {
+    if (!skipLoading) setLoading(true);
 
     try {
       const response = await fetch('/api/scrape', {
@@ -159,18 +164,14 @@ export default function SDBPage() {
 
       const result = await response.json();
 
-      // Log for debugging
       if (action === 'get-api-discovery') {
         console.log('📦 Full API Response:', result);
-        console.log('📊 Data sample:', result.data?.slice(0, 2));
       }
 
       if (result.success) {
-        // ไม่แสดง Toast สำหรับ action โหลดข้อมูลพื้นฐาน เพื่อไม่ให้รกหน้าจอ
-        if (action !== 'get-account-info' && action !== 'list-zones') {
+        if (!skipLoading && action !== 'get-account-info' && action !== 'list-zones' && action !== 'get-subdomain-stats') {
           showToast(result.message, 'success');
         }
-        // Return full result instead of just data
         return result;
       } else {
         showToast(result.message || 'เกิดข้อผิดพลาด', 'error');
@@ -180,7 +181,7 @@ export default function SDBPage() {
       showToast('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: ' + err.message, 'error');
       return null;
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   };
 
@@ -188,7 +189,6 @@ export default function SDBPage() {
     setLoading(true);
     const result = await callAPI('get-account-info', {}, tokenOverride);
     if (result && result.data) {
-      setAccounts(result.data);
       setAccounts(result.data);
       console.log('📋 Available Accounts:', result.data.map(a => a.name));
     }
@@ -201,32 +201,21 @@ export default function SDBPage() {
     if (user) {
       setCurrentUser(user);
 
-      // Initial load if token exists in localStorage
       if (user.cloudflare_api_token) {
         loadAccounts(user.cloudflare_api_token);
       }
 
-      // Force refresh user profile to get latest token
       getUserProfileAction(user.id).then(res => {
         if (res.success) {
           console.log('🔄 User Profile Refreshed:', res.user.username);
           const newToken = res.user.cloudflare_api_token;
-
-          // Update state
           setCurrentUser(res.user);
-          localStorage.setItem('sdb_session', JSON.stringify(res.user));
-
-          // Load accounts with new token (if we didn't already, or just force reload to be safe)
-          // If we already loaded with same token, maybe skip? But hard to compare easily here.
-          // Just reload to be safe and fix the "missing token" bug.
+          localStorage.setItem('sdb_session', JSON.stringify(res.user)); // Keep session key same for compatibility
           loadAccounts(newToken);
         }
       });
     }
   }, []);
-
-  // Auto-select removed
-
 
   // โหลด zones เมื่อเลือก account
   const handleAccountChange = async (accountId) => {
@@ -234,6 +223,8 @@ export default function SDBPage() {
     setSelectedZone('');
     setZones([]);
     setDiscoveryData([]);
+    setExpandedItems({});
+    setSubdomainCache({});
 
     if (!accountId) return;
 
@@ -244,14 +235,9 @@ export default function SDBPage() {
     if (result && result.data) {
       console.log('✅ Loaded Zones:', result.data.length, 'zones');
       setZones(result.data);
-    } else {
-      console.log('❌ No zones loaded or error occurred');
     }
-
     setLoadingZones(false);
   };
-
-  // Auto-select Zone removed
 
   // โหลด discovery data เมื่อเลือก zone
   useEffect(() => {
@@ -266,21 +252,51 @@ export default function SDBPage() {
 
       const result = await callAPI('get-api-discovery', { zoneId: selectedZone });
       if (result && result.data) {
-        console.log('✅ Setting discovery data:', result.data.length, 'items');
         setDiscoveryData(result.data);
         setRawDiscoveryData(result.raw || null);
-        setCurrentPage(1); // Reset page to 1
-        setSearchTerm(''); // Reset search
-        setFilterStatus('all'); // Reset status filter
+        setCurrentPage(1);
+        setSearchTerm('');
+        setFilterStatus('all');
+        setExpandedItems({});
+        setSubdomainCache({});
       } else {
         setDiscoveryData([]);
-        setRawDiscoveryData(null);
       }
       setLoadingDiscovery(false);
     };
 
     loadDiscovery();
   }, [selectedZone]);
+
+  // Handle Expand Subdomains
+  const handleExpand = async (index, item) => {
+    const isExpanding = !expandedItems[index];
+    setExpandedItems(prev => ({ ...prev, [index]: isExpanding }));
+
+    if (isExpanding) {
+      const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
+
+      if (!subdomainCache[cacheKey]) {
+        setLoadingSubdomains(prev => ({ ...prev, [index]: true }));
+
+        try {
+          const result = await callAPI('get-subdomain-stats', {
+            zoneId: selectedZone,
+            method: item.method,
+            path: item.path
+          }, null, true); // skipLoading=true to avoid full screen loader
+
+          if (result && result.data) {
+            setSubdomainCache(prev => ({ ...prev, [cacheKey]: result.data }));
+          }
+        } catch (error) {
+          console.error("Expand Error:", error);
+        } finally {
+          setLoadingSubdomains(prev => ({ ...prev, [index]: false }));
+        }
+      }
+    }
+  };
 
   // Format account options for searchable dropdown
   const accountOptions = accounts.map(account => ({
@@ -296,52 +312,85 @@ export default function SDBPage() {
     subtitle: `${zone.status} - ${zone.plan}`
   }));
 
-  // ฟังก์ชันดาวน์โหลด CSV
-  const handleDownloadCSV = () => {
-    console.log('🔽 CSV Download clicked');
-    console.log('📊 Discovery Data:', discoveryData);
-    console.log('📊 Data length:', discoveryData?.length);
-
+  // ฟังก์ชันดาวน์โหลด CSV (Advanced with Subdomains)
+  const handleDownloadCSV = async () => {
     if (!discoveryData || discoveryData.length === 0) {
       showToast('ไม่มีข้อมูลสำหรับดาวน์โหลด', 'error');
       return;
     }
 
+    showToast('กำลังเตรียมข้อมูล CSV (อาจใช้เวลาสักครู่)...', 'success');
+    setLoading(true);
+
     try {
       // CSV Header
-      const headers = ['Hostname,Method,Source,State,Path'];
+      const headers = ['Hostname,Method,Source,State,Path,RequestCount,IsSubdomain'];
+      const rows = [];
 
-      // CSV Rows
-      const rows = discoveryData.map(item => {
-        // Convert to string first, then escape ข้อมูลที่มี comma ด้วย double quotes
-        const host = `"${String(item.host || '').replace(/"/g, '""')}"`;
-        const method = `"${String(item.method || '').replace(/"/g, '""')}"`;
-        const source = `"${String(item.source || '').replace(/"/g, '""')}"`;
-        const state = `"${String(item.state || '').replace(/"/g, '""')}"`;
-        const path = `"${String(item.path || '').replace(/"/g, '""')}"`;
+      // Process all items (filtered by current view or all? Usually all)
+      const visibleData = discoveryData; // Export all loaded data
 
-        return `${host},${method},${source},${state},${path}`;
-      });
+      // Use a concurrency limiter if list is large? For now, run sequential batches is safer.
+
+      for (const item of visibleData) {
+        const isVariableHost = (item.host || '').includes('{hostVar1}');
+
+        // Base row
+        // escape double quotes
+        const safe = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+
+        if (isVariableHost) {
+          // Check cache first
+          const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
+          let subs = subdomainCache[cacheKey];
+
+          if (!subs) {
+            // Fetch On Demand
+            const res = await callAPI('get-subdomain-stats', {
+              zoneId: selectedZone,
+              method: item.method,
+              path: item.path
+            }, null, true);
+            subs = res?.data || [];
+            // Update cache for future
+            setSubdomainCache(prev => ({ ...prev, [cacheKey]: subs }));
+          }
+
+          if (subs.length > 0) {
+            // Add rows for each subdomain
+            for (const sub of subs) {
+              // Format: Subdomain Host, Method, Source, State, Path, Count, YES
+              rows.push(`${safe(sub.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},${sub.count},Yes`);
+            }
+          } else {
+            // Fallback if no traffic found
+            rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},0,Original`);
+          }
+
+        } else {
+          // Normal Row
+          rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Original`);
+        }
+      }
 
       const csvContent = [headers, ...rows].join('\n');
-      console.log('📄 CSV Content preview:', csvContent.substring(0, 200));
-
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const filename = `api_discovery_${selectedZone}_${new Date().toISOString().split('T')[0]}.csv`;
+      const filename = `api_discovery_${selectedZone}_expanded_${new Date().toISOString().split('T')[0]}.csv`;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      console.log('✅ CSV Download initiated:', filename);
-      showToast('กำลังดาวน์โหลด CSV...', 'success');
+      showToast('ดาวน์โหลด CSV เรียบร้อยแล้ว', 'success');
     } catch (error) {
       console.error('❌ CSV Download Error:', error);
       showToast('เกิดข้อผิดพลาดในการดาวน์โหลด CSV', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -377,21 +426,10 @@ export default function SDBPage() {
         ))}
       </div>
 
-      {/* Auth Controls (Top Right) */}
+      {/* Auth Controls */}
       <div className="fixed top-6 right-6 z-40 flex items-center gap-3">
         {currentUser && (
           <>
-            {currentUser.role === 'root' && (
-              <button
-                onClick={() => router.push('/admin/users')}
-                className="bg-blue-600/80 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium backdrop-blur-sm border border-blue-500/50 transition-all shadow-lg hover:shadow-blue-500/30 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                Manage Users
-              </button>
-            )}
             <div className="bg-gray-800/80 text-white px-4 py-2 rounded-lg font-medium backdrop-blur-sm border border-gray-600 flex items-center gap-2">
               <span className="text-orange-400 text-sm uppercase font-bold">{currentUser.role}</span>
               <span className="text-gray-400">|</span>
@@ -407,47 +445,23 @@ export default function SDBPage() {
         )}
       </div>
 
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgb(251, 146, 60) 1px, transparent 0)`,
-          backgroundSize: '40px 40px'
-        }}></div>
-      </div>
-
       <div className="relative min-h-screen p-6">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12 animate-fade-in">
-            <div className="inline-block p-4 bg-gradient-to-br from-orange-600 to-amber-700 rounded-2xl shadow-2xl mb-6 transform hover:scale-105 transition-transform duration-300 shadow-orange-500/50">
-              <svg
-                className="w-16 h-16 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
-                />
-              </svg>
-            </div>
             <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-200 mb-4 tracking-tight drop-shadow-sm">
-              Cloudflare API Dashboard
+              API Discovery
             </h1>
             <p className="text-gray-400 text-lg font-medium">
-              จัดการ Cloudflare ด้วย API Token
+              Discover, Monitor, and Secure your API Endpoints
             </p>
           </div>
 
-          {/* Main Card - ลบ overflow-hidden */}
           <div className="bg-gray-800/50 backdrop-blur-lg rounded-3xl shadow-2xl border-2 border-gray-700 mb-6">
             <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-6 rounded-t-3xl">
               <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                 <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                เลือก Account และ Zone
+                ค้นหาและจัดการ API
               </h2>
             </div>
 
@@ -486,7 +500,7 @@ export default function SDBPage() {
                 </div>
               )}
 
-              {/* แสดง API Discovery Data */}
+              {/* API Discovery Data */}
               {selectedZone && (
                 <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 border-2 border-purple-600 rounded-2xl p-6 animate-slide-in">
                   <div className="flex items-start gap-3">
@@ -506,7 +520,6 @@ export default function SDBPage() {
 
                         {discoveryData.length > 0 && (
                           <div className="flex items-center gap-3 w-full sm:w-auto">
-                            {/* Page Size Selector */}
                             <select
                               value={pageSize}
                               onChange={(e) => {
@@ -520,7 +533,6 @@ export default function SDBPage() {
                               <option value={100}>100 / page</option>
                             </select>
 
-                            {/* Status Filter */}
                             <select
                               value={filterStatus}
                               onChange={(e) => {
@@ -535,30 +547,22 @@ export default function SDBPage() {
                               <option value="ignored">Ignored</option>
                             </select>
 
-                            {/* Live Search */}
-                            <div className="relative flex-1 sm:w-64">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                              </div>
-                              <input
-                                type="text"
-                                className="bg-gray-800 border border-gray-600 text-gray-300 text-xs rounded-lg block w-full pl-10 p-2 focus:ring-purple-500 focus:border-purple-500"
-                                placeholder="Search path, host, method..."
-                                value={searchTerm}
-                                onChange={(e) => {
-                                  setSearchTerm(e.target.value);
-                                  setCurrentPage(1);
-                                }}
-                              />
-                            </div>
+                            <input
+                              type="text"
+                              className="bg-gray-800 border border-gray-600 text-gray-300 text-xs rounded-lg block w-full p-2 focus:ring-purple-500 focus:border-purple-500"
+                              placeholder="Search..."
+                              value={searchTerm}
+                              onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                              }}
+                            />
 
-                            {/* Download CSV Button */}
                             <button
                               onClick={handleDownloadCSV}
-                              className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500"
-                              title="Download CSV"
+                              className={`bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={loading}
+                              title="Download Extended CSV"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -580,7 +584,6 @@ export default function SDBPage() {
                       ) : discoveryData.length === 0 ? (
                         <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700 text-center">
                           <p className="text-gray-400">ไม่พบข้อมูล API Discovery</p>
-                          <p className="text-sm text-gray-500 mt-2">Zone นี้อาจจะยังไม่มี API endpoints ที่ถูก discover</p>
                         </div>
                       ) : (
                         <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
@@ -588,98 +591,100 @@ export default function SDBPage() {
                             <table className="w-full text-sm">
                               <thead className="bg-gray-900/50">
                                 <tr>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/4">Hostname</th>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/12">Method</th>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/12">Source</th>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/12">State</th>
-                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-1/2">Path</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold w-8"></th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold">Hostname</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold">Method</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold">Source</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold">State</th>
+                                  <th className="px-4 py-3 text-left text-purple-300 font-semibold">Path</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-700">
                                 {discoveryData
                                   .filter(item => {
-                                    // Status Filter
                                     if (filterStatus !== 'all' && item.state !== filterStatus) return false;
-
-                                    // Search Filter
                                     if (!searchTerm) return true;
-                                    const searchLower = searchTerm.toLowerCase();
-                                    return (
-                                      (item.path || '').toLowerCase().includes(searchLower) ||
-                                      (item.host || '').toLowerCase().includes(searchLower) ||
-                                      (item.method || '').toLowerCase().includes(searchLower)
-                                    );
+                                    const s = searchTerm.toLowerCase();
+                                    return (item.path + item.host + item.method).toLowerCase().includes(s);
                                   })
                                   .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-                                  .map((item, index) => (
-                                    <tr key={index} className="hover:bg-gray-700/30 transition-colors">
-                                      <td className="px-4 py-3 text-gray-300 text-xs font-semibold">
-                                        {item.host || '-'}
-                                      </td>
-                                      <td className="px-4 py-3">
-                                        <span className={`
-                                        px-2 py-1 rounded font-mono text-xs font-bold
-                                        ${item.method === 'GET' ? 'bg-green-600/30 text-green-300' :
-                                            item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
-                                              item.method === 'PUT' ? 'bg-yellow-600/30 text-yellow-300' :
-                                                item.method === 'DELETE' ? 'bg-red-600/30 text-red-300' :
-                                                  'bg-gray-600/30 text-gray-300'}
-                                      `}>
-                                          {item.method}
-                                        </span>
-                                      </td>
-                                      <td className="px-4 py-3 text-gray-400 text-xs text-center">
-                                        {item.source || '-'}
-                                      </td>
-                                      <td className="px-4 py-3">
-                                        <span className={`
-                                        px-2 py-1 rounded text-xs font-semibold
-                                        ${item.state === 'review' ? 'bg-orange-600/30 text-orange-300' :
-                                            item.state === 'saved' ? 'bg-green-600/30 text-green-300' :
-                                              item.state === 'ignored' ? 'bg-gray-600/30 text-gray-400' :
-                                                'bg-yellow-600/30 text-yellow-300'}
-                                      `}>
-                                          {item.state}
-                                        </span>
-                                      </td>
-                                      <td className="px-4 py-3 text-purple-200 font-mono text-xs break-all">
-                                        {item.path}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  .map((item, index) => {
+                                    // Use absolute index ID based on data for consistent key
+                                    const rowKey = `${item.method}-${item.path}-${index}`;
+                                    const hasVar = (item.host || '').includes('{hostVar1}');
+                                    const isExpanded = expandedItems[rowKey];
+                                    const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
+                                    const subStats = subdomainCache[cacheKey] || [];
+                                    const isLoadingSubs = loadingSubdomains[rowKey];
+
+                                    return (
+                                      <>
+                                        <tr key={rowKey} className={`hover:bg-gray-700/30 transition-colors ${isExpanded ? 'bg-gray-700/50' : ''}`}>
+                                          <td className="px-2 py-3 text-center">
+                                            {hasVar && (
+                                              <button
+                                                onClick={() => handleExpand(rowKey, item)}
+                                                className="text-purple-400 hover:text-white transition-colors focus:outline-none"
+                                              >
+                                                {isLoadingSubs ? (
+                                                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                ) : (
+                                                  <svg className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-3 text-gray-300 text-xs font-semibold">{item.host}</td>
+                                          <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded font-mono text-xs font-bold ${item.method === 'GET' ? 'bg-green-600/30 text-green-300' :
+                                                item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
+                                                  'bg-gray-600/30 text-gray-300'
+                                              }`}>
+                                              {item.method}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-3 text-gray-400 text-xs">{item.source || '-'}</td>
+                                          <td className="px-4 py-3 text-gray-300 text-xs">{item.state}</td>
+                                          <td className="px-4 py-3 text-purple-200 font-mono text-xs break-all">{item.path}</td>
+                                        </tr>
+
+                                        {isExpanded && (
+                                          <tr key={`${rowKey}-ex`} className="bg-gray-800/80 animate-fade-in-fast">
+                                            <td colSpan="6" className="px-4 py-3 pl-12">
+                                              <div className="bg-gray-900/50 rounded-lg p-3 border border-purple-500/30">
+                                                <h5 className="text-xs font-bold text-gray-400 mb-2 flex items-center gap-2">
+                                                  <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                                  Subdomains for <span className="text-purple-300 font-mono">{item.path}</span>
+                                                </h5>
+                                                {subStats.length > 0 ? (
+                                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                    {subStats.map((sub, i) => (
+                                                      <div key={i} className="flex justify-between items-center bg-gray-800 p-2 rounded text-xs border border-gray-700">
+                                                        <span className="text-gray-300 truncate font-mono" title={sub.host}>{sub.host}</span>
+                                                        <span className="text-green-400 font-bold bg-green-900/30 px-1.5 rounded">{sub.count}</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <p className="text-xs text-gray-500 italic">No traffic data found for this path pattern.</p>
+                                                )}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </>
+                                    );
+                                  })}
                               </tbody>
                             </table>
                           </div>
-
-                          {/* Pagination Footer */}
-                          <div className="bg-gray-900/50 px-4 py-3 border-t border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-                            <p className="text-xs text-gray-400">
-                              แสดง <span className="text-white font-medium">{Math.min((currentPage - 1) * pageSize + 1, discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length)}</span> ถึง <span className="text-white font-medium">{Math.min(currentPage * pageSize, discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length)}</span> จากทั้งหมด <strong className="text-purple-300">{discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length}</strong> รายการ (Total: {discoveryData.length})
-                            </p>
-
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="px-3 py-1 text-xs font-medium rounded bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                ก่อนหน้า
-                              </button>
-                              <span className="px-3 py-1 text-xs text-gray-300 flex items-center">
-                                หน้า {currentPage}
-                              </span>
-                              <button
-                                onClick={() => setCurrentPage(p => {
-                                  const filteredLen = discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length;
-                                  const maxPage = Math.ceil(filteredLen / pageSize);
-                                  return Math.min(maxPage, p + 1);
-                                })}
-                                disabled={currentPage >= Math.ceil(discoveryData.filter(i => (filterStatus === 'all' || i.state === filterStatus) && (!searchTerm || (i.path + i.host + i.method).toLowerCase().includes(searchTerm.toLowerCase()))).length / pageSize)}
-                                className="px-3 py-1 text-xs font-medium rounded bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                ถัดไป
-                              </button>
-                            </div>
+                          {/* Pagination Controls... simplified */}
+                          <div className="bg-gray-900/50 px-4 py-3 flex justify-between">
+                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(c => Math.max(1, c - 1))} className="text-gray-400 hover:text-white disabled:opacity-30">Prev</button>
+                            <span className="text-gray-400 text-xs">Page {currentPage}</span>
+                            <button onClick={() => setCurrentPage(c => c + 1)} className="text-gray-400 hover:text-white">Next</button>
                           </div>
                         </div>
                       )}
@@ -691,6 +696,6 @@ export default function SDBPage() {
           </div>
         </div>
       </div>
-    </div >
+    </div>
   );
 }

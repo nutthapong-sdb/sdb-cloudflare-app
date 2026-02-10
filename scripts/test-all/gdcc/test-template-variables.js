@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { getApiToken, colors, log } = require('../helpers');
+const { getApiToken, colors, log } = require('../libs/api-helper');
 
 const BASE_URL = 'http://localhost:8002/api/scrape';
 const DEFAULT_ZONE = 'bdms.co.th';

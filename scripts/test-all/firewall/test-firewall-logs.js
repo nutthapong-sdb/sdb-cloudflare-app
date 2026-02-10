@@ -1,6 +1,6 @@
 require('dotenv').config({ path: '.env.local' });
 const axios = require('axios');
-const helpers = require('../helpers');
+const helpers = require('../libs/api-helper');
 const { log, colors } = helpers;
 
 // --- Configuration ---

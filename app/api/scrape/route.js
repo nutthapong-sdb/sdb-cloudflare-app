@@ -357,7 +357,7 @@ export async function POST(request) {
 
         }
 
-        // 7. Get API Discovery (SDB System)
+        // 7. Get API Discovery (API Discovery)
         else if (action === 'get-api-discovery') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
 
@@ -489,6 +489,80 @@ export async function POST(request) {
                     data: [],
                     message: 'API Discovery not available for this zone'
                 });
+            }
+        }
+
+        // 7.1 Get Subdomain Stats (GraphQL for {hostVar1})
+        else if (action === 'get-subdomain-stats') {
+            const { zoneId, method, path, limit } = body;
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+
+            // Default 7 days scan to find subdomains
+            const now = new Date();
+            const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days
+
+            console.log(`🔍 Fetching Subdomain Stats for Path: ${path}, Method: ${method}...`);
+
+            const query = `
+                query GetSubdomains($zoneTag: String, $since: String, $until: String, $method: String, $path: String, $limit: Int) {
+                    viewer {
+                        zones(filter: { zoneTag: $zoneTag }) {
+                            httpRequestsAdaptiveGroups(
+                                filter: {
+                                    datetime_geq: $since,
+                                    datetime_leq: $until,
+                                    clientRequestHTTPMethodName: $method,
+                                    clientRequestPath: $path
+                                }
+                                limit: $limit
+                                orderBy: [count_DESC]
+                            ) {
+                                count
+                                dimensions {
+                                    clientRequestHTTPHost
+                                }
+                            }
+                        }
+                    }
+                }
+            `;
+
+            const variables = {
+                zoneTag: zoneId,
+                since: since.toISOString(),
+                until: now.toISOString(),
+                method: method,
+                path: path,
+                limit: limit || 50
+            };
+
+            try {
+                const response = await axios({
+                    method: 'POST',
+                    url: `${CLOUDFLARE_API_BASE}/graphql`,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    data: { query, variables }
+                });
+
+                if (response.data.errors) {
+                    // console.error('❌ Cloudflare GraphQL Errors:', response.data.errors);
+                    return NextResponse.json({ success: false, message: 'GraphQL Error', error: response.data.errors }, { status: 500 });
+                }
+
+                const groups = response.data.data.viewer.zones[0].httpRequestsAdaptiveGroups || [];
+                const subdomains = groups.map(g => ({
+                    host: g.dimensions.clientRequestHTTPHost,
+                    count: g.count
+                }));
+
+                return NextResponse.json({ success: true, data: subdomains });
+
+            } catch (error) {
+                console.error('Subdomain Stats Error:', error.response?.data || error.message);
+                return NextResponse.json({ success: false, message: 'Failed to fetch subdomain stats' }, { status: 500 });
             }
         }
 
