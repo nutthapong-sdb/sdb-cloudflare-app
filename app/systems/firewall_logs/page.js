@@ -292,10 +292,15 @@ export default function FirewallLogs() {
                 });
             }
         } else {
+            let errorMessage = result.message || 'Unknown error occurred';
+            if (errorMessage.includes('500') || errorMessage.includes('Request failed')) {
+                errorMessage = 'ไม่พบข้อมูล กรุณาตรวจสอบ Account หรือ Zone อีกครั้ง';
+            }
+
             Swal.fire({
                 icon: 'error',
-                title: 'Error Fetching Logs',
-                text: result.message || 'Unknown error occurred',
+                title: 'เกิดข้อผิดพลาด',
+                text: errorMessage,
                 background: '#1a1d24',
                 color: '#fff',
                 confirmButtonColor: '#ef4444'
