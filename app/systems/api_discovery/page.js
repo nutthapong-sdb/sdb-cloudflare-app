@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
@@ -324,7 +324,7 @@ export default function APIDiscoveryPage() {
 
     try {
       // CSV Header
-      const headers = ['Hostname,Method,Source,State,Path,RequestCount,IsSubdomain'];
+      const headers = ['Hostname,Method,Source,State,Path,RequestCount,Type'];
       const rows = [];
 
       // Process all items (filtered by current view or all? Usually all)
@@ -340,6 +340,9 @@ export default function APIDiscoveryPage() {
         const safe = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
         if (isVariableHost) {
+          // 1. Add Parent Row FIRST
+          rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Parent`);
+
           // Check cache first
           const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
           let subs = subdomainCache[cacheKey];
@@ -360,16 +363,14 @@ export default function APIDiscoveryPage() {
             // Add rows for each subdomain
             for (const sub of subs) {
               // Format: Subdomain Host, Method, Source, State, Path, Count, YES
-              rows.push(`${safe(sub.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},${sub.count},Yes`);
+              rows.push(`${safe(sub.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},${sub.count},Subdomain`);
             }
-          } else {
-            // Fallback if no traffic found
-            rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},0,Original`);
           }
+          // Fallback logic removed as parent row is already added above.
 
         } else {
           // Normal Row
-          rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Original`);
+          rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Normal`);
         }
       }
 
@@ -618,8 +619,8 @@ export default function APIDiscoveryPage() {
                                     const isLoadingSubs = loadingSubdomains[rowKey];
 
                                     return (
-                                      <>
-                                        <tr key={rowKey} className={`hover:bg-gray-700/30 transition-colors ${isExpanded ? 'bg-gray-700/50' : ''}`}>
+                                      <Fragment key={rowKey}>
+                                        <tr className={`hover:bg-gray-700/30 transition-colors ${isExpanded ? 'bg-gray-700/50' : ''}`}>
                                           <td className="px-2 py-3 text-center">
                                             {hasVar && (
                                               <button
@@ -639,8 +640,8 @@ export default function APIDiscoveryPage() {
                                           <td className="px-4 py-3 text-gray-300 text-xs font-semibold">{item.host}</td>
                                           <td className="px-4 py-3">
                                             <span className={`px-2 py-1 rounded font-mono text-xs font-bold ${item.method === 'GET' ? 'bg-green-600/30 text-green-300' :
-                                                item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
-                                                  'bg-gray-600/30 text-gray-300'
+                                              item.method === 'POST' ? 'bg-blue-600/30 text-blue-300' :
+                                                'bg-gray-600/30 text-gray-300'
                                               }`}>
                                               {item.method}
                                             </span>
@@ -674,7 +675,7 @@ export default function APIDiscoveryPage() {
                                             </td>
                                           </tr>
                                         )}
-                                      </>
+                                      </Fragment>
                                     );
                                   })}
                               </tbody>
