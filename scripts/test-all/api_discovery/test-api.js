@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { getApiToken, colors, log } = require('../helpers');
+const { getApiToken, colors, log } = require('../libs/api-helper');
 
 // --- Configuration ---
 const API_BASE_URL = 'http://localhost:8002/api/scrape';

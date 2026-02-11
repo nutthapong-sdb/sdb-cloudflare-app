@@ -1,7 +1,7 @@
 // Helper functions for test scripts
 // Use this in all test scripts to ensure consistency
 
-require('dotenv').config({ path: require('path').join(__dirname, '../.env.local') });
+require('dotenv').config({ path: require('path').join(__dirname, '../../../.env.local') });
 
 // Get API Token from environment
 function getApiToken() {

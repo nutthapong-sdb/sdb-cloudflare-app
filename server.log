@@ -1,0 +1,81 @@
+
+> sdb-cd-discovery-scraping@0.1.0 dev
+> next dev -p 8002
+
+▲ Next.js 16.1.1 (Turbopack)
+- Local:         http://localhost:8002
+- Network:       http://192.168.1.136:8002
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 1117ms
+ HEAD / 200 in 632ms (compile: 587ms, render: 45ms)
+(node:2903) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ POST /api/scrape 200 in 1645ms (compile: 105ms, render: 1540ms)
+ POST /api/scrape 200 in 1499ms (compile: 3ms, render: 1496ms)
+🔍 Fetching API Discovery for Zone: d71d0d3cd46afbcfc392ba7da5788450...
+Discovery API Error: {
+  result: null,
+  success: false,
+  errors: [ { code: 10403, message: 'You are not entitled for this service' } ],
+  messages: []
+}
+⚠️ API Discovery not available - this could be due to:
+   - Token lacks API Gateway permissions
+   - Zone does not have API Gateway Discovery enabled
+   - Feature not available on this plan
+→ Returning empty discoveries list
+ POST /api/scrape 200 in 1149ms (compile: 2ms, render: 1146ms)
+
+🔍 [DEBUG] RAW BOT MANAGEMENT for Zone d71d0d3cd46afbcfc392ba7da5788450:
+{
+  "enable_js": false,
+  "fight_mode": false,
+  "ai_bots_protection": "disabled",
+  "crawler_protection": "disabled",
+  "is_robots_txt_managed": false,
+  "cf_robots_variant": "policy_only",
+  "using_latest_model": true
+}
+Ruleset Rate Limit fetch failed (api): 404 could not find entrypoint ruleset in the http_ratelimit phase
+ POST /api/scrape 200 in 9.0s (compile: 803µs, render: 9.0s)
+📝 Fetching ALL DNS Records for Zone: d71d0d3cd46afbcfc392ba7da5788450...
+   Fetching page 1... Found 7 records.
+   Fetching Load Balancers... Found 0 Load Balancers.
+   📉 Filtered DNS Only records: 7 -> 0 (Proxied Only)
+
+🔍 [DEBUG] RAW DNS RECORDS for Zone d71d0d3cd46afbcfc392ba7da5788450:
+Total Fetched: 0 (incl. 0 LBs)
+---------------------------------------------------
+
+ POST /api/scrape 200 in 1695ms (compile: 784µs, render: 1694ms)
+🔹 API: Traffic Request Received for Zone: d71d0d3cd46afbcfc392ba7da5788450
+❌ Cloudflare GraphQL Errors: [
+  {
+    "message": "zone 'd71d0d3cd46afbcfc392ba7da5788450' does not have access to the path. Refer to this page for more details about access controls: https://developers.cloudflare.com/analytics/graphql-api/errors/",
+    "path": [
+      "GetZoneAnalytics",
+      "viewer",
+      "zones",
+      "0",
+      "firewallRules"
+    ],
+    "extensions": {
+      "code": "authz",
+      "timestamp": "2026-02-11T02:44:19.715338973Z",
+      "ray_id": "9cc080efb6fd2725-AMS"
+    }
+  }
+]
+🔹 API: Sending Traffic Response...
+ POST /api/scrape 200 in 1347ms (compile: 3ms, render: 1344ms)
+ POST /api/scrape 200 in 1405ms (compile: 665µs, render: 1404ms)
+ POST /api/scrape 200 in 1298ms (compile: 3ms, render: 1295ms)
+🔹 API: Traffic Request Received for Zone: 93d69480316a824799294bd1716ff1d8
+🔹 API: Sending Traffic Response...
+ POST /api/scrape 200 in 4.4s (compile: 3ms, render: 4.4s)
+ POST /api/scrape 200 in 1629ms (compile: 701µs, render: 1628ms)
+ POST /api/scrape 200 in 1274ms (compile: 1878µs, render: 1272ms)
+🔍 Fetching Firewall Logs for Zone: 19647477578f706f508ffa416d8e06e9, Rule: 18e96f1b9dc044daa9f5a3d302bda61d...
+ POST /api/scrape 200 in 2.7s (compile: 3ms, render: 2.7s)
