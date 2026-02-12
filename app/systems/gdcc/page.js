@@ -1997,6 +1997,18 @@ export default function GDCCPage() {
             }
 
             // Use verified LOCAL data
+            // Fetch Zone-Wide Stats FIRST (Fix: stats is not defined)
+            updateProgress('Fetching Zone-wide Statistics...', 'step');
+            const zoneStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', selectedZone, batchTimeRange) || {
+                zoneWideRequests: 0,
+                zoneWideCacheRequests: 0,
+                zoneWideDataTransfer: 0,
+                zoneWideCacheDataTransfer: 0,
+                zoneWideTopCountriesReq: [],
+                zoneWideTopCountriesBytes: [],
+                fwEvents: { total: 0, managed: 0, custom: 0, bic: 0, access: 0 }
+            };
+
             const domainReportData = {
                 domain: zones.find(z => z.id === selectedZone)?.name,
                 totalRequests: totalRequests,
@@ -2057,15 +2069,15 @@ export default function GDCCPage() {
                 rateLimits: localZoneSettings?.rateLimits,
 
                 // --- New Traffic & Cache Stats (Always Zone-Wide) ---
-                zoneTotalRequests: stats.zoneWideRequests.toLocaleString(),
-                zoneCacheHitRequests: stats.zoneWideCacheRequests.toLocaleString(),
-                zoneCacheHitRequestsRatio: stats.zoneWideRequests > 0 ? ((stats.zoneWideCacheRequests / stats.zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
-                zoneTotalDataTransfer: (stats.zoneWideRequests > 0 ? (stats.zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
-                zoneCacheHitDataTransfer: (stats.zoneWideRequests > 0 ? (stats.zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
-                zoneCacheHitDataTransferRatio: stats.zoneWideDataTransfer > 0 ? ((stats.zoneWideCacheDataTransfer / stats.zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
-                zoneTopCountriesReq: stats.zoneWideTopCountriesReq,
-                zoneTopCountriesBytes: stats.zoneWideTopCountriesBytes,
-                fwEvents: stats.fwEvents
+                zoneTotalRequests: zoneStats.zoneWideRequests.toLocaleString(),
+                zoneCacheHitRequests: zoneStats.zoneWideCacheRequests.toLocaleString(),
+                zoneCacheHitRequestsRatio: zoneStats.zoneWideRequests > 0 ? ((zoneStats.zoneWideCacheRequests / zoneStats.zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
+                zoneTotalDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                zoneCacheHitDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                zoneCacheHitDataTransferRatio: zoneStats.zoneWideDataTransfer > 0 ? ((zoneStats.zoneWideCacheDataTransfer / zoneStats.zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
+                zoneTopCountriesReq: zoneStats.zoneWideTopCountriesReq,
+                zoneTopCountriesBytes: zoneStats.zoneWideTopCountriesBytes,
+                fwEvents: zoneStats.fwEvents
             };
 
 

@@ -64,6 +64,9 @@ description: เรียก workflow นี้ทุกครั้งที่
 
    # Test GDCC System (Report Download)
    node scripts/test-all/gdcc/test-gdcc.js
+   
+   # Test GDCC Batch Report (30 Days Generation)
+   node scripts/test-all/gdcc/test-report-generation.js
 
    # Test Firewall Logs System (CSV Download)
    node scripts/test-all/firewall/test-firewall.js
