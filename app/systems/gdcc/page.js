@@ -308,9 +308,16 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     // Regex explanation: Match <tr...> content @VARIABLE content </tr>
     // (?:(?!<\/tr>)[\s\S])*  matches any content that does NOT contain "</tr>"
     const dnsRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@DNS_TOTAL_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
-    if (dnsRegex.test(html) && dnsRowsHtml) {
-        html = html.replace(dnsRegex, dnsRowsHtml);
+    if (dnsRegex.test(html)) {
+        if (dnsRowsHtml) {
+            // Has data: replace with new rows
+            html = html.replace(dnsRegex, dnsRowsHtml);
+        } else {
+            // Empty data: remove the entire row
+            html = html.replace(dnsRegex, '');
+        }
     } else {
+        // Fallback: simple replacement (no <tr> wrapper found)
         html = html.replace(/@DNS_TOTAL_ROWS(@)?/g, dnsRowsHtml);
     }
 
@@ -368,9 +375,16 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 
     // Smart replacement: IP Access Rules
     const ipAccessRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@IP_ACCESS_RULES_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
-    if (ipAccessRegex.test(html) && ipAccessRulesHtml) {
-        html = html.replace(ipAccessRegex, ipAccessRulesHtml);
+    if (ipAccessRegex.test(html)) {
+        if (ipAccessRulesHtml) {
+            // Has data: replace with new rows
+            html = html.replace(ipAccessRegex, ipAccessRulesHtml);
+        } else {
+            // Empty data: remove the entire row
+            html = html.replace(ipAccessRegex, '');
+        }
     } else {
+        // Fallback: simple replacement (no <tr> wrapper found)
         html = html.replace(/@IP_ACCESS_RULES_ROWS(@)?/g, ipAccessRulesHtml);
     }
 
@@ -392,9 +406,16 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     }
     // Smart replacement: Custom Rules
     const customRulesRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@CUSTOM_RULES_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
-    if (customRulesRegex.test(html) && customRulesHtml) {
-        html = html.replace(customRulesRegex, customRulesHtml);
+    if (customRulesRegex.test(html)) {
+        if (customRulesHtml) {
+            // Has data: replace with new rows
+            html = html.replace(customRulesRegex, customRulesHtml);
+        } else {
+            // Empty data: remove the entire row
+            html = html.replace(customRulesRegex, '');
+        }
     } else {
+        // Fallback: simple replacement (no <tr> wrapper found)
         html = html.replace(/@CUSTOM_RULES_ROWS(@)?/g, customRulesHtml);
     }
 
@@ -417,10 +438,16 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 
     // Smart replacement: Rate Limit Rules
     const rateLimitRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@RATE_LIMITING_RULES_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
-    if (rateLimitRegex.test(html) && rateLimitRulesHtml) {
-        html = html.replace(rateLimitRegex, rateLimitRulesHtml);
+    if (rateLimitRegex.test(html)) {
+        if (rateLimitRulesHtml) {
+            // Has data: replace with new rows
+            html = html.replace(rateLimitRegex, rateLimitRulesHtml);
+        } else {
+            // Empty data: remove the entire row
+            html = html.replace(rateLimitRegex, '');
+        }
     } else {
-        // Fallback for simple replacement
+        // Fallback: simple replacement (no <tr> wrapper found)
         html = html.replace(/@RATE_LIMITING_RULES_ROWS(@)?/g, rateLimitRulesHtml);
     }
 
