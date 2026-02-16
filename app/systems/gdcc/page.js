@@ -3000,7 +3000,7 @@ export default function GDCCPage() {
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
                             <LayoutDashboard className={`w-5 h-5 ${theme.accent}`} />
-                            <h1 className={`text-sm font-bold ${theme.text}`}>GDCC <span className={theme.subText}>Analytics</span></h1>
+                            <h1 className={`text-sm font-bold ${theme.text}`}>Cloudflare <span className={theme.subText}>Report</span></h1>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -3011,6 +3011,19 @@ export default function GDCCPage() {
                             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors"
                         >
                             <List className="w-3 h-3" /> Create Report
+                        </button>
+
+                        {/* GENERATE DASHBOARD BUTTON */}
+                        <button
+                            onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange)}
+                            disabled={!selectedSubDomain || loadingStats}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${!selectedSubDomain || loadingStats
+                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                                }`}
+                        >
+                            {loadingStats ? <Activity className="w-3 h-3 animate-spin" /> : <Activity className="w-3 h-3" />}
+                            {loadingStats ? 'Generating...' : 'Generate Dashboard'}
                         </button>
 
                         {/* SETTINGS DROPDOWN (with Report Template submenu) */}
@@ -3148,27 +3161,13 @@ export default function GDCCPage() {
                     <SearchableDropdown theme={theme} icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingDNS && subDomains.length === 0} />
                 </div>
 
-                {/* ACTIONS & TIME RANGE */}
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                    {/* Manual Generate Button */}
-                    <button
-                        onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange)}
-                        disabled={!selectedSubDomain || loadingStats}
-                        className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold shadow-lg transition-all border ${!selectedSubDomain || loadingStats
-                            ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                            : 'bg-blue-600 border-blue-500 hover:bg-blue-500 text-white hover:shadow-blue-500/20 active:scale-95'
-                            }`}
-                    >
-                        {loadingStats ? <Activity className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                        {loadingStats ? 'GENERATING...' : 'GENERATE DASHBOARD'}
-                    </button>
 
-                    <div className="flex justify-end">
-                        <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
-                            {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
-                                <button key={t.val} onClick={() => setTimeRange(t.val)} className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{t.label}</button>
-                            ))}
-                        </div>
+                {/* TIME RANGE SELECTOR */}
+                <div className="flex justify-end items-center mb-4">
+                    <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
+                        {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
+                            <button key={t.val} onClick={() => setTimeRange(t.val)} className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{t.label}</button>
+                        ))}
                     </div>
                 </div>
 
