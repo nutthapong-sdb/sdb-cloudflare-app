@@ -1080,8 +1080,14 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     const [batchTimeRange, setBatchTimeRange] = useState(1440);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Filter hosts based on search
-    const filteredHosts = hosts.filter(h => h.toLowerCase().includes(searchTerm.toLowerCase()));
+    // FILTER LOGIC & DEBUGGING
+    const filteredHosts = hosts.filter(h => {
+        const hStr = String(h || '');
+        const match = hStr.toLowerCase().includes(searchTerm.toLowerCase());
+        return match;
+    });
+
+    // console.log('🔍 Modal Render:', { term: searchTerm, total: hosts.length, visible: filteredHosts.length });
 
     useEffect(() => {
         if (isOpen) {
@@ -1089,6 +1095,10 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
             setSearchTerm(''); // Reset search
         }
     }, [isOpen]);
+
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
+    };
 
     const toggleAll = () => {
         // Toggle based on filtered hosts if search is active, or all hosts?
@@ -1158,7 +1168,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                                 type="text"
                                 placeholder="Filter sub-domains..."
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={handleSearchChange}
                                 className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-600"
                             />
                         </div>
