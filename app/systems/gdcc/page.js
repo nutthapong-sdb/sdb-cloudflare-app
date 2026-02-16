@@ -1490,6 +1490,7 @@ export default function GDCCPage() {
     const [fwEvents, setFwEvents] = useState({ total: 0, managed: 0, custom: 0, bic: 0, access: 0 });
 
     const fetchAndApplyTrafficData = async (subdomain, zoneId, timeRange) => {
+        setLoadingStats(true); // Start manual generation spinner
         const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
         console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (Range: ${timeRange}m)`);
 
@@ -1937,6 +1938,7 @@ export default function GDCCPage() {
         };
 
         setLoadingStats(false);
+        setHasGenerated(true); // Mark generation as complete
         return stats;
     };
 
@@ -2416,7 +2418,9 @@ export default function GDCCPage() {
     };
 
     const [loadingZones, setLoadingZones] = useState(false);
-    const [loadingStats, setLoadingStats] = useState(false);
+    const [loadingStats, setLoadingStats] = useState(false); // Dashboard Generation Loading
+    const [loadingDNS, setLoadingDNS] = useState(false); // DNS Loading (Subdomain List)
+    const [hasGenerated, setHasGenerated] = useState(false); // Flag for manual generation
 
     // --- DYNAMIC DASHBOARD DATA STATES ---
     const [rawData, setRawData] = useState([]);
@@ -2544,6 +2548,7 @@ export default function GDCCPage() {
     };
 
     const resetDashboardData = () => {
+        setHasGenerated(false); // Reset generation flag
         setRawData([]); setTotalRequests(0); setAvgResponseTime(0); setBlockedEvents(0); setLogEvents(0);
         setThroughputData([]); setAttackSeriesData([]); setDetailedAttackList([]);
         setHttpStatusSeriesData({ data: [], keys: [] });
@@ -2560,7 +2565,7 @@ export default function GDCCPage() {
         if (!selectedZone) { resetDashboardData(); setSubDomains([]); return; }
 
         const loadDNS = async () => {
-            setLoadingStats(true); setSelectedSubDomain(''); setSubDomains([]);
+            setLoadingDNS(true); setSelectedSubDomain(''); setSubDomains([]);
             const dnsRes = await callAPI('get-dns-records', { zoneId: selectedZone });
             const allHosts = new Set();
             if (dnsRes && dnsRes.data) {
@@ -2591,7 +2596,7 @@ export default function GDCCPage() {
                 setSelectedSubDomain('ALL_SUBDOMAINS');
             }
 
-            setLoadingStats(false);
+            setLoadingDNS(false);
         };
         loadDNS();
 
@@ -2950,7 +2955,7 @@ export default function GDCCPage() {
                 <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 p-5 rounded-xl border border-dashed ${theme.selectorContainer}`}>
                     <SearchableDropdown theme={theme} icon={<Key className="w-4 h-4 text-blue-400" />} label="Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))} value={selectedAccount} onChange={(val) => handleAccountChange(val, false)} loading={loading && accounts.length === 0} />
                     <SearchableDropdown theme={theme} icon={<Server className="w-4 h-4 text-green-400" />} label="Select Zone (Domain)" placeholder={!selectedAccount ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."} options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))} value={selectedZone} onChange={setSelectedZone} loading={loadingZones} />
-                    <SearchableDropdown theme={theme} icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingStats && subDomains.length === 0} />
+                    <SearchableDropdown theme={theme} icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingDNS && subDomains.length === 0} />
                 </div>
 
                 {/* ACTIONS & TIME RANGE */}
@@ -2978,7 +2983,7 @@ export default function GDCCPage() {
                 </div>
 
                 {/* DASHBOARD */}
-                <div className={`space-y-4 transition-all duration-500 ${selectedSubDomain && !loadingStats ? 'opacity-100 filter-none' : 'opacity-40 grayscale blur-sm'}`}>
+                <div className={`space-y-4 transition-all duration-500 ${selectedSubDomain && hasGenerated && !loadingStats ? 'opacity-100 filter-none' : 'opacity-40 grayscale blur-sm'}`}>
 
                     {/* STATS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
