@@ -13,6 +13,23 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
         if (isOpen) fetchTemplates();
     }, [isOpen]);
 
+    // ESC key to close modal
+    useEffect(() => {
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isOpen, onClose]);
+
     const fetchTemplates = async () => {
         setLoading(true);
         const list = await listTemplates();
