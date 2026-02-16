@@ -129,6 +129,11 @@ const formatThaiDate = (date) => {
 };
 
 // --- TEMPLATE PROCESSING ---
+// Helper to escape special regex characters
+const escapeRegExp = (string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 const formatCompactNumber = (num) => {
     if (!num || isNaN(num)) return '0';
     if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
@@ -256,6 +261,8 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@TOP_UA_VAL': safeData.topUserAgents && safeData.topUserAgents.length > 0 ? safeData.topUserAgents[0].agent : '-',
         '@TOP_COUNTRY_VAL': safeData.topCountries && safeData.topCountries.length > 0 ? getCountryName(safeData.topCountries[0].name) : '-',
         '@TOP_HOST_VAL': safeData.topHosts && safeData.topHosts.length > 0 ? safeData.topHosts[0].host : '-',
+        // Page Break for Word
+        '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -459,7 +466,9 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
     for (const key of sortedKeys) {
         const val = replacements[key];
         // Support @VARIABLE and @VARIABLE@
-        const regex = new RegExp(key + '(@)?', 'g');
+        // Escape special regex characters in the key
+        const escapedKey = escapeRegExp(key);
+        const regex = new RegExp(escapedKey + '(@)?', 'g');
         html = html.replace(regex, val);
     }
 
@@ -939,7 +948,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES',
                                                     '@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS',
                                                     '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL',
-                                                    '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST'
+                                                    '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST',
+                                                    '@PAGE_BREAK@'
                                                 ].map(v => (
                                                     <button
                                                         key={v}
@@ -964,6 +974,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                             , '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO'
                                                             , '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'
                                                             , '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL'
+                                                            , '@PAGE_BREAK@'
                                                         ].map(v => (
                                                             <button
                                                                 key={v}
@@ -3178,7 +3189,7 @@ export default function GDCCPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Card theme={theme} title="Total Requests"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-blue-400">{totalRequests.toLocaleString()}</span><span className="text-xl font-thai opacity-60">Req</span></div></Card>
                         <Card theme={theme} title="Avg Response Time (TTFB)"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-purple-400">{avgResponseTime}</span><span className="text-xl opacity-60">ms</span></div></Card>
-                        <Card theme={theme} title="Blocked Events"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-orange-400">{blockedEvents}</span><span className="text-xl font-thai opacity-60">Events</span></div></Card>
+                        <Card theme={theme} title="Blocked Events"><div className="flex items-baseline gap-2"><span className="text-6xl font-bold text-orange-400">{blockedEvents.toLocaleString()}</span><span className="text-xl font-thai opacity-60">Events</span></div></Card>
                     </div>
 
                     {/* CHARTS ROW 1 */}
