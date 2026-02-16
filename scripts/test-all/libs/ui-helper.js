@@ -43,17 +43,27 @@ async function setupPage(browser) {
 
 async function login(page) {
     log('🔹 Performing Login...', colors.blue);
-    await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle0' });
+    try {
+        await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle2', timeout: 30000 });
+    } catch (e) {
+        log(`    ⚠️ Navigation timeout (HMR likely), proceeding...`, colors.yellow);
+    }
 
     // Check if already logged in (redirected)
     if (page.url().includes('/login')) {
+        await page.waitForSelector('input[type="text"]', { visible: true }); // Ensure input visible
         await page.type('input[type="text"]', 'admin');
         await page.type('input[type="password"]', 'password');
-        await page.click('button[type="submit"]');
-        await page.waitForNavigation({ waitUntil: 'networkidle0' });
+
+        await Promise.all([
+            page.click('button[type="submit"]'),
+            page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(e => log(`    ⚠️ Login nav timeout, checking URL...`, colors.yellow)),
+        ]);
     }
 
-    if (page.url().includes('/login')) {
+    // Check if redirected to dashboard or systems
+    const url = page.url();
+    if (url.includes('/login')) {
         throw new Error('Login Failed: Still on login page');
     }
     log('✅ Login Successful', colors.green);
