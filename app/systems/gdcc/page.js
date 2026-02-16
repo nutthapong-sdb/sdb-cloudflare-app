@@ -168,7 +168,7 @@ const formatActionName = (action) => {
     ).join(' ');
 };
 
-const processTemplate = (tmpl, safeData, now = new Date()) => {
+const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null) => {
     // If static template mode, return raw HTML (no replacement)
     // Mode check removed here as we pass safeData specifically for processing
     let html = tmpl;
@@ -263,6 +263,8 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         '@TOP_HOST_VAL': safeData.topHosts && safeData.topHosts.length > 0 ? safeData.topHosts[0].host : '-',
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
+        // Dashboard Screenshot Image
+        '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6 flex justify-center"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="600" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -678,7 +680,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     // --- TEMPLATE PROCESSING ---
     const getProcessedHtml = () => {
         // Even for static template, we want to process date variables
-        return processTemplate(localTemplate, safeData, new Date());
+        return processTemplate(localTemplate, safeData, new Date(), dashboardImage);
     };
 
     // --- COPY FUNCTION ---
@@ -879,19 +881,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     `}} />
                     <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
-                        {/* Image only in Preview (Report Mode) */}
-                        {mode === 'report' && !isEditing && dashboardImage && (
-                            <div className="mb-6 flex justify-center">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                    src={dashboardImage}
-                                    alt="Dashboard Snapshot"
-                                    width={600}
-                                    style={{ height: 'auto', display: 'block', margin: '0 auto' }}
-                                />
-                            </div>
-                        )}
-
                         {isEditing ? (
                             <div className="flex gap-4 h-full">
                                 {/* Editor Section - Left */}
@@ -949,7 +938,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     '@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS',
                                                     '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL',
                                                     '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST',
-                                                    '@PAGE_BREAK@'
+                                                    '@PAGE_BREAK@',
+                                                    '@DASHBOARD_IMAGE@'
                                                 ].map(v => (
                                                     <button
                                                         key={v}
@@ -1246,12 +1236,18 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     }, [isOpen, onClose]);
 
 
+
     // FILTER LOGIC & DEBUGGING
+    const NO_SUBDOMAIN = '__NO_SUBDOMAIN__'; // Special identifier
+
     const filteredHosts = hosts.filter(h => {
         const hStr = String(h || '');
         const match = hStr.toLowerCase().includes(searchTerm.toLowerCase());
         return match;
     });
+
+    // Always prepend "No Subdomain" option at the beginning
+    const displayHosts = [NO_SUBDOMAIN, ...filteredHosts];
 
     // console.log('🔍 Modal Render:', { term: searchTerm, total: hosts.length, visible: filteredHosts.length });
 
@@ -1267,12 +1263,14 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     };
 
     const toggleAll = () => {
-        // Toggle based on filtered hosts if search is active, or all hosts?
-        // Let's toggle ALL visible hosts
-        const allVisibleSelected = filteredHosts.every(h => selected.has(h));
+        // Toggle ALL hosts (excluding NO_SUBDOMAIN)
+        const allRealHostsSelected = filteredHosts.every(h => selected.has(h));
 
         const newSet = new Set(selected);
-        if (allVisibleSelected) {
+        // Remove NO_SUBDOMAIN if present
+        newSet.delete(NO_SUBDOMAIN);
+
+        if (allRealHostsSelected) {
             filteredHosts.forEach(h => newSet.delete(h));
         } else {
             filteredHosts.forEach(h => newSet.add(h));
@@ -1282,8 +1280,22 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
 
     const toggleOne = (host) => {
         const newSet = new Set(selected);
-        if (newSet.has(host)) newSet.delete(host);
-        else newSet.add(host);
+
+        // If selecting NO_SUBDOMAIN, clear all others
+        if (host === NO_SUBDOMAIN) {
+            newSet.clear();
+            if (!selected.has(NO_SUBDOMAIN)) {
+                newSet.add(NO_SUBDOMAIN);
+            }
+        } else {
+            // If selecting a real host, remove NO_SUBDOMAIN
+            newSet.delete(NO_SUBDOMAIN);
+            if (newSet.has(host)) {
+                newSet.delete(host);
+            } else {
+                newSet.add(host);
+            }
+        }
         setSelected(newSet);
     };
 
@@ -1355,29 +1367,34 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
                         <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
-                            {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect Visible' : 'Select Visible'}
+                            {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect All' : 'Select All'}
                         </button>
                     </div>
-                    {filteredHosts.length === 0 ? (
+                    {displayHosts.length === 0 ? (
                         <div className="text-center text-gray-500 py-8 text-sm italic">
-                            {hosts.length === 0 ? "No sub-domains available." : "No matching sub-domains found."}
+                            No sub-domains available.
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            {filteredHosts.map(host => (
-                                <label key={host} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700 group">
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? 'bg-blue-600 border-blue-600' : 'border-gray-600 group-hover:border-gray-500'}`}>
-                                        {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                    </div>
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.has(host)}
-                                        onChange={() => toggleOne(host)}
-                                        className="hidden"
-                                    />
-                                    <span className={`text-sm ${selected.has(host) ? 'text-white font-medium' : 'text-gray-400'}`}>{host}</span>
-                                </label>
-                            ))}
+                            {displayHosts.map(host => {
+                                const isNoSubdomain = host === NO_SUBDOMAIN;
+                                const displayName = isNoSubdomain ? 'No Subdomain' : host;
+
+                                return (
+                                    <label key={host} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${isNoSubdomain ? 'bg-yellow-900/20 hover:bg-yellow-900/30 border-yellow-700/50 hover:border-yellow-600' : 'bg-gray-800/50 hover:bg-gray-800 border-transparent hover:border-gray-700'} group`}>
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? 'bg-yellow-600 border-yellow-600' : 'bg-blue-600 border-blue-600') : (isNoSubdomain ? 'border-yellow-700 group-hover:border-yellow-600' : 'border-gray-600 group-hover:border-gray-500')}`}>
+                                            {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={selected.has(host)}
+                                            onChange={() => toggleOne(host)}
+                                            className="hidden"
+                                        />
+                                        <span className={`text-sm ${selected.has(host) ? 'text-white font-medium' : (isNoSubdomain ? 'text-yellow-400' : 'text-gray-400')}`}>{displayName}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -1386,12 +1403,17 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                 <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
                     <button
-                        onClick={() => onConfirm(Array.from(selected), batchTimeRange, selectedTemplateId)}
+                        onClick={() => {
+                            // If NO_SUBDOMAIN is selected, send empty array
+                            // Otherwise, filter out NO_SUBDOMAIN from the selection
+                            const hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
+                            onConfirm(hostsToGenerate, batchTimeRange, selectedTemplateId);
+                        }}
                         disabled={selected.size === 0}
                         className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
                     >
                         <FileText className="w-3 h-3" />
-                        Generate {selected.size > 0 ? `(${selected.size})` : ''} Reports
+                        {selected.has(NO_SUBDOMAIN) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
                     </button>
                 </div>
             </div>
@@ -3019,7 +3041,11 @@ export default function GDCCPage() {
                         {/* CREATE REPORT BUTTON */}
                         <button
                             onClick={() => setIsBatchModalOpen(true)}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs transition-colors"
+                            disabled={!selectedAccount || !selectedZone}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${!selectedAccount || !selectedZone
+                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                }`}
                         >
                             <List className="w-3 h-3" /> Create Report
                         </button>
