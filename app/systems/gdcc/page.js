@@ -1077,20 +1077,31 @@ const THEMES = {
 // Batch Report Modal Component
 const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     const [selected, setSelected] = useState(new Set());
-    const [batchTimeRange, setBatchTimeRange] = useState(1440); // Default 1d
+    const [batchTimeRange, setBatchTimeRange] = useState(1440);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // Filter hosts based on search
+    const filteredHosts = hosts.filter(h => h.toLowerCase().includes(searchTerm.toLowerCase()));
 
     useEffect(() => {
         if (isOpen) {
             setSelected(new Set()); // Reset on open
+            setSearchTerm(''); // Reset search
         }
     }, [isOpen]);
 
     const toggleAll = () => {
-        if (selected.size === hosts.length) {
-            setSelected(new Set());
+        // Toggle based on filtered hosts if search is active, or all hosts?
+        // Let's toggle ALL visible hosts
+        const allVisibleSelected = filteredHosts.every(h => selected.has(h));
+
+        const newSet = new Set(selected);
+        if (allVisibleSelected) {
+            filteredHosts.forEach(h => newSet.delete(h));
         } else {
-            setSelected(new Set(hosts));
+            filteredHosts.forEach(h => newSet.add(h));
         }
+        setSelected(newSet);
     };
 
     const toggleOne = (host) => {
@@ -1139,17 +1150,33 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                         </div>
                     </div>
 
+                    {/* Live Search Input (New) */}
+                    <div className="mb-3">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
+                            <input
+                                type="text"
+                                placeholder="Filter sub-domains..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-600"
+                            />
+                        </div>
+                    </div>
+
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
                         <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
-                            {selected.size === hosts.length && hosts.length > 0 ? 'Deselect All' : 'Select All'}
+                            {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect Visible' : 'Select Visible'}
                         </button>
                     </div>
-                    {hosts.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8 text-sm italic">No sub-domains available.</div>
+                    {filteredHosts.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8 text-sm italic">
+                            {hosts.length === 0 ? "No sub-domains available." : "No matching sub-domains found."}
+                        </div>
                     ) : (
                         <div className="space-y-2">
-                            {hosts.map(host => (
+                            {filteredHosts.map(host => (
                                 <label key={host} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700 group">
                                     <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? 'bg-blue-600 border-blue-600' : 'border-gray-600 group-hover:border-gray-500'}`}>
                                         {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
@@ -1189,7 +1216,9 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon, theme }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [focusedIndex, setFocusedIndex] = useState(-1);
     const dropdownRef = useRef(null);
+    const listRef = useRef(null);
 
     // Default theme fallback
     const t = theme ? theme.dropdown : {
@@ -1202,7 +1231,8 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
         active: 'bg-blue-600 text-white',
         label: 'text-gray-400',
         placeholder: 'text-gray-500',
-        inputText: 'text-white'
+        inputText: 'text-white',
+        focused: 'bg-gray-700 text-white' // Helper for keyboard focus
     };
 
     const filteredOptions = options.filter(option =>
@@ -1216,7 +1246,61 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
         onChange(optionValue);
         setIsOpen(false);
         setSearchTerm('');
+        setFocusedIndex(-1);
     };
+
+    // Reset focus when options change or open
+    useEffect(() => {
+        setFocusedIndex(-1);
+    }, [isOpen, searchTerm]);
+
+    const handleKeyDown = (e) => {
+        if (!isOpen) {
+            if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === ' ') {
+                e.preventDefault();
+                setIsOpen(true);
+            }
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setFocusedIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
+                // Scroll logic could go here
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setFocusedIndex(prev => (prev > 0 ? prev - 1 : prev));
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (focusedIndex >= 0 && filteredOptions[focusedIndex]) {
+                    handleSelect(filteredOptions[focusedIndex].value);
+                } else if (filteredOptions.length === 1) {
+                    // Auto select single result if enter pressed? Optional but nice.
+                    handleSelect(filteredOptions[0].value);
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                setIsOpen(false);
+                break;
+            case 'Tab':
+                setIsOpen(false);
+                break;
+        }
+    };
+
+    // Scroll focused item into view
+    useEffect(() => {
+        if (isOpen && focusedIndex >= 0 && listRef.current) {
+            const focusedItem = listRef.current.children[focusedIndex];
+            if (focusedItem) {
+                focusedItem.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [focusedIndex, isOpen]);
 
     return (
         <div className="space-y-2 relative" ref={dropdownRef}>
@@ -1225,7 +1309,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                 {label}
             </label>
 
-            <div className="relative">
+            <div className="relative" onKeyDown={handleKeyDown}>
                 <div
                     onClick={() => !loading && setIsOpen(!isOpen)}
                     className={`
@@ -1234,6 +1318,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
              ${t.bg} border ${t.border}
              ${isOpen ? 'ring-2 ring-blue-500/50 border-blue-500' : 'hover:opacity-80'}
           `}
+                    tabIndex={0} // Make accessible/focusable
                 >
                     {isOpen ? (
                         <input
@@ -1256,25 +1341,29 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                 </div>
 
                 {isOpen && (
-                    <div className={`absolute z-[100] w-full mt-1 ${t.menuBg} border ${t.menuBorder} rounded-lg shadow-xl max-h-60 overflow-y-auto`}>
+                    <div ref={listRef} className={`absolute z-[100] w-full mt-1 ${t.menuBg} border ${t.menuBorder} rounded-lg shadow-xl max-h-60 overflow-y-auto`}>
                         {loading ? (
                             <div className="p-3 text-center text-xs text-gray-400">Loading...</div>
                         ) : filteredOptions.length === 0 ? (
                             <div className="p-3 text-center text-xs text-gray-400">No results found</div>
                         ) : (
-                            filteredOptions.map((option) => (
-                                <div
-                                    key={option.value}
-                                    onMouseDown={() => handleSelect(option.value)}
-                                    className={`
+                            filteredOptions.map((option, index) => {
+                                const isFocused = index === focusedIndex;
+                                return (
+                                    <div
+                                        key={option.value}
+                                        onMouseDown={() => handleSelect(option.value)}
+                                        onMouseEnter={() => setFocusedIndex(index)} // Mouse hover updates focus too
+                                        className={`
                     px-4 py-2 cursor-pointer transition-colors text-sm
-                    ${value === option.value ? t.active : `${t.hover} ${t.text}`}
+                    ${value === option.value ? t.active : isFocused ? (t.focused || 'bg-gray-700 text-white') : `${t.hover} ${t.text}`}
                   `}
-                                >
-                                    <div className="font-medium">{option.label}</div>
-                                    {option.subtitle && <div className="text-xs opacity-60">{option.subtitle}</div>}
-                                </div>
-                            ))
+                                    >
+                                        <div className="font-medium">{option.label}</div>
+                                        {option.subtitle && <div className="text-xs opacity-60">{option.subtitle}</div>}
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                 )}
