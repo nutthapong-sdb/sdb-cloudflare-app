@@ -28,6 +28,8 @@ description: ขั้นตอนการพัฒนา แก้ไข แ�
    - ใช้ `libs/ui-helper.js` เพื่อจัดการ Browser/Page/Login
    - จำลอง User Flow: Login -> Navigate -> Interact (Click, Type) -> Verify Result (Check Element, Text, Screenshot)
 
+   **สำคัญ:** เมื่อสร้างหรือแก้ไข Script ทดสอบเสร็จสิ้น ให้เพิ่ม path ของไฟล์ Script นั้นลงใน `.agent/workflows/test_all.md` เสมอ เพื่อให้ถูกเรียกใช้งานในการทดสอบรวม (Regression Test)
+
 4. **ดำเนินการทดสอบ (Execution):**
    - รัน Script ทั้งสองไฟล์เพื่อยืนยันความถูกต้อง
    - หากเป็นการแก้ไขฟีเจอร์เดิม ให้รัน Test Suite ทั้งหมดของระบบนั้นๆ เพื่อป้องกัน Regression
