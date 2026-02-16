@@ -74,6 +74,9 @@ description: เรียก workflow นี้ทุกครั้งที่
    # Test GDCC Manual Dashboard Generation (Button Trigger)
    node scripts/test-all/gdcc/test-manual-generation.js
 
+   # Test Template Management API (CRUD & Structure)
+   node scripts/test-all/gdcc/test-template-api.js
+
    # Test Firewall Logs System (CSV Download)
    node scripts/test-all/firewall/test-firewall.js
 

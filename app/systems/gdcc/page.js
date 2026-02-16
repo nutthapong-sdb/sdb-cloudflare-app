@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
-import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate } from '@/app/utils/templateApi';
+import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, listTemplates } from '@/app/utils/templateApi';
+import ManageTemplateModal from './ManageTemplateModal';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -303,7 +304,15 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         console.log('No DNS records found for domain report');
     }
 
-    html = html.replace(/@DNS_TOTAL_ROWS(@)?/g, dnsRowsHtml);
+    // Smart replacement: DNS Records
+    // Regex explanation: Match <tr...> content @VARIABLE content </tr>
+    // (?:(?!<\/tr>)[\s\S])*  matches any content that does NOT contain "</tr>"
+    const dnsRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@DNS_TOTAL_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
+    if (dnsRegex.test(html) && dnsRowsHtml) {
+        html = html.replace(dnsRegex, dnsRowsHtml);
+    } else {
+        html = html.replace(/@DNS_TOTAL_ROWS(@)?/g, dnsRowsHtml);
+    }
 
     // IP Access Rules - Real data from API
     // Format according to user requirements:
@@ -357,7 +366,13 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
         console.log('No IP Access Rules found for domain report');
     }
 
-    html = html.replace(/@IP_ACCESS_RULES_ROWS(@)?/g, ipAccessRulesHtml);
+    // Smart replacement: IP Access Rules
+    const ipAccessRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@IP_ACCESS_RULES_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
+    if (ipAccessRegex.test(html) && ipAccessRulesHtml) {
+        html = html.replace(ipAccessRegex, ipAccessRulesHtml);
+    } else {
+        html = html.replace(/@IP_ACCESS_RULES_ROWS(@)?/g, ipAccessRulesHtml);
+    }
 
     // Custom Rules - Real data from API
     let customRulesHtml = '';
@@ -375,7 +390,13 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             customRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
         });
     }
-    html = html.replace(/@CUSTOM_RULES_ROWS(@)?/g, customRulesHtml);
+    // Smart replacement: Custom Rules
+    const customRulesRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@CUSTOM_RULES_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
+    if (customRulesRegex.test(html) && customRulesHtml) {
+        html = html.replace(customRulesRegex, customRulesHtml);
+    } else {
+        html = html.replace(/@CUSTOM_RULES_ROWS(@)?/g, customRulesHtml);
+    }
 
     // Rate Limiting Rules - Real data from API
     let rateLimitRulesHtml = '';
@@ -393,7 +414,15 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
             rateLimitRulesHtml += `<tr><td style="width: 5.98335%; border-style: none solid solid; border-color: #000000; border-width: 1px; padding: 0cm 5.4pt;" nowrap="nowrap" width="6%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';"> </span></p></td><td style="width: 72.2553%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" width="71%"><p class="MsoNormal" style="margin-bottom: 0cm; line-height: normal;"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${indent}${rule.description}</span></p></td><td style="width: 21.7613%; border-style: none solid solid none; border-color: #000000; padding: 0cm 5.4pt; border-width: 1px;" nowrap="nowrap" width="21%"><p class="MsoNormal" style="margin-bottom: 0cm; text-align: center; line-height: normal;" align="center"><span lang="EN-US" style="font-size: 16.0pt; font-family: 'TH SarabunPSK',sans-serif; mso-fareast-font-family: 'Times New Roman';">${actionDisplay}</span></p></td></tr>`;
         });
     }
-    html = html.replace(/@RATE_LIMITING_RULES_ROWS(@)?/g, rateLimitRulesHtml);
+
+    // Smart replacement: Rate Limit Rules
+    const rateLimitRegex = /<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?@RATE_LIMITING_RULES_ROWS(?:(?!<\/tr>)[\s\S])*?<\/tr>/i;
+    if (rateLimitRegex.test(html) && rateLimitRulesHtml) {
+        html = html.replace(rateLimitRegex, rateLimitRulesHtml);
+    } else {
+        // Fallback for simple replacement
+        html = html.replace(/@RATE_LIMITING_RULES_ROWS(@)?/g, rateLimitRulesHtml);
+    }
 
     // Sort keys by length descending to prevent shorter keys from partial matching longer ones
     // Example: @ZONE_CACHE_HIT_REQ vs @ZONE_CACHE_HIT_REQ_RATIO
@@ -547,9 +576,11 @@ const processTemplate = (tmpl, safeData, now = new Date()) => {
 // 1. Report Modal Component
 const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report' }) => {
     // mode: 'report' | 'static-template'
+    console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
-    const currentTemplate = template || DEFAULT_TEMPLATE;
+    // Use nullish coalescing to allow empty string (for empty templates)
+    const currentTemplate = template ?? DEFAULT_TEMPLATE;
 
     // Default to editing in static mode, preview in report mode
     const [isEditing, setIsEditing] = useState(false);
@@ -559,7 +590,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // Sync local template when prop changes
     useEffect(() => {
-        setLocalTemplate(template || DEFAULT_TEMPLATE);
+        setLocalTemplate(template ?? DEFAULT_TEMPLATE);
     }, [template, isOpen]);
 
     // Sync mode when opening
@@ -702,7 +733,56 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     };
 
     const handleSave = () => {
-        if (onSaveTemplate) onSaveTemplate(localTemplate);
+        let contentToSave = localTemplate;
+
+        // Cleanup empty table rows logic
+        if (typeof DOMParser !== 'undefined') {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(contentToSave, 'text/html');
+                const tables = doc.querySelectorAll('table');
+                let removedCount = 0;
+
+                tables.forEach(table => {
+                    const rows = Array.from(table.rows);
+                    rows.forEach(row => {
+                        const cells = row.cells;
+                        let isEmptyRow = true;
+
+                        if (!cells || cells.length === 0) {
+                            isEmptyRow = true;
+                        } else {
+                            // Check each cell content
+                            for (let i = 0; i < cells.length; i++) {
+                                const cell = cells[i];
+                                const hasMedia = cell.querySelector('img, svg, canvas, video, hr, iframe, input, button, select, textarea');
+                                // Check text content (trim whitespace and &nbsp;)
+                                const text = (cell.textContent || '').replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]/g, '');
+
+                                if (hasMedia || text.length > 0) {
+                                    isEmptyRow = false; // Found content
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (isEmptyRow) {
+                            row.remove();
+                            removedCount++;
+                        }
+                    });
+                });
+
+                if (removedCount > 0) {
+                    console.log(`Cleanup: Removed ${removedCount} empty rows from tables.`);
+                    contentToSave = doc.body.innerHTML;
+                }
+            } catch (e) {
+                console.warn('Error during table cleanup:', e);
+            }
+        }
+
+        if (onSaveTemplate) onSaveTemplate(contentToSave);
         setIsEditing(false);
     };
 
@@ -720,7 +800,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         <FileText className="w-5 h-5 text-blue-500" />
                         <h3 className="text-lg font-bold text-gray-100">
                             {mode === 'static-template'
-                                ? 'แบบฟอร์มรายงาน (Report Template Source)'
+                                ? 'Domain Report'
                                 : (isEditing
                                     ? 'Edit Report'
                                     : 'Preview Report'
@@ -1079,6 +1159,20 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
     const [selected, setSelected] = useState(new Set());
     const [batchTimeRange, setBatchTimeRange] = useState(1440);
     const [searchTerm, setSearchTerm] = useState('');
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('default');
+
+    useEffect(() => {
+        if (isOpen) {
+            listTemplates().then(list => {
+                setTemplates(list);
+                if (list.length > 0 && !list.find(t => t.id === selectedTemplateId)) {
+                    setSelectedTemplateId('default'); // Fallback
+                }
+            });
+        }
+    }, [isOpen]);
+
 
     // FILTER LOGIC & DEBUGGING
     const filteredHosts = hosts.filter(h => {
@@ -1144,6 +1238,18 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
 
                 {/* Body */}
                 <div className="p-4 overflow-y-auto flex-1">
+                    {/* Template Selector */}
+                    <div className="mb-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">Report Template</label>
+                        <select
+                            value={selectedTemplateId}
+                            onChange={e => setSelectedTemplateId(e.target.value)}
+                            className="bg-gray-800 border border-gray-600 text-white rounded p-2.5 w-full text-sm outline-none focus:border-blue-500 transition-colors appearance-none"
+                        >
+                            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </div>
+
                     {/* Time Range Selector */}
                     <div className="mb-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
                         <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">Time Range</label>
@@ -1208,7 +1314,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                 <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
                     <button
-                        onClick={() => onConfirm(Array.from(selected), batchTimeRange)}
+                        onClick={() => onConfirm(Array.from(selected), batchTimeRange, selectedTemplateId)}
                         disabled={selected.size === 0}
                         className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
                     >
@@ -1952,8 +2058,8 @@ export default function GDCCPage() {
         return stats;
     };
 
-    // Updated handleBatchReport to accept timeRange
-    const handleBatchReport = async (selectedHosts, batchTimeRange) => {
+    // Updated handleBatchReport to accept timeRange and templateId
+    const handleBatchReport = async (selectedHosts, batchTimeRange, templateId = 'default') => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
@@ -2041,15 +2147,17 @@ export default function GDCCPage() {
             console.log('Creating Document Structure from staticReportTemplate.json...');
 
             // ALWAYS load from JSON file - no fallback
-            let domainTemplateContent;
+            let domainTemplateContent, subReportTemplateContent;
             try {
-                const loaded = await loadStaticTemplate();
-                if (!loaded) {
-                    throw new Error('Static template file is empty or invalid');
+                const tid = templateId || 'default';
+                domainTemplateContent = await loadStaticTemplate(tid);
+                subReportTemplateContent = await loadTemplate(tid);
+
+                if (!domainTemplateContent || !subReportTemplateContent) {
+                    throw new Error('Template file is empty or invalid (ID: ' + tid + ')');
                 }
-                domainTemplateContent = loaded;
-                updateProgress('✓ Created Document Structure', 'success');
-                console.log('✓ Created Document Structure');
+                updateProgress('✓ Loaded Report Templates (Domain & Sub-reports)', 'success');
+                console.log('✓ Loaded Report Templates');
             } catch (e) {
                 const errorMsg = e?.message || 'Unknown error loading template';
                 console.error("Failed to load domain template from JSON file:", e);
@@ -2320,8 +2428,8 @@ export default function GDCCPage() {
                     // 5. Generate HTML
                     const htmlStart = performance.now();
                     updateProgress(`Step 5/5: Generating HTML...`, 'step', true);
-                    console.log(`🔨 Step 5/5: Generating HTML report...`);
-                    let reportHtml = processTemplate(reportTemplate, currentReportData, new Date());
+                    console.log(`🔨 Step 5/5: Generating HTML report using template: ${templateId}...`);
+                    let reportHtml = processTemplate(subReportTemplateContent, currentReportData, new Date());
 
                     // Insert Image at the top if captured
                     if (imgData) {
@@ -2677,14 +2785,39 @@ export default function GDCCPage() {
         });
     }, []);
 
+    // -- TEMPLATE MANAGEMENT STATE --
+    const [isManageTemplateModalOpen, setIsManageTemplateModalOpen] = useState(false);
+    const [templateToEditId, setTemplateToEditId] = useState('default');
+
     const handleSaveTemplate = async (newTemplate) => {
         setReportTemplate(newTemplate);
-        await saveTemplate(newTemplate);
+        await saveTemplate(newTemplate, templateToEditId);
+        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
     };
 
     const handleSaveStaticTemplate = async (newTemplate) => {
         setStaticReportTemplate(newTemplate);
-        await saveStaticTemplate(newTemplate);
+        await saveStaticTemplate(newTemplate, templateToEditId);
+        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+    };
+
+    // -- TEMPLATE EDIT HANDLERS --
+    const onEditSub = async (id) => {
+        // Keep manage modal open in background
+        setTemplateToEditId(id);
+        const content = await loadTemplate(id);
+        if (content !== null) setReportTemplate(content);
+        setReportModalMode('report');
+        setIsReportModalOpen(true);
+    };
+
+    const onEditDomain = async (id) => {
+        // Keep manage modal open in background
+        setTemplateToEditId(id);
+        const content = await loadStaticTemplate(id);
+        if (content !== null) setStaticReportTemplate(content);
+        setReportModalMode('static-template');
+        setIsReportModalOpen(true);
     };
 
     const handleOpenReportWithImage = () => {
@@ -2831,35 +2964,14 @@ export default function GDCCPage() {
 
                             {isReportMenuOpen && (
                                 <div className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-[60] animate-fade-in-up">
-                                    {/* Report Template - with submenu */}
-                                    <div className="relative border-b border-gray-700">
+                                    {/* Manage Template Button (Replaces Submenu) */}
+                                    <div className="border-t border-gray-700/50 pt-1 mt-1">
                                         <button
-                                            onClick={() => setIsTemplateSubmenuOpen(!isTemplateSubmenuOpen)}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center justify-between"
+                                            onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsManageTemplateModalOpen(true); }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
                                         >
-                                            <span className="flex items-center gap-2">
-                                                <FileText className="w-3 h-3" /> Report Template
-                                            </span>
-                                            <svg className={`w-3 h-3 transition-transform ${isTemplateSubmenuOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                            <FileText className="w-3 h-3" /> Manage Template
                                         </button>
-
-                                        {/* Submenu */}
-                                        {isTemplateSubmenuOpen && (
-                                            <div className="bg-gray-900 border-t border-gray-700 shadow-inner">
-                                                <button
-                                                    onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); handleOpenReportWithImage(); }}
-                                                    className="w-full text-left px-8 py-2 text-xs text-gray-400 hover:bg-gray-800 hover:text-white flex items-center gap-2"
-                                                >
-                                                    <Edit3 className="w-3 h-3" /> Sub Report
-                                                </button>
-                                                <button
-                                                    onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); handleOpenTemplateManager(); }}
-                                                    className="w-full text-left px-8 py-2 text-xs text-gray-400 hover:bg-gray-800 hover:text-white flex items-center gap-2"
-                                                >
-                                                    <FileText className="w-3 h-3" /> Domain Report
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
 
                                     {/* Theme Settings (Refactored to Submenu) */}
@@ -2950,6 +3062,13 @@ export default function GDCCPage() {
                 onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : handleSaveTemplate}
                 onGenerate={captureAndGenerateReport} // NEW PROP
                 mode={reportModalMode}
+            />
+
+            <ManageTemplateModal
+                isOpen={isManageTemplateModalOpen}
+                onClose={() => setIsManageTemplateModalOpen(false)}
+                onEditSub={onEditSub}
+                onEditDomain={onEditDomain}
             />
 
             <BatchReportModal
