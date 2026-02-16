@@ -142,17 +142,61 @@ export async function POST(request) {
             return NextResponse.json({ success: true, data: allRecords });
         }
 
-        // 4. Get Account Info
+        // 4. Get Account Info (With Pagination)
         else if (action === 'get-account-info') {
-            // console.log(`👤 Fetching Account Info...`);
-            const response = await axios.get(`${CLOUDFLARE_API_BASE}/accounts`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                }
-            });
+            console.log(`👤 Fetching Account Info...`);
+            let allAccounts = [];
+            let page = 1;
+            let hasMore = true;
+            const perPage = 50;
 
-            return NextResponse.json({ success: true, data: response.data.result });
+            try {
+                while (hasMore) {
+                    process.stdout.write(`   Fetching Accounts page ${page}... `);
+                    const response = await axios.get(`${CLOUDFLARE_API_BASE}/accounts`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        params: {
+                            page: page,
+                            per_page: perPage
+                        }
+                    });
+
+                    const accounts = response.data.result || [];
+                    const resultInfo = response.data.result_info;
+
+                    if (accounts.length > 0) {
+                        allAccounts = allAccounts.concat(accounts);
+                        
+                        // Check pagination using result_info
+                        if (resultInfo) {
+                            if (page >= resultInfo.total_pages) {
+                                hasMore = false;
+                            } else {
+                                page++;
+                            }
+                        } else {
+                             // Fallback logic
+                            if (accounts.length < perPage) {
+                                hasMore = false;
+                            } else {
+                                page++;
+                            }
+                        }
+                    } else {
+                        hasMore = false;
+                    }
+                }
+                
+                console.log(`\n✅ Total Accounts Fetched: ${allAccounts.length}`);
+                return NextResponse.json({ success: true, data: allAccounts });
+
+            } catch (error) {
+                console.error('\n❌ Error fetching accounts:', error.response?.data || error.message);
+                return NextResponse.json({ success: false, message: 'Failed to fetch accounts', error: error.message }, { status: 500 });
+            }
         }
 
         // 6. Get Traffic Analytics (GraphQL) - MAIN DASHBOARD

@@ -54,6 +54,8 @@ async function main() {
         const response = await axios.post(API_BASE_URL, withToken({ action: 'get-account-info' }), { headers });
         if (!response.data.success) throw new Error(response.data.message || 'Failed to get account info');
         if (!response.data.data || response.data.data.length === 0) throw new Error('No accounts found');
+
+        console.log(`    ✅ Found ${response.data.data.length} Accounts.`);
         accountId = response.data.data[0].id; // Pick first account
     });
 
