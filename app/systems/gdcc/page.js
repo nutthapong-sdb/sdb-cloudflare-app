@@ -19,7 +19,7 @@ import {
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import Swal from 'sweetalert2';
-import { Editor } from '@tinymce/tinymce-react';
+import { THEMES } from '@/app/utils/themes';
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
@@ -612,7 +612,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
 };
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report' }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme }) => {
     // mode: 'report' | 'static-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
@@ -841,19 +841,22 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         setIsEditing(false);
     };
 
+    // Default theme fallback
+    const t = theme || THEMES.dark;
+
     return (
         <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            className={`fixed inset-0 z-[100] flex items-center justify-center p-4 ${t.modalOverlay}`}
             onClick={(e) => {
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-[95%] shadow-2xl overflow-hidden flex flex-col h-[90vh]">
+            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-[95%] shadow-2xl overflow-hidden flex flex-col h-[90vh]`}>
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-950/50 flex-shrink-0">
+                <div className={`px-6 py-4 border-b ${t.modalBorder} flex justify-between items-center ${t.modalHeaderBg} flex-shrink-0`}>
                     <div className="flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-blue-500" />
-                        <h3 className="text-lg font-bold text-gray-100">
+                        <FileText className={`w-5 h-5 ${t.iconAccent || 'text-blue-500'}`} />
+                        <h3 className={`text-lg font-bold ${t.modalTitle}`}>
                             {mode === 'static-template'
                                 ? 'Domain Report'
                                 : (isEditing
@@ -862,7 +865,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 )}
                         </h3>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                    <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}>
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -918,10 +921,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     </div>
                                 </div>
                                 {/* Variables Section - Right */}
-                                <div className="w-[28rem] flex-shrink-0 flex flex-col bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                    <div className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2 sticky top-0 bg-gray-50 pb-2 border-b border-gray-300">
-                                        <span className="bg-blue-500 text-white px-2 py-1 rounded">Variables</span>
-                                        <span className="text-xs text-gray-500">Click to insert</span>
+                                <div className={`w-[28rem] flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg p-4 border overflow-hidden`}>
+                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'}`}>
+                                        <span className={`${t.buttonPrimary || 'bg-blue-500 text-white'} px-2 py-1 rounded shadow-sm`}>Variables</span>
+                                        <span className={`text-xs ${t.subText || 'text-gray-500'}`}>Click to insert</span>
                                     </div>
                                     <div className="overflow-y-auto pr-2 space-y-4">
                                         {mode === 'report' ? (
@@ -944,7 +947,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     <button
                                                         key={v}
                                                         onClick={() => editorRef.current?.insertContent(v)}
-                                                        className="px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate w-full"
+                                                        className={`px-2 py-1 ${t.card || 'bg-white border-gray-300'} border rounded text-[10px] font-mono ${t.subText || 'text-gray-600'} ${t.tableRowHover || 'hover:bg-blue-50'} hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate w-full`}
                                                         title={`Insert ${v}`}
                                                     >
                                                         {v}
@@ -956,7 +959,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             <>
                                                 {/* ข้อมูลพื้นฐาน */}
                                                 <div>
-                                                    <div className="text-xs font-semibold text-gray-600 mb-2 pb-1 border-b border-gray-300">
+                                                    <div className={`text-xs font-semibold ${t.text || 'text-gray-600'} mb-2 pb-1 border-b ${t.modalBorder || 'border-gray-300'}`}>
                                                         ข้อมูลพื้นฐาน
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
@@ -969,7 +972,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                             <button
                                                                 key={v}
                                                                 onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-mono text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate"
+                                                                className={`px-2 py-1 ${t.card || 'bg-white border-gray-300'} border rounded text-[10px] font-mono ${t.subText || 'text-gray-600'} ${t.tableRowHover || 'hover:bg-blue-50'} hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate`}
                                                                 title={`Insert ${v}`}
                                                             >
                                                                 {v}
@@ -980,7 +983,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
                                                 {/* 1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ */}
                                                 <div>
-                                                    <div className="text-xs font-semibold text-blue-700 mb-2 pb-1 border-b border-blue-300">
+                                                    <div className={`text-xs font-semibold ${t.accent || 'text-blue-700'} mb-2 pb-1 border-b ${t.modalBorder || 'border-blue-300'}`}>
                                                         1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
@@ -991,7 +994,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                                 <button
                                                                     key={v}
                                                                     onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-blue-200 rounded text-[10px] font-mono text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate"
+                                                                    className={`px-2 py-1 ${t.card || 'bg-white'} border ${t.modalBorder || 'border-blue-200'} rounded text-[10px] font-mono ${t.subText || 'text-blue-700'} ${t.tableRowHover || 'hover:bg-blue-50 hover:border-blue-400'} transition-all shadow-sm active:scale-95 text-left truncate`}
                                                                     title={`Insert ${v}`}
                                                                 >
                                                                     {v}
@@ -1111,23 +1114,23 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3 flex-shrink-0">
+                <div className={`px-6 py-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3 flex-shrink-0`}>
                     {/* In Edit Mode (Default for Static) */}
                     {isEditing ? (
                         <>
-                            <button onClick={() => setIsEditing(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+                            <button onClick={() => setIsEditing(false)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded`}>
                                 Cancel
                             </button>
-                            <button onClick={handleSave} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded flex items-center gap-2">
+                            <button onClick={handleSave} className={`px-4 py-2 ${t.buttonSuccess} text-xs font-bold rounded flex items-center gap-2`}>
                                 <Edit3 className="w-3 h-3" /> {mode === 'static-template' ? 'Save Template' : 'Save & Preview'}
                             </button>
                         </>
                     ) : (
                         <>
-                            <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                            <button onClick={() => setIsEditing(true)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
                                 <Edit3 className="w-3 h-3" /> Edit Template
                             </button>
-                            <button onClick={handleDownloadWord} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2 transition-colors">
+                            <button onClick={handleDownloadWord} className={`px-4 py-2 ${t.buttonPrimary} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
                                 <FileType className="w-3 h-3" /> Download Word
                             </button>
                         </>
@@ -1140,67 +1143,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 
 // --- THEME CONFIG ---
-const THEMES = {
-    dark: {
-        id: 'dark',
-        name: 'Dark (Default)',
-        bg: 'bg-black',
-        nav: 'bg-[#0f1115]',
-        card: 'bg-gray-900 border-gray-800',
-        cardHeader: 'bg-gray-900/50 border-gray-800',
-        text: 'text-white',
-        subText: 'text-gray-400',
-        accent: 'text-orange-500',
-        button: 'bg-gray-800 hover:bg-gray-700 text-gray-300',
-        icon: 'text-gray-500 hover:text-white',
-        selectorContainer: 'bg-gray-900/40 border-gray-800',
-        rawData: 'bg-gray-950 border-gray-800 text-gray-400',
-        tableRowHover: 'hover:bg-gray-900',
-        dropdown: {
-            bg: 'bg-gray-900',
-            border: 'border-gray-700',
-            menuBg: 'bg-gray-800',
-            menuBorder: 'border-gray-700',
-            hover: 'hover:bg-gray-700',
-            text: 'text-gray-300',
-            active: 'bg-blue-600 text-white',
-            label: 'text-gray-400',
-            placeholder: 'text-gray-500',
-            inputText: 'text-white'
-        }
-    },
-    pastel: {
-        id: 'pastel',
-        name: 'Pink Pastel',
-        bg: 'bg-pink-50',
-        nav: 'bg-pink-200 border-pink-300',
-        card: 'bg-white border-pink-300 shadow-md',
-        cardHeader: 'bg-pink-100/50 border-pink-200',
-        text: 'text-pink-900',
-        subText: 'text-pink-500',
-        accent: 'text-pink-600',
-        button: 'bg-white hover:bg-pink-100 text-pink-600 border border-pink-300',
-        icon: 'text-pink-400 hover:text-pink-600',
-        selectorContainer: 'bg-white/60 border-pink-300 shadow-sm',
-        rawData: 'bg-white border-pink-200 text-gray-600',
-        tableRowHover: 'hover:bg-pink-50',
-        dropdown: {
-            bg: 'bg-white',
-            border: 'border-pink-300',
-            menuBg: 'bg-white',
-            menuBorder: 'border-pink-200 font-medium',
-            hover: 'hover:bg-pink-50',
-            text: 'text-gray-600',
-            active: 'bg-pink-400 text-white',
-            label: 'text-pink-500',
-            placeholder: 'text-gray-400',
-            inputText: 'text-gray-800'
-        }
-    }
-};
+// --- THEME CONFIG ---
+// Moved to '@/app/utils/themes'
 
 // Batch Report Modal Component
-const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
+const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
     const [selected, setSelected] = useState(new Set());
     const [batchTimeRange, setBatchTimeRange] = useState(1440);
     const [searchTerm, setSearchTerm] = useState('');
@@ -1301,21 +1248,24 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
 
     if (!isOpen) return null;
 
+    // Default theme fallback
+    const t = theme || THEMES.dark;
+
     return (
         <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+            className={`fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in ${t.modalOverlay}`}
             onClick={(e) => {
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl`}>
                 {/* Header */}
-                <div className="p-4 border-b border-gray-800 bg-gray-950/50 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <List className="w-5 h-5 text-purple-400" />
+                <div className={`p-4 border-b ${t.modalBorder} ${t.modalHeaderBg} flex justify-between items-center`}>
+                    <h3 className={`text-lg font-bold ${t.modalTitle} flex items-center gap-2`}>
+                        <List className={`w-5 h-5 ${t.iconAccent || 'text-purple-400'}`} />
                         Create Report
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                    <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}>
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -1323,28 +1273,28 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                 {/* Body */}
                 <div className="p-4 overflow-y-auto flex-1">
                     {/* Template Selector */}
-                    <div className="mb-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">Report Template</label>
+                    <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                        <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Report Template</label>
                         <select
                             value={selectedTemplateId}
                             onChange={e => setSelectedTemplateId(e.target.value)}
-                            className="bg-gray-800 border border-gray-600 text-white rounded p-2.5 w-full text-sm outline-none focus:border-blue-500 transition-colors appearance-none"
+                            className={`${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none focus:border-blue-500 transition-colors appearance-none`}
                         >
                             {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                     </div>
 
                     {/* Time Range Selector */}
-                    <div className="mb-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">Time Range</label>
+                    <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                        <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Time Range</label>
                         <div className="flex gap-2">
-                            {[{ label: '1 Day', val: 1440 }, { label: '7 Days', val: 10080 }, { label: '30 Days', val: 43200 }].map(t => (
+                            {[{ label: '1 Day', val: 1440 }, { label: '7 Days', val: 10080 }, { label: '30 Days', val: 43200 }].map(tObj => (
                                 <button
-                                    key={t.val}
-                                    onClick={() => setBatchTimeRange(t.val)}
-                                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors border ${batchTimeRange === t.val ? 'bg-blue-600 border-blue-600 text-white' : 'bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-200'}`}
+                                    key={tObj.val}
+                                    onClick={() => setBatchTimeRange(tObj.val)}
+                                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors border ${batchTimeRange === tObj.val ? `${t.dropdown.active || 'bg-blue-600 text-white'} border-transparent` : `${t.dropdown.bg} ${t.dropdown.border} ${t.subText} hover:border-gray-500`}`}
                                 >
-                                    {t.label}
+                                    {tObj.label}
                                 </button>
                             ))}
                         </div>
@@ -1353,25 +1303,25 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                     {/* Live Search Input (New) */}
                     <div className="mb-3">
                         <div className="relative">
-                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
+                            <Search className={`absolute left-3 top-2.5 w-4 h-4 ${t.subText}`} />
                             <input
                                 type="text"
                                 placeholder="Filter sub-domains..."
                                 value={searchTerm}
                                 onChange={handleSearchChange}
-                                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-600"
+                                className={`w-full ${t.dropdown.bg} border ${t.dropdown.border} ${t.dropdown.inputText} rounded-lg pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-${t.dropdown.placeholder ? t.dropdown.placeholder.replace('text-', '') : 'gray-600'}`}
                             />
                         </div>
                     </div>
 
                     <div className="flex items-center justify-between mb-4">
-                        <span className="text-gray-400 text-sm">Select Sub-domains to include:</span>
-                        <button onClick={toggleAll} className="text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors uppercase tracking-wider">
+                        <span className={`${t.subText} text-sm`}>Select Sub-domains to include:</span>
+                        <button onClick={toggleAll} className={`text-xs ${t.iconAccent || 'text-blue-400'} hover:opacity-80 font-bold transition-colors uppercase tracking-wider`}>
                             {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect All' : 'Select All'}
                         </button>
                     </div>
                     {displayHosts.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8 text-sm italic">
+                        <div className={`text-center ${t.subText || 'text-gray-500'} py-8 text-sm italic`}>
                             No sub-domains available.
                         </div>
                     ) : (
@@ -1380,9 +1330,26 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                                 const isNoSubdomain = host === NO_SUBDOMAIN;
                                 const displayName = isNoSubdomain ? 'No Subdomain' : host;
 
+                                // Determine styles based on theme
+                                const isLight = t.id === 'pastel';
+
+                                // Yellow style for No Subdomain
+                                const yellowBg = isLight ? 'bg-yellow-50 hover:bg-yellow-100' : 'bg-yellow-900/20 hover:bg-yellow-900/30';
+                                const yellowBorder = isLight ? 'border-yellow-200 hover:border-yellow-300' : 'border-yellow-700/50 hover:border-yellow-600';
+                                const yellowText = isLight ? 'text-yellow-700 font-bold' : 'text-yellow-400';
+                                const yellowCheckBg = isLight ? 'bg-yellow-500 border-yellow-500' : 'bg-yellow-600 border-yellow-600';
+                                const yellowCheckBorder = isLight ? 'border-yellow-300 group-hover:border-yellow-400' : 'border-yellow-700 group-hover:border-yellow-600';
+
+                                // Regular host style
+                                const regularBg = t.card || (isLight ? 'bg-white' : 'bg-gray-800/50');
+                                const regularBorder = t.dropdown?.border || (isLight ? 'border-pink-200' : 'border-transparent');
+                                const regularSubText = t.subText;
+                                const regularCheckBg = t.dropdown?.active || 'bg-blue-600';
+                                const regularCheckBorder = t.dropdown?.border || 'border-gray-600';
+
                                 return (
-                                    <label key={host} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${isNoSubdomain ? 'bg-yellow-900/20 hover:bg-yellow-900/30 border-yellow-700/50 hover:border-yellow-600' : 'bg-gray-800/50 hover:bg-gray-800 border-transparent hover:border-gray-700'} group`}>
-                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? 'bg-yellow-600 border-yellow-600' : 'bg-blue-600 border-blue-600') : (isNoSubdomain ? 'border-yellow-700 group-hover:border-yellow-600' : 'border-gray-600 group-hover:border-gray-500')}`}>
+                                    <label key={host} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
                                             {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                         </div>
                                         <input
@@ -1391,7 +1358,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                                             onChange={() => toggleOne(host)}
                                             className="hidden"
                                         />
-                                        <span className={`text-sm ${selected.has(host) ? 'text-white font-medium' : (isNoSubdomain ? 'text-yellow-400' : 'text-gray-400')}`}>{displayName}</span>
+                                        <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
                                     </label>
                                 );
                             })}
@@ -1400,8 +1367,8 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-gray-800 bg-gray-950/50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 font-medium transition-colors text-xs">Cancel</button>
+                <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
+                    <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
                     <button
                         onClick={() => {
                             // If NO_SUBDOMAIN is selected, send empty array
@@ -1410,7 +1377,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
                             onConfirm(hostsToGenerate, batchTimeRange, selectedTemplateId);
                         }}
                         disabled={selected.size === 0}
-                        className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2"
+                        className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
                     >
                         <FileText className="w-3 h-3" />
                         {selected.has(NO_SUBDOMAIN) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
@@ -1665,6 +1632,26 @@ export default function GDCCPage() {
     // Theme State
     const [currentTheme, setCurrentTheme] = useState('dark');
     const theme = THEMES[currentTheme] || THEMES.dark;
+
+    // Theme Persist & Broadcast
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('gdcc_theme');
+            if (stored && THEMES[stored]) {
+                setCurrentTheme(stored);
+                // Dispatch initial event just in case
+                window.dispatchEvent(new CustomEvent('theme-change', { detail: stored }));
+            }
+        }
+    }, []);
+
+    const changeTheme = (newThemeId) => {
+        setCurrentTheme(newThemeId);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('gdcc_theme', newThemeId);
+            window.dispatchEvent(new CustomEvent('theme-change', { detail: newThemeId }));
+        }
+    };
 
     // Selector States
     const [loading, setLoading] = useState(false);
@@ -3043,8 +3030,8 @@ export default function GDCCPage() {
                             onClick={() => setIsBatchModalOpen(true)}
                             disabled={!selectedAccount || !selectedZone}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${!selectedAccount || !selectedZone
-                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                ? (theme.buttonDisabled || 'bg-gray-700 text-gray-500 cursor-not-allowed')
+                                : (theme.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg')
                                 }`}
                         >
                             <List className="w-3 h-3" /> Create Report
@@ -3055,8 +3042,8 @@ export default function GDCCPage() {
                             onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange)}
                             disabled={!selectedSubDomain || loadingStats}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${!selectedSubDomain || loadingStats
-                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                : 'bg-green-600 hover:bg-green-700 text-white'
+                                ? (theme.buttonDisabled || 'bg-gray-700 text-gray-500 cursor-not-allowed')
+                                : (theme.buttonSuccess || 'bg-green-600 hover:bg-green-700 text-white shadow-lg')
                                 }`}
                         >
                             {loadingStats ? <Activity className="w-3 h-3 animate-spin" /> : <Activity className="w-3 h-3" />}
@@ -3067,19 +3054,19 @@ export default function GDCCPage() {
                         <div className="relative">
                             <button
                                 onClick={() => setIsReportMenuOpen(!isReportMenuOpen)}
-                                className={`flex items-center gap-2 ${theme.button} px-3 py-1.5 rounded text-xs transition-colors border border-gray-700`}
+                                className={`flex items-center gap-2 ${theme.button} px-3 py-1.5 rounded text-xs transition-colors`}
                             >
                                 <Settings className="w-3 h-3" />
                                 <svg className={`w-3 h-3 transition-transform ${isReportMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </button>
 
                             {isReportMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-[60] animate-fade-in-up">
+                                <div className={`absolute right-0 mt-2 w-56 ${theme.dropdown?.menuBg || 'bg-gray-800'} rounded-lg shadow-xl border ${theme.dropdown?.border || 'border-gray-700'} z-[60] animate-fade-in-up`}>
                                     {/* Manage Template Button (Replaces Submenu) */}
-                                    <div className="border-t border-gray-700/50 pt-1 mt-1">
+                                    <div className={`border-t ${theme.dropdown?.menuBorder || 'border-gray-700/50'} pt-1 mt-1`}>
                                         <button
                                             onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsManageTemplateModalOpen(true); }}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
+                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
                                         >
                                             <FileText className="w-3 h-3" /> Manage Template
                                         </button>
@@ -3089,7 +3076,7 @@ export default function GDCCPage() {
                                     <div className="relative">
                                         <button
                                             onClick={() => setIsThemeSubmenuOpen(!isThemeSubmenuOpen)}
-                                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center justify-between"
+                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center justify-between`}
                                         >
                                             <span className="flex items-center gap-2">
                                                 <Activity className="w-3 h-3" /> Theme {/* Using Activity as placeholder icon */}
@@ -3099,12 +3086,12 @@ export default function GDCCPage() {
 
                                         {/* Submenu */}
                                         {isThemeSubmenuOpen && (
-                                            <div className="bg-gray-900 border-t border-gray-700 shadow-inner">
+                                            <div className={`${theme.dropdown?.bg || 'bg-gray-900'} border-t ${theme.dropdown?.border || 'border-gray-700'} shadow-inner`}>
                                                 {Object.values(THEMES).map(t => (
                                                     <button
                                                         key={t.id}
-                                                        onClick={() => { setCurrentTheme(t.id); setIsReportMenuOpen(false); setIsThemeSubmenuOpen(false); }}
-                                                        className={`w-full text-left px-8 py-2 text-xs flex items-center gap-2 hover:bg-gray-800 ${currentTheme === t.id ? 'text-blue-400 font-bold' : 'text-gray-400 hover:text-white'}`}
+                                                        onClick={() => { changeTheme(t.id); setIsReportMenuOpen(false); setIsThemeSubmenuOpen(false); }}
+                                                        className={`w-full text-left px-8 py-2 text-xs flex items-center gap-2 hover:bg-gray-800 ${currentTheme === t.id ? 'text-blue-400 font-bold' : (theme.subText || 'text-gray-400') + ' hover:text-white'}`}
                                                     >
                                                         {currentTheme === t.id && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                                                         {t.name}
@@ -3173,6 +3160,7 @@ export default function GDCCPage() {
                 onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : handleSaveTemplate}
                 onGenerate={captureAndGenerateReport} // NEW PROP
                 mode={reportModalMode}
+                theme={theme}
             />
 
             <ManageTemplateModal
@@ -3180,6 +3168,7 @@ export default function GDCCPage() {
                 onClose={() => setIsManageTemplateModalOpen(false)}
                 onEditSub={onEditSub}
                 onEditDomain={onEditDomain}
+                theme={theme}
             />
 
             <BatchReportModal
@@ -3187,6 +3176,7 @@ export default function GDCCPage() {
                 onClose={() => setIsBatchModalOpen(false)}
                 hosts={getBatchHosts()}
                 onConfirm={handleBatchReport}
+                theme={theme}
             />
 
             <main ref={dashboardRef} className="p-4 min-h-screen">
@@ -3201,9 +3191,18 @@ export default function GDCCPage() {
 
                 {/* TIME RANGE SELECTOR */}
                 <div className="flex justify-end items-center mb-4">
-                    <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
+                    <div className={`${theme.dropdown?.bg || 'bg-gray-900'} border ${theme.dropdown?.border || 'border-gray-800'} rounded-lg p-1 flex gap-1`}>
                         {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
-                            <button key={t.val} onClick={() => setTimeRange(t.val)} className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{t.label}</button>
+                            <button
+                                key={t.val}
+                                onClick={() => setTimeRange(t.val)}
+                                className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val
+                                    ? (theme.dropdown?.active || 'bg-blue-600 text-white') + ' shadow-lg'
+                                    : (theme.dropdown?.text || 'text-gray-400') + ' hover:' + (theme.dropdown?.inputText || 'text-white') + ' ' + (theme.dropdown?.hover || 'hover:bg-gray-800')
+                                    }`}
+                            >
+                                {t.label}
+                            </button>
                         ))}
                     </div>
                 </div>
@@ -3279,19 +3278,19 @@ export default function GDCCPage() {
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
-                                <div className="h-20 overflow-y-auto mt-2 border-t border-gray-800 pt-2 bg-gray-950/50 rounded">
+                                <div className={`h-20 overflow-y-auto mt-2 border-t pt-2 rounded ${theme.rawData ? theme.rawData.replace('text-', '') : 'bg-gray-950/50 border-gray-800'}`}>
                                     {detailedAttackList.length === 0 ? (
-                                        <div className="text-gray-500 text-[10px] text-center italic py-2">No attack events in this period</div>
+                                        <div className={`${theme.subText || 'text-gray-500'} text-[10px] text-center italic py-2`}>No attack events in this period</div>
                                     ) : (
-                                        <table className="w-full text-xs text-gray-400">
+                                        <table className={`w-full text-xs ${theme.subText || 'text-gray-400'}`}>
                                             <tbody>
                                                 {detailedAttackList.map((d, i) => (
-                                                    <tr key={i} className="border-b border-gray-900/50 hover:bg-gray-900">
-                                                        <td className="py-1 pl-2 text-gray-500 font-mono">
+                                                    <tr key={i} className={`border-b ${theme.dropdown?.border || 'border-gray-900/50'} ${theme.tableRowHover || 'hover:bg-gray-900'}`}>
+                                                        <td className={`py-1 pl-2 font-mono ${theme.subText || 'text-gray-500'}`}>
                                                             {d.time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                                                         </td>
-                                                        <td className="py-1 px-2 text-orange-400 font-semibold text-[10px]">{formatActionName(d.action)}</td>
-                                                        <td className="py-1 pr-2 text-right text-red-400 font-bold">{d.count}</td>
+                                                        <td className={`py-1 ${theme.accent || 'text-orange-400'}`}>{formatActionName(d.action)}</td>
+                                                        <td className={`py-1 pr-2 text-right ${theme.text || 'text-gray-300'}`}>{d.count}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
