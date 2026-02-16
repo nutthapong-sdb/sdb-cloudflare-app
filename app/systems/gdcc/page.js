@@ -627,6 +627,23 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         }
     }, [isOpen]);
 
+    // ESC key to close modal
+    useEffect(() => {
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     // --- DATA PREPARATION ---
@@ -1199,6 +1216,23 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm }) => {
             });
         }
     }, [isOpen]);
+
+    // ESC key to close modal
+    useEffect(() => {
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isOpen, onClose]);
 
 
     // FILTER LOGIC & DEBUGGING
