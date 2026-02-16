@@ -1,5 +1,5 @@
 ---
-description: ตรวจสอบ Branch, Commit, Push (CI Trigger) และ Merge เข้า Main อัตโนมัติ
+description: ตรวจสอบ Branch, Commit, Merge เข้า Main และ Publish Branch
 ---
 
 1. **ตรวจสอบ Branch ปัจจุบันและสถานะ (Check Branch & Status):**
@@ -17,13 +17,7 @@ description: ตรวจสอบ Branch, Commit, Push (CI Trigger) และ M
    git commit -m "feat([system]): [รายละเอียดการแก้ไข]"
    ```
 
-3. **Push Feature Branch (Trigger CI):**
-   - ส่งโค้ดขึ้น GitHub เพื่อให้ CI ทำงาน (ถ้ามี)
-   ```bash
-   git push origin HEAD
-   ```
-
-4. **Merge to Main (รวมโค้ดเข้า Main):**
+3. **Merge to Main (รวมโค้ดเข้า Main):**
    - สลับไป Branch Main และดึงข้อมูลล่าสุด
    ```bash
    git checkout main
@@ -33,7 +27,17 @@ description: ตรวจสอบ Branch, Commit, Push (CI Trigger) และ M
    ```bash
    git merge [feature-branch] --no-ff
    ```
-   - Push Main ขึ้น GitHub
+   - Push Main ขึ้น GitHub (Update Production)
    ```bash
    git push origin main
+   ```
+
+4. **Publish Feature Branch (Update Online):**
+   - สลับกลับมายัง Feature Branch
+   ```bash
+   git checkout [feature-branch]
+   ```
+   - Push Feature Branch ขึ้น GitHub (เพื่อให้ Branch ออนไลน์เป็นปัจจุบัน)
+   ```bash
+   git push -u origin [feature-branch]
    ```
