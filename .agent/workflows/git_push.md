@@ -37,9 +37,3 @@ description: ตรวจสอบ Branch, Commit, Push (CI Trigger) และ M
    ```bash
    git push origin main
    ```
-
-5. **สลับกลับมา Feature Branch (Optional):**
-   - หากต้องการทำงานต่อใน Branch เดิม
-   ```bash
-   git checkout [feature-branch]
-   ```

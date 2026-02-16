@@ -2621,8 +2621,10 @@ export default function GDCCPage() {
     // 4. Subdomain Selected -> Fetch Traffic
     useEffect(() => {
         if (!selectedSubDomain) { resetDashboardData(); return; }
-        fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange);
-    }, [selectedSubDomain, selectedZone, timeRange, currentUser?.cloudflare_api_token]);
+        // Manual Generation Requested: Do not auto-fetch on selection change
+        // Only reset data to avoid showing stale data for wrong domain
+        resetDashboardData();
+    }, [selectedSubDomain, selectedZone]); // Removed timeRange/token dependency to prevent auto-fetch
 
     useEffect(() => {
         const init = async () => {
@@ -2951,12 +2953,27 @@ export default function GDCCPage() {
                     <SearchableDropdown theme={theme} icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingStats && subDomains.length === 0} />
                 </div>
 
-                {/* TIME RANGE */}
-                <div className="flex justify-end mb-4">
-                    <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
-                        {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
-                            <button key={t.val} onClick={() => setTimeRange(t.val)} className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{t.label}</button>
-                        ))}
+                {/* ACTIONS & TIME RANGE */}
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    {/* Manual Generate Button */}
+                    <button
+                        onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange)}
+                        disabled={!selectedSubDomain || loadingStats}
+                        className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold shadow-lg transition-all border ${!selectedSubDomain || loadingStats
+                            ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-blue-600 border-blue-500 hover:bg-blue-500 text-white hover:shadow-blue-500/20 active:scale-95'
+                            }`}
+                    >
+                        {loadingStats ? <Activity className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                        {loadingStats ? 'GENERATING...' : 'GENERATE DASHBOARD'}
+                    </button>
+
+                    <div className="flex justify-end">
+                        <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 flex gap-1">
+                            {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
+                                <button key={t.val} onClick={() => setTimeRange(t.val)} className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{t.label}</button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 

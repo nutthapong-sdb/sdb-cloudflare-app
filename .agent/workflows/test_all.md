@@ -71,6 +71,9 @@ description: เรียก workflow นี้ทุกครั้งที่
    # Test GDCC UI Enhancements (Search Modal & Keyboard Nav)
    node scripts/test-all/gdcc/test-ui-enhancements.js
 
+   # Test GDCC Manual Dashboard Generation (Button Trigger)
+   node scripts/test-all/gdcc/test-manual-generation.js
+
    # Test Firewall Logs System (CSV Download)
    node scripts/test-all/firewall/test-firewall.js
 
