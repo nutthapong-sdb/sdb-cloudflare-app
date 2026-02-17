@@ -3169,6 +3169,7 @@ export default function GDCCPage() {
                 onEditSub={onEditSub}
                 onEditDomain={onEditDomain}
                 theme={theme}
+                userRole={currentUser?.role}
             />
 
             <BatchReportModal

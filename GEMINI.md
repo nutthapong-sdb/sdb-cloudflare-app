@@ -11,6 +11,7 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 *   **Security Monitoring:** Track WAF events, blocked attacks, and HTTP status code distributions.
 *   **API Discovery:** Discover and manage API endpoints associated with your zones. Handles permissions gracefully (graceful degradation if feature is unavailable).
 *   **Batch Reporting:** Automatically generate comprehensive reports for multiple sub-domains. This feature captures dashboard snapshots and aggregates data into a single downloadable Word document using Template Variables (e.g., `@TOP_HOST_VAL@`).
+*   **Dynamic Theming:** Centralized theme management supporting multiple themes (Dark, Pink Pastel, Corporate Blue). Theming applies globally to Sidebar, Modals, and Dashboard components via `app/utils/themes.js` and custom events.
 
 # Building and Running
 
@@ -44,7 +45,11 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 
 # Development Conventions
 
-*   **Styling:** The project uses Tailwind CSS for styling.
+*   **Styling & Theming:**
+    *   Uses Tailwind CSS for styling.
+    *   **Theme System:** All theme colors and styles are centralized in `app/utils/themes.js`.
+    *   Components subscribe to theme changes via the `theme-change` custom event.
+    *   **Do not hardcode colors.** Use variables from the `theme` object (e.g., `theme.bg`, `theme.text`, `theme.card`) to ensure compatibility across Dark, Pastel, and Corporate themes.
 *   **API:** The backend API is built with Next.js API Routes. The main endpoint is `/api/scrape`, which handles various actions related to the Cloudflare API.
 *   **Authentication:** User authentication is handled by Next.js Server Actions and session management using `localStorage`.
 *   **Debug Scripts:**
@@ -57,6 +62,8 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 
 *   `app/page.js`: The main portal page with links to different systems.
 *   `app/systems/gdcc/page.js`: The GDCC Analytics dashboard. Handles data visualization, report generation logic, and processing of template variables (like `@TOP_HOST_VAL@`).
+*   `app/systems/Sidebar.js`: The global sidebar component, fully themable and responsive.
+*   `app/utils/themes.js`: Centralized configuration for all application themes (Dark, Pastel, Corporate).
 *   `app/systems/api_discovery/page.js`: The SDB Cloudflare API dashboard for zone and API discovery management.
 *   `app/api/scrape/route.js`: The core of the backend, handling all interactions with the Cloudflare API (Proxy to Cloudflare).
 *   `app/utils/auth.js`: Handles user authentication and session management.
