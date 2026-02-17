@@ -207,7 +207,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                         {/* Edit Content Buttons */}
                                         <div className={`flex ${t.sectionHeader || 'bg-gray-900 border-gray-700'} rounded-lg p-1 border`}>
                                             <button
-                                                onClick={() => onEditSub(tmp.id)}
+                                                onClick={() => onEditSub(tmp.id, tmp.name)}
                                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
                                                 title="Edit Sub-domain Report Structure"
                                             >
@@ -216,7 +216,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                             </button>
                                             <div className={`w-px ${t.modalBorder} my-1`}></div>
                                             <button
-                                                onClick={() => onEditDomain(tmp.id)}
+                                                onClick={() => onEditDomain(tmp.id, tmp.name)}
                                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
                                                 title="Edit Domain Summary Report Structure"
                                             >
