@@ -1542,6 +1542,13 @@ export default function GDCCPage() {
         }
     }, []);
 
+    // Force scroll to top on mount/refresh
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.scrollTo(0, 0);
+        }
+    }, []);
+
     const changeTheme = (newThemeId) => {
         setCurrentTheme(newThemeId);
         if (typeof window !== 'undefined') {
