@@ -21,7 +21,7 @@ export async function POST(request) {
                 bottom: 1440,
                 left: 1440,
             },
-            font: 'TH SarabunPSK',
+            font: 'Arial',
             fontSize: 32, // html-to-docx uses half-points (16pt * 2)
             footer: true,
             pageNumber: true,
@@ -30,14 +30,30 @@ export async function POST(request) {
         // Convert HTML to DOCX Buffer
         const docxBuffer = await HTMLToDOCX(html, null, docxOptions);
 
+        if (!docxBuffer) {
+            throw new Error('HTMLToDOCX returned null/undefined');
+        }
+
+        const length = docxBuffer.length || docxBuffer.byteLength || 0;
+        console.log(`DOCX Generation: Buffer Type: ${docxBuffer.constructor.name}, Length: ${length}`);
+
+        if (length < 2000) { // Standard empty docx is around 20k
+            console.warn('DOCX Buffer is suspiciously small:', length);
+        }
+
+        // Ensure we have a Buffer/Uint8Array for the Response
+        const responseData = Buffer.isBuffer(docxBuffer) ? docxBuffer : Buffer.from(docxBuffer);
+
         // Return the binary data with correct headers
-        return new Response(docxBuffer, {
+        return new Response(responseData, {
             status: 200,
             headers: {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Length': responseData.length.toString(),
             },
         });
+
 
     } catch (error) {
         console.error('DOCX Export Error:', error);
