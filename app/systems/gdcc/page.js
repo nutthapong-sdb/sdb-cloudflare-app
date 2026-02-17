@@ -720,7 +720,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         const filename = mode === 'static-template' ? `template.docx` : `report_${safeData.domain || 'report'}.doc`.replace('.doc', '.docx');
 
-        const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+        const legacyHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
             "xmlns='http://www.w3.org/TR/REC-html40'>" +
             "<head><meta charset='utf-8'><title>Export HTML to Word Document</title>" +
@@ -743,6 +743,15 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "</style>" +
             "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
             "</head><body><div class='Section1'>";
+
+        const cleanHeader = "<html><head><meta charset='utf-8'><style>" +
+            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 12pt; }" +
+            "img { max-width: 100%; height: auto; display: block; margin: 10px auto; }" +
+            "table { width: 100%; border-collapse: collapse; margin: 10px 0; }" +
+            "td, th { border: 1px solid #000; padding: 5px; }" +
+            "h1, h2, h3 { color: #1a56db; }" +
+            "</style></head><body>";
+
         const footer = "</div></body></html>";
 
         let cleanHTML = "";
@@ -766,20 +775,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             cleanHTML = cleanHTML.replace(/<img[^>]*style="[^"]*margin-left:\s*auto;[^"]*margin-right:\s*auto;[^"]*"[^>]*>/gi, (match) => {
                 return `<p align="center">${match}</p>`;
             });
-
-            // Special handling for html-to-docx: it likes explicit widths or 100%
-            // But let's leave as is for now as we pass standard HTML
         }
 
-        const sourceHTML = header + cleanHTML + footer;
+        const sourceHTML = legacyHeader + cleanHTML + footer;
 
         try {
-            // Use the new API for real DOCX generation
+            // Use the new API with CLEAN HTML
             const response = await fetch('/api/export-docx', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    html: sourceHTML,
+                    html: cleanHeader + cleanHTML + footer,
                     filename: filename,
                     title: filename.includes('template') ? 'Report Template' : 'Cloudflare Report'
                 })
@@ -806,6 +812,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             a.click();
         }
     };
+
 
 
     const handleSave = () => {
@@ -2108,7 +2115,7 @@ export default function GDCCPage() {
             color: '#fff'
         });
 
-        const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+        const legacyHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
             "xmlns='http://www.w3.org/TR/REC-html40'>" +
             "<head><meta charset='utf-8'><title>Batch Report</title>" +
@@ -2122,7 +2129,18 @@ export default function GDCCPage() {
             ".page-break { page-break-after: always; }" +
             "</style>" +
             "</head><body><div class='Section1'>";
+
+        const cleanHeader = "<html><head><meta charset='utf-8'><style>" +
+            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 12pt; }" +
+            "img { max-width: 100%; height: auto; display: block; margin: 10px auto; }" +
+            "table { width: 100%; border-collapse: collapse; margin: 10px 0; }" +
+            "td, th { border: 1px solid #000; padding: 5px; }" +
+            "h1, h2, h3 { color: #1a56db; }" +
+            ".page-break { page-break-after: always; }" +
+            "</style></head><body>";
+
         const footer = "</div></body></html>";
+
 
         let combinedHtml = "";
 
@@ -2443,16 +2461,16 @@ export default function GDCCPage() {
             updateProgress(`Generating final .docx document...`, 'step');
             console.log(`\n${'='.repeat(60)}`);
             console.log(`📥 Generating final .docx document...`);
-            const sourceHTML = header + combinedHtml + footer;
+            const sourceHTML = legacyHeader + combinedHtml + footer;
             const filename = `batch_report_${new Date().getTime()}.docx`;
 
             try {
-                // Use the new API for real DOCX generation
+                // Use the new API for real DOCX generation with CLEAN HTML
                 const response = await fetch('/api/export-docx', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        html: sourceHTML,
+                        html: cleanHeader + combinedHtml + footer,
                         filename: filename,
                         title: 'Batch Report'
                     })
@@ -2482,6 +2500,7 @@ export default function GDCCPage() {
                 document.body.removeChild(a);
                 updateProgress(`✓ .doc download initiated (Fallback)`, 'success', true);
             }
+
             console.log(`✅ File download initiated`);
 
 
