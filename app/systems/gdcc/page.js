@@ -266,6 +266,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
         // Dashboard Screenshot Image
+        '@DASHBOARD_IMAGE@': dashboardImage ? `<img src="${dashboardImage}" style="width: 100%; height: auto; display: block; margin: 20px auto;" />` : '',
         '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6 flex justify-center"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="600" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
     };
 
@@ -2395,12 +2396,9 @@ export default function GDCCPage() {
                     const htmlStart = performance.now();
                     updateProgress(`Step 5/5: Generating HTML...`, 'step', true);
                     console.log(`🔨 Step 5/5: Generating HTML report using template: ${templateId}...`);
-                    let reportHtml = processTemplate(subReportTemplateContent, currentReportData, new Date());
+                    let reportHtml = processTemplate(subReportTemplateContent, currentReportData, new Date(), imgData);
 
-                    // Insert Image at the top if captured
-                    if (imgData) {
-                        reportHtml = `<img src="${imgData}" width="600" style="width: 500px; height: auto; display: block; margin: 0 auto 20px auto;" />` + reportHtml;
-                    }
+
 
                     const htmlEnd = performance.now();
                     const htmlDuration = ((htmlEnd - htmlStart) / 1000).toFixed(2);
