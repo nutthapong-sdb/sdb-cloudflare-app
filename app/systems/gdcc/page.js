@@ -715,8 +715,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     };
 
     // --- DOWNLOAD WORD FUNCTION ---
-    const handleDownloadWord = () => {
+    const handleDownloadWord = async () => {
         if (!reportContentRef.current) return;
+
+        const filename = mode === 'static-template' ? `template.docx` : `report_${safeData.domain || 'report'}.doc`.replace('.doc', '.docx');
 
         const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
@@ -729,7 +731,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; white-space: pre-wrap; }" +
             "img { max-width: 100%; height: auto; }" +
-            "table { width: 100%; border-collapse: collapse; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             "h1 { font-size: 24pt; font-weight: bold; margin-bottom: 0.5em; }" +
@@ -749,52 +750,63 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         if (isEditing) {
             cleanHTML = localTemplate;
         } else {
-            // Clone the node to manipulate text without affecting the UI
             const clone = reportContentRef.current.cloneNode(true);
-
-            // Traverse text nodes and replace consecutive spaces with non-breaking spaces
-            // This ensures Word respects multiple spaces which it otherwise collapses
             const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
             let node;
             while (node = walker.nextNode()) {
                 if (node.nodeValue) {
-                    // Replace any space that is followed by another space with a non-breaking space
-                    // This preserves the whitespace width while keeping the last space as a breaking point if needed
                     node.nodeValue = node.nodeValue.replace(/ (?= )/g, '\u00A0');
                 }
             }
 
             cleanHTML = clone.innerHTML;
-
-            // 1. Unwrap divs that are inside paragraphs (TinyMCE often creates <p><div>...</div></p>)
-            // This is invalid HTML and causes extra margins in Word.
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
 
-            // 2. Remove any gap between lists and tables (Aggressive)
-            // Matches </ul> or </ol>, followed by ANYTHING (non-greedy), followed by <table or <div
-            // AND specifically target the table start
-            // cleanHTML = cleanHTML.replace(/(<\/ul>|<\/ol>)[\s\S]*?(<table|<div)/gi, '$1$2');
-
-            // 3. Fix Image alignment
-            // TinyMCE uses `style="display: block; margin-left: auto; margin-right: auto;"` for center.
-            // Word prefers <p align="center"> or <div align="center">
             cleanHTML = cleanHTML.replace(/<img[^>]*style="[^"]*margin-left:\s*auto;[^"]*margin-right:\s*auto;[^"]*"[^>]*>/gi, (match) => {
                 return `<p align="center">${match}</p>`;
             });
 
-            cleanHTML = cleanHTML.replace(/style="[^"]*width[^"]*"/g, '');
+            // Special handling for html-to-docx: it likes explicit widths or 100%
+            // But let's leave as is for now as we pass standard HTML
         }
 
         const sourceHTML = header + cleanHTML + footer;
-        const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-        const fileDownload = document.createElement("a");
-        document.body.appendChild(fileDownload);
-        fileDownload.href = source;
-        fileDownload.download = mode === 'static-template' ? `template.doc` : `report_${safeData.domain || 'report'}.doc`;
-        fileDownload.click();
-        document.body.removeChild(fileDownload);
+
+        try {
+            // Use the new API for real DOCX generation
+            const response = await fetch('/api/export-docx', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    html: sourceHTML,
+                    filename: filename,
+                    title: filename.includes('template') ? 'Report Template' : 'Cloudflare Report'
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to generate .docx');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Word export error:', error);
+            // Fallback to the old method if API fails
+            const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+            const a = document.createElement("a");
+            a.href = source;
+            a.download = filename.replace('.docx', '.doc');
+            a.click();
+        }
     };
+
 
     const handleSave = () => {
         let contentToSave = localTemplate;
@@ -2421,19 +2433,50 @@ export default function GDCCPage() {
 
             // 6. Download the final Word document
             updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-            updateProgress(`Generating final Word document...`, 'step');
+            updateProgress(`Generating final .docx document...`, 'step');
             console.log(`\n${'='.repeat(60)}`);
-            console.log(`📥 Generating final Word document...`);
+            console.log(`📥 Generating final .docx document...`);
             const sourceHTML = header + combinedHtml + footer;
-            const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-            const fileDownload = document.createElement("a");
-            document.body.appendChild(fileDownload);
-            fileDownload.href = source;
-            fileDownload.download = `batch_report_${new Date().getTime()}.doc`;
-            fileDownload.click();
-            document.body.removeChild(fileDownload);
-            updateProgress(`✓ File download initiated`, 'success', true);
+            const filename = `batch_report_${new Date().getTime()}.docx`;
+
+            try {
+                // Use the new API for real DOCX generation
+                const response = await fetch('/api/export-docx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        html: sourceHTML,
+                        filename: filename,
+                        title: 'Batch Report'
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to generate .docx');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                updateProgress(`✓ .docx download initiated`, 'success', true);
+            } catch (error) {
+                console.error('Batch Word export error:', error);
+                // Fallback to the old method if API fails
+                const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+                const a = document.createElement("a");
+                a.href = source;
+                a.download = filename.replace('.docx', '.doc');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                updateProgress(`✓ .doc download initiated (Fallback)`, 'success', true);
+            }
             console.log(`✅ File download initiated`);
+
 
 
 
