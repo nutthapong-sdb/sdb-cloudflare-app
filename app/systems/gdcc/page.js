@@ -20,6 +20,7 @@ import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import Swal from 'sweetalert2';
 import { THEMES } from '@/app/utils/themes';
+import { Editor } from '@tinymce/tinymce-react';
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
