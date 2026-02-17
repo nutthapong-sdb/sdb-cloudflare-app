@@ -3,7 +3,7 @@ import { X, Plus, Trash2, Edit2, Copy, FileText, LayoutTemplate, Check, MoreVert
 import Swal from 'sweetalert2';
 import { listTemplates, createTemplate, renameTemplate, deleteTemplate } from '@/app/utils/templateApi';
 
-export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditDomain, theme }) {
+export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditDomain, theme, userRole }) {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(false);
     const [renamingId, setRenamingId] = useState(null);
@@ -71,6 +71,10 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
     };
 
     const handleDelete = async (id, name) => {
+        if (userRole !== 'root') {
+            return Swal.fire('Permission Denied', 'Only root users can delete templates', 'error');
+        }
+
         const res = await Swal.fire({
             title: 'Delete Template?',
             text: `Are you sure you want to delete "${name}"?`,
@@ -222,7 +226,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                         </div>
 
                                         {/* Delete */}
-                                        {tmp.id !== 'default' && (
+                                        {tmp.id !== 'default' && userRole === 'root' && (
                                             <button
                                                 onClick={() => handleDelete(tmp.id, tmp.name)}
                                                 className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
