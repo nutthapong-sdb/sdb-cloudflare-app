@@ -266,7 +266,6 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
         // Dashboard Screenshot Image
-        '@DASHBOARD_IMAGE@': dashboardImage ? `<img src="${dashboardImage}" style="width: 100%; height: auto; display: block; margin: 20px auto;" />` : '',
         '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6 flex justify-center"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="600" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
     };
 
