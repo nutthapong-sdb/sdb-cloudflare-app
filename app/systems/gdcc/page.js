@@ -614,7 +614,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
 };
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName }) => {
     // mode: 'report' | 'static-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
@@ -865,13 +865,16 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 <div className={`px-6 py-4 border-b ${t.modalBorder} flex justify-between items-center ${t.modalHeaderBg} flex-shrink-0`}>
                     <div className="flex items-center gap-2">
                         <FileText className={`w-5 h-5 ${t.iconAccent || 'text-blue-500'}`} />
-                        <h3 className={`text-lg font-bold ${t.modalTitle}`}>
-                            {mode === 'static-template'
-                                ? 'Domain Report'
-                                : (isEditing
-                                    ? 'Edit Report'
-                                    : 'Preview Report'
-                                )}
+                        <h3 className={`text-lg font-bold ${t.modalTitle} flex items-baseline gap-2`}>
+                            <span>
+                                {mode === 'static-template'
+                                    ? 'Domain Report'
+                                    : (isEditing
+                                        ? 'Edit Report'
+                                        : 'Preview Report'
+                                    )}
+                            </span>
+                            {templateName && <span className={`text-xs font-normal opacity-70 ${t.subText || 'text-gray-400'}`}>({templateName})</span>}
                         </h3>
                     </div>
                     <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}>
@@ -2751,6 +2754,7 @@ export default function GDCCPage() {
     // -- TEMPLATE MANAGEMENT STATE --
     const [isManageTemplateModalOpen, setIsManageTemplateModalOpen] = useState(false);
     const [templateToEditId, setTemplateToEditId] = useState('default');
+    const [templateToEditName, setTemplateToEditName] = useState('Default Template');
 
     const handleSaveTemplate = async (newTemplate) => {
         setReportTemplate(newTemplate);
@@ -2765,18 +2769,20 @@ export default function GDCCPage() {
     };
 
     // -- TEMPLATE EDIT HANDLERS --
-    const onEditSub = async (id) => {
+    const onEditSub = async (id, name = 'Report Template') => {
         // Keep manage modal open in background
         setTemplateToEditId(id);
+        setTemplateToEditName(name);
         const content = await loadTemplate(id);
         if (content !== null) setReportTemplate(content);
         setReportModalMode('report');
         setIsReportModalOpen(true);
     };
 
-    const onEditDomain = async (id) => {
+    const onEditDomain = async (id, name = 'Domain Report Template') => {
         // Keep manage modal open in background
         setTemplateToEditId(id);
+        setTemplateToEditName(name);
         const content = await loadStaticTemplate(id);
         if (content !== null) setStaticReportTemplate(content);
         setReportModalMode('static-template');
@@ -3043,6 +3049,7 @@ export default function GDCCPage() {
                 onGenerate={captureAndGenerateReport} // NEW PROP
                 mode={reportModalMode}
                 theme={theme}
+                templateName={templateToEditName}
             />
 
             <ManageTemplateModal
