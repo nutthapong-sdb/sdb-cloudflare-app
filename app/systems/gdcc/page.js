@@ -1552,7 +1552,20 @@ export default function GDCCPage() {
     // Force scroll to top on mount/refresh
     useEffect(() => {
         if (typeof window !== 'undefined') {
+            // Disable browser's automatic scroll restoration
+            if ('scrollRestoration' in window.history) {
+                window.history.scrollRestoration = 'manual';
+            }
+
+            // Scroll to top immediately
             window.scrollTo(0, 0);
+
+            // Also scroll after a short delay to ensure and override any other logic
+            const timer = setTimeout(() => {
+                window.scrollTo(0, 0);
+            }, 100);
+
+            return () => clearTimeout(timer);
         }
     }, []);
 
