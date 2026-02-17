@@ -21,6 +21,7 @@ import * as htmlToImage from 'html-to-image';
 import Swal from 'sweetalert2';
 import { THEMES } from '@/app/utils/themes';
 import { Editor } from '@tinymce/tinymce-react';
+import { REPORT_VARIABLES, STATIC_VARIABLES } from './variableDefinitions';
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
@@ -626,6 +627,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [localTemplate, setLocalTemplate] = useState(currentTemplate);
     const reportContentRef = useRef(null);
     const editorRef = useRef(null);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
+    const filteredVariables = availableVariables.filter(v =>
+        v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.desc.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     // Sync local template when prop changes
     useEffect(() => {
@@ -922,188 +930,61 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     </div>
                                 </div>
                                 {/* Variables Section - Right */}
-                                <div className={`w-[28rem] flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg p-4 border overflow-hidden`}>
-                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'}`}>
-                                        <span className={`${t.buttonPrimary || 'bg-blue-500 text-white'} px-2 py-1 rounded shadow-sm`}>Variables</span>
-                                        <span className={`text-xs ${t.subText || 'text-gray-500'}`}>Click to insert</span>
+                                <div className={`w-[40rem] flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg p-4 border overflow-hidden`}>
+                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center justify-between gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`${t.buttonPrimary || 'bg-blue-500 text-white'} px-2 py-1 rounded shadow-sm`}>Variables</span>
+                                            <span className={`text-xs ${t.subText || 'text-gray-500'}`}>Click to insert</span>
+                                        </div>
+                                        <div className="relative">
+                                            <Search className="absolute left-2 top-1.5 w-3 h-3 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search variables..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="overflow-y-auto pr-2 space-y-4">
-                                        {mode === 'report' ? (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {[
-                                                    '@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@time_range', '@DOMAIN', '@ACCOUNT_NAME', '@ZONE_NAME', '@TOTAL_REQ', '@AVG_TIME', '@BLOCK_PCT', '@LOG_PCT',
-                                                    '@PEAK_TIME', '@PEAK_COUNT', '@PEAK_ATTACK_TIME', '@PEAK_ATTACK_COUNT', '@PEAK_HTTP_TIME', '@PEAK_HTTP_COUNT',
-                                                    '@TOP_UA_AGENT', '@TOP_UA_COUNT',
-                                                    '@TOP_URLS_LIST', '@TOP_IPS_LIST',
-                                                    '@TOP_RULES_LIST', '@TOP_ATTACKERS_LIST', '@TOP_SOURCES_LIST',
-                                                    '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO',
-                                                    '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO',
-                                                    '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES',
-                                                    '@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS',
-                                                    '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL',
-                                                    '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST',
-                                                    '@PAGE_BREAK@',
-                                                    '@DASHBOARD_IMAGE@'
-                                                ].map(v => (
-                                                    <button
-                                                        key={v}
-                                                        onClick={() => editorRef.current?.insertContent(v)}
-                                                        className={`px-2 py-1 ${t.card || 'bg-white border-gray-300'} border rounded text-[10px] font-mono ${t.subText || 'text-gray-600'} ${t.tableRowHover || 'hover:bg-blue-50'} hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate w-full`}
-                                                        title={`Insert ${v}`}
+
+                                    <div className="flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar">
+                                        <table className="w-full text-left text-xs border-collapse relative">
+                                            <thead className={`sticky top-0 z-10 ${t.card || 'bg-gray-100'} border-b shadow-sm`}>
+                                                <tr>
+                                                    <th className="p-2 font-semibold w-[30%]">Variable</th>
+                                                    <th className="p-2 font-semibold w-[40%]">Description</th>
+                                                    <th className="p-2 font-semibold w-[30%]">Example</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {filteredVariables.length > 0 ? filteredVariables.map((v) => (
+                                                    <tr
+                                                        key={v.name}
+                                                        onClick={() => editorRef.current?.insertContent(v.name)}
+                                                        className={`cursor-pointer hover:bg-blue-50 transition-colors group ${t.text || 'text-gray-700'}`}
+                                                        title={`Click to insert ${v.name}\nCategory: ${v.category}`}
                                                     >
-                                                        {v}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            // Static Template Mode - Grouped by Category
-                                            <>
-                                                {/* ข้อมูลพื้นฐาน */}
-                                                <div>
-                                                    <div className={`text-xs font-semibold ${t.text || 'text-gray-600'} mb-2 pb-1 border-b ${t.modalBorder || 'border-gray-300'}`}>
-                                                        ข้อมูลพื้นฐาน
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@DAY', '@MONTH', '@YEAR', '@FULL_DATE', '@ACCOUNT_NAME', '@ZONE_NAME', '@DNS_RECORDS'
-                                                            , '@ZONE_TOTAL_REQ', '@ZONE_CACHE_HIT_REQ', '@ZONE_CACHE_HIT_REQ_RATIO'
-                                                            , '@ZONE_TOTAL_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH', '@ZONE_CACHE_HIT_BANDWIDTH_RATIO'
-                                                            , '@TOP_IP_VAL', '@TOP_UA_VAL', '@TOP_COUNTRY_VAL', '@TOP_HOST_VAL'
-                                                            , '@PAGE_BREAK@'
-                                                        ].map(v => (
-                                                            <button
-                                                                key={v}
-                                                                onClick={() => editorRef.current?.insertContent(v)}
-                                                                className={`px-2 py-1 ${t.card || 'bg-white border-gray-300'} border rounded text-[10px] font-mono ${t.subText || 'text-gray-600'} ${t.tableRowHover || 'hover:bg-blue-50'} hover:text-blue-600 hover:border-blue-400 transition-all shadow-sm active:scale-95 text-left truncate`}
-                                                                title={`Insert ${v}`}
-                                                            >
-                                                                {v}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* 1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ */}
-                                                <div>
-                                                    <div className={`text-xs font-semibold ${t.accent || 'text-blue-700'} mb-2 pb-1 border-b ${t.modalBorder || 'border-blue-300'}`}>
-                                                        1. ป้องกันการโจมตีด้วยกลไกอัตโนมัติ
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@SECURITY_LEVEL', '@BOT_MANAGEMENT_STATUS', '@BLOCK_AI_BOTS',
-                                                            '@DEFINITELY_AUTOMATED', '@LIKELY_AUTOMATED', '@VERIFIED_BOTS',
-                                                            '@CLOUDFLARE_MANAGED_RULESET', '@OWASP_CORE_RULESET',
-                                                            '@MANAGED_RULES_COUNT'].map(v => (
-                                                                <button
-                                                                    key={v}
-                                                                    onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className={`px-2 py-1 ${t.card || 'bg-white'} border ${t.modalBorder || 'border-blue-200'} rounded text-[10px] font-mono ${t.subText || 'text-blue-700'} ${t.tableRowHover || 'hover:bg-blue-50 hover:border-blue-400'} transition-all shadow-sm active:scale-95 text-left truncate`}
-                                                                    title={`Insert ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* 2. ลดความเสี่ยงช่องโหว่ทางเทคนิค */}
-                                                <div>
-                                                    <div className="text-xs font-semibold text-green-700 mb-2 pb-1 border-b border-green-300">
-                                                        2. ลดความเสี่ยงช่องโหว่ทางเทคนิค
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@SSL_MODE', '@MIN_TLS_VERSION', '@TLS_1_3',
-                                                            '@LEAKED_CREDENTIALS', '@BROWSER_INTEGRITY_CHECK', '@HOTLINK_PROTECTION'].map(v => (
-                                                                <button
-                                                                    key={v}
-                                                                    onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-green-200 rounded text-[10px] font-mono text-green-700 hover:bg-green-50 hover:border-green-400 transition-all shadow-sm active:scale-95 text-left truncate"
-                                                                    title={`Insert ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* 3. ป้องกัน DDoS และการโจมตีอื่นๆ */}
-                                                <div>
-                                                    <div className="text-xs font-semibold text-red-700 mb-2 pb-1 border-b border-red-300">
-                                                        3. ป้องกัน DDoS และการโจมตีอื่นๆ
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@DDOS_PROTECTION', '@HTTP_DDOS_PROTECTION', '@SSL_TLS_DDOS_PROTECTION', '@NETWORK_DDOS_PROTECTION',
-                                                        ].map(v => (
-                                                            <button
-                                                                key={v}
-                                                                onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-red-200 rounded text-[10px] font-mono text-red-700 hover:bg-red-50 hover:border-red-400 transition-all shadow-sm active:scale-95 text-left truncate"
-                                                                title={`Insert ${v}`}
-                                                            >
-                                                                {v}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* 4. Custom Rules & Rulesets */}
-                                                <div>
-                                                    <div className="text-xs font-semibold text-purple-700 mb-2 pb-1 border-b border-purple-300">
-                                                        4. Custom Rules & Rulesets
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@CUSTOM_RULES_STATUS', '@RULE_BYPASSWAF', '@RULE_BYPASS_EMAIL', '@RULE_BLOCK_URL',
-                                                            '@RATE_LIMIT_RULES_STATUS', '@RULE_LOG_1000_REQ'].map(v => (
-                                                                <button
-                                                                    key={v}
-                                                                    onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-purple-200 rounded text-[10px] font-mono text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all shadow-sm active:scale-95 text-left truncate"
-                                                                    title={`Insert ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* 5. สถิติความปลอดภัย (Firewall Stats) */}
-                                                <div>
-                                                    <div className="text-xs font-semibold text-orange-700 mb-2 pb-1 border-b border-orange-300">
-                                                        5. สถิติความปลอดภัย (Firewall Stats)
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@FW_TOTAL_EVENTS', '@FW_MANAGED_EVENTS', '@FW_CUSTOM_EVENTS', '@FW_BIC_EVENTS', '@FW_ACCESS_EVENTS'].map(v => (
-                                                            <button
-                                                                key={v}
-                                                                onClick={() => editorRef.current?.insertContent(v)}
-                                                                className="px-2 py-1 bg-white border border-orange-200 rounded text-[10px] font-mono text-orange-700 hover:bg-orange-50 hover:border-orange-400 transition-all shadow-sm active:scale-95 text-left truncate"
-                                                                title={`Insert ${v}`}
-                                                            >
-                                                                {v}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* 6. Table Variables */}
-                                                <div>
-                                                    <div className="text-xs font-semibold text-teal-700 mb-2 pb-1 border-b border-teal-300">
-                                                        6. Table Variables
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {['@IP_ACCESS_RULES_ROWS', '@DNS_TOTAL_ROWS', '@ZONE_TOP_COUNTRIES_REQ', '@ZONE_TOP_COUNTRIES_BYTES',
-                                                            '@TOP_PATHS_LIST', '@TOP_CUSTOM_RULES_LIST', '@TOP_MANAGED_RULES_LIST'].map(v => (
-                                                                <button
-                                                                    key={v}
-                                                                    onClick={() => editorRef.current?.insertContent(v)}
-                                                                    className="px-2 py-1 bg-white border border-teal-200 rounded text-[10px] font-mono text-teal-700 hover:bg-teal-50 hover:border-teal-400 transition-all shadow-sm active:scale-95 text-left truncate"
-                                                                    title={`Insert ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ))}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
+                                                        <td className="p-2 font-mono text-blue-600 font-medium whitespace-nowrap group-hover:underline align-top">
+                                                            {v.name}
+                                                            <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
+                                                        </td>
+                                                        <td className="p-2 text-gray-600 align-top">
+                                                            {v.desc}
+                                                        </td>
+                                                        <td className="p-2 font-mono text-gray-500 text-[10px] break-all align-top">
+                                                            {v.example}
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan={3} className="p-4 text-center text-gray-500 italic">
+                                                            No variables found matching "{searchTerm}"
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
