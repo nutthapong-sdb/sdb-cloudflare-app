@@ -744,15 +744,15 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
             "</head><body><div class='Section1'>";
 
-        const cleanHeader = "<html><head><meta charset='utf-8'><style>" +
-            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 12pt; }" +
+        const cleanHeader = "<style>" +
+            "body, p, div, span, td, th { font-family: 'Arial', sans-serif; font-size: 11pt; }" +
             "img { max-width: 100%; height: auto; display: block; margin: 10px auto; }" +
-            "table { width: 100%; border-collapse: collapse; margin: 10px 0; }" +
+            "table { width: 100%; border-collapse: collapse; margin: 10px 0; border: 1px solid #000; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
-            "h1, h2, h3 { color: #1a56db; }" +
-            "</style></head><body>";
+            "h1, h2, h3 { color: #1a56db; font-family: 'Arial', sans-serif; }" +
+            "</style><div class='Section1'>";
 
-        const footer = "</div></body></html>";
+        const footer = "</div>";
 
         let cleanHTML = "";
 
@@ -1394,7 +1394,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                 <div
                     onClick={() => !loading && setIsOpen(!isOpen)}
                     className={`
-             w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all 
+             w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all
              flex items-center justify-between
              ${t.bg} border ${t.border}
              ${isOpen ? 'ring-2 ring-blue-500/50 border-blue-500' : 'hover:opacity-80'}
@@ -2015,7 +2015,7 @@ export default function GDCCPage() {
                 fwCustom += count;
             } else if (lowerSource === 'bic' || lowerSource === 'browser_integrity_check') {
                 fwBic += count;
-            } else if (lowerSource === 'accessrules' || lowerSource === 'ip_access_rules' || lowerSource === 'ip' || lowerSource === 'country' || lowerSource === 'asn' || lowerSource === 'ipaddress' || lowerSource === 'ip_access_rule') {
+            } else if (lowerSource === 'accessrules' || lowerSource === 'ip_access_rules' || lowerSource === 'ip' || lowerSource === 'asn' || lowerSource === 'ipaddress' || lowerSource === 'ip_access_rule') {
                 fwAccess += count;
             }
 
@@ -2143,16 +2143,16 @@ export default function GDCCPage() {
             "</style>" +
             "</head><body><div class='Section1'>";
 
-        const cleanHeader = "<html><head><meta charset='utf-8'><style>" +
-            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 12pt; }" +
+        const cleanHeader = "<style>" +
+            "body, p, div, span, td, th { font-family: 'Arial', sans-serif; font-size: 11pt; }" +
             "img { max-width: 100%; height: auto; display: block; margin: 10px auto; }" +
-            "table { width: 100%; border-collapse: collapse; margin: 10px 0; }" +
+            "table { width: 100%; border-collapse: collapse; margin: 10px 0; border: 1px solid #000; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
-            "h1, h2, h3 { color: #1a56db; }" +
+            "h1, h2, h3 { color: #1a56db; font-family: 'Arial', sans-serif; }" +
             ".page-break { page-break-after: always; }" +
-            "</style></head><body>";
+            "</style><div class='Section1'>";
 
-        const footer = "</div></body></html>";
+        const footer = "</div>";
 
 
         let combinedHtml = "";
