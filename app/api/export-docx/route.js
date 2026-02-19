@@ -1,66 +1,63 @@
 import { NextResponse } from 'next/server';
-import HTMLToDOCX from 'html-to-docx';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+import libreoffice from 'libreoffice-convert';
+import { promisify } from 'util';
+
+const convertAsync = promisify(libreoffice.convert);
 
 export async function POST(request) {
+    let tempDocPath = null;
+    let outputPath = null;
+
     try {
         const body = await request.json();
-        const { html, filename = 'document.docx', title = 'Report' } = body;
+        const { html, filename = 'document.docx' } = body;
 
         if (!html) {
             return NextResponse.json({ success: false, message: 'Missing HTML content' }, { status: 400 });
         }
 
-        // Configure document options
-        // Note: TH SarabunPSK name might need to match what Word expects
-        const docxOptions = {
-            title: title,
-            orientation: 'portrait',
-            margins: {
-                top: 1440, // 1 inch
-                right: 1440,
-                bottom: 1440,
-                left: 1440,
-            },
-            font: 'Arial',
-            fontSize: 32, // html-to-docx uses half-points (16pt * 2)
-            footer: true,
-            pageNumber: true,
-        };
+        // 1. Create a temporary file path
+        const tmpDir = os.tmpdir();
+        const timestamp = Date.now();
+        const baseName = `report_${timestamp}`;
+        tempDocPath = path.join(tmpDir, `${baseName}.html`); // Using .html as input for LibreOffice is safer for MHTML/HTML content
+        // Note: We save as .html because LibreOffice handles HTML -> DOCX conversion very well. 
+        // If we saved as .doc (MHTML), it might be tricky relying on extensions.
+        // Actually, the user's content IS HTML.
 
-        // Convert HTML to DOCX Buffer
-        const docxBuffer = await HTMLToDOCX(html, null, docxOptions);
+        // 2. Prepare Buffer (Skip file write, use buffer directly)
+        const inputBuffer = Buffer.from(html, 'utf-8');
 
-        if (!docxBuffer) {
-            throw new Error('HTMLToDOCX returned null/undefined');
-        }
 
-        const length = docxBuffer.length || docxBuffer.byteLength || 0;
-        console.log(`DOCX Generation: Buffer Type: ${docxBuffer.constructor.name}, Length: ${length}`);
+        // 3. Convert to DOCX using LibreOffice
+        // libreoffice-convert takes a buffer.
 
-        if (length < 2000) { // Standard empty docx is around 20k
-            console.warn('DOCX Buffer is suspiciously small:', length);
-        }
+        console.log('🔄 Converting to DOCX using LibreOffice...');
+        const docxBuffer = await convertAsync(inputBuffer, '.docx', undefined);
 
-        // Ensure we have a Buffer/Uint8Array for the Response
-        const responseData = Buffer.isBuffer(docxBuffer) ? docxBuffer : Buffer.from(docxBuffer);
+        console.log(`✅ Conversion successful. Buffer length: ${docxBuffer.length}`);
 
-        // Return the binary data with correct headers
-        return new Response(responseData, {
+        // 4. Return the new DOCX
+        return new Response(docxBuffer, {
             status: 200,
             headers: {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'Content-Disposition': `attachment; filename="${filename}"`,
-                'Content-Length': responseData.length.toString(),
+                'Content-Length': docxBuffer.length.toString(),
             },
         });
 
-
     } catch (error) {
-        console.error('DOCX Export Error:', error);
+        console.error('DOCX Export/Conversion Error:', error);
         return NextResponse.json({
             success: false,
-            message: 'Failed to generate DOCX',
+            message: 'Failed to convert to DOCX',
             error: error.message
         }, { status: 500 });
+    } finally {
+        // cleanup if we used files, but here we used buffer with library
     }
 }

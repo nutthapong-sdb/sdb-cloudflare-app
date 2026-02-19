@@ -2143,16 +2143,22 @@ export default function GDCCPage() {
             "</style>" +
             "</head><body><div class='Section1'>";
 
-        const cleanHeader = "<style>" +
-            "body, p, div, span, td, th { font-family: 'Arial', sans-serif; font-size: 11pt; }" +
-            "img { max-width: 100%; height: auto; display: block; margin: 10px auto; }" +
-            "table { width: 100%; border-collapse: collapse; margin: 10px 0; border: 1px solid #000; }" +
+        const cleanHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+            "xmlns:w='urn:schemas-microsoft-com:office:word' " +
+            "xmlns='http://www.w3.org/TR/REC-html40'>" +
+            "<head><meta charset='utf-8'><title>Batch Report</title>" +
+            "<style>" +
+            "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
+            "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "div.Section1 { page: Section1; }" +
+            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
+            "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
-            "h1, h2, h3 { color: #1a56db; font-family: 'Arial', sans-serif; }" +
             ".page-break { page-break-after: always; }" +
-            "</style><div class='Section1'>";
+            "</style>" +
+            "</head><body><div class='Section1'>";
 
-        const footer = "</div>";
+        const footer = "</div></body></html>";
 
 
         let combinedHtml = "";
@@ -2473,45 +2479,27 @@ export default function GDCCPage() {
             updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
             updateProgress(`Generating final .docx document...`, 'step');
             console.log(`\n${'='.repeat(60)}`);
-            console.log(`📥 Generating final .docx document...`);
-            const sourceHTML = legacyHeader + combinedHtml + footer;
-            const filename = `batch_report_${new Date().getTime()}.docx`;
+            console.log(`📥 Generating final .doc document (Legacy Mode)...`);
+            // cleanHeader now contains the legacy structure
+            // cleanHeader (legacy structure) is still good HTML source
+            const sourceHTML = cleanHeader + combinedHtml + footer;
+            const filename = `batch_report_${new Date().getTime()}.doc`;
 
             try {
-                // Use the new API for real DOCX generation with CLEAN HTML
-                const response = await fetch('/api/export-docx', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        html: cleanHeader + combinedHtml + footer,
-                        filename: filename,
-                        title: 'Batch Report'
-                    })
-                });
+                // Legacy .doc Method (MHTML/HTML masquerading as .doc)
+                console.log('Using Legacy .doc export method');
 
-                if (!response.ok) throw new Error('Failed to generate .docx');
-
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                updateProgress(`✓ .docx download initiated`, 'success', true);
-            } catch (error) {
-                console.error('Batch Word export error:', error);
-                // Fallback to the old method if API fails
                 const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
                 const a = document.createElement("a");
                 a.href = source;
-                a.download = filename.replace('.docx', '.doc');
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                updateProgress(`✓ .doc download initiated (Fallback)`, 'success', true);
+                updateProgress(`✓ .doc download initiated`, 'success', true);
+            } catch (error) {
+                console.error('Batch Word export error:', error);
+                updateProgress(`❌ Export failed: ${error.message}`, 'error');
             }
 
             console.log(`✅ File download initiated`);
