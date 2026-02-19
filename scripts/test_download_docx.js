@@ -160,7 +160,7 @@ const path = require('path');
                 // console.log('Current files in tmp:', currentFiles);
             }
 
-            const found = currentFiles.find(f => f.endsWith('.docx') && !f.endsWith('.crdownload'));
+            const found = currentFiles.find(f => (f.endsWith('.docx') || f.endsWith('.doc')) && !f.endsWith('.crdownload'));
             if (found) {
                 downloadedFile = found;
                 break;
@@ -178,11 +178,26 @@ const path = require('path');
                 log(`⚠️ Warning: File size is curiously small (${stats.size} bytes). Possible corruption?`, colors.yellow);
             }
 
-            // Open the file (macOS)
-            log(`📂 Opening file: ${filePath}`, colors.cyan);
-            require('child_process').exec(`open "${filePath}"`, (error) => {
-                if (error) log(`⚠️ Failed to open file: ${error.message}`, colors.yellow);
-            });
+            // Run Python Conversion Script
+            if (downloadedFile.endsWith('.doc')) {
+                log('\nRunning Python Conversion Script...', colors.cyan);
+                const pythonScriptPath = path.join(__dirname, 'convert_doc_to_docx.py');
+
+                await new Promise((resolve, reject) => {
+                    require('child_process').exec(`python3 "${pythonScriptPath}"`, (error, stdout, stderr) => {
+                        if (error) {
+                            log(`❌ Python Conversion Failed: ${error.message}`, colors.red);
+                            console.error(stderr);
+                            // Don't fail the whole test, just log error
+                        } else {
+                            console.log(stdout); // Print Python script output
+                            log('✅ Conversion Script Completed.', colors.green);
+                        }
+                        resolve();
+                    });
+                });
+            }
+
         } else {
             const allFiles = fs.readdirSync(TMP_DOWNLOAD_DIR);
             log(`❌ Timeout! Files found in directory: ${JSON.stringify(allFiles)}`, colors.red);
