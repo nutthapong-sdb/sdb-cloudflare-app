@@ -283,7 +283,8 @@ export default function APIDiscoveryPage() {
           const result = await callAPI('get-subdomain-stats', {
             zoneId: selectedZone,
             method: item.method,
-            path: item.path
+            path: item.path,
+            host: item.host
           }, null, true); // skipLoading=true to avoid full screen loader
 
           if (result && result.data) {
@@ -333,13 +334,15 @@ export default function APIDiscoveryPage() {
       // Use a concurrency limiter if list is large? For now, run sequential batches is safer.
 
       for (const item of visibleData) {
-        const isVariableHost = (item.host || '').includes('{hostVar1}');
+        const hasHostVar = (item.host || '').includes('{hostVar1}');
+        const hasPathVar = /\{var\d+\}/.test(item.path || '');
+        const isVariableType = hasHostVar || hasPathVar;
 
         // Base row
         // escape double quotes
         const safe = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
-        if (isVariableHost) {
+        if (isVariableType) {
           // 1. Add Parent Row FIRST
           rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Parent`);
 
@@ -352,7 +355,8 @@ export default function APIDiscoveryPage() {
             const res = await callAPI('get-subdomain-stats', {
               zoneId: selectedZone,
               method: item.method,
-              path: item.path
+              path: item.path,
+              host: item.host
             }, null, true);
             subs = res?.data || [];
             // Update cache for future
@@ -360,10 +364,10 @@ export default function APIDiscoveryPage() {
           }
 
           if (subs.length > 0) {
-            // Add rows for each subdomain
+            // Add rows for each subdomain/subpath
             for (const sub of subs) {
-              // Format: Subdomain Host, Method, Source, State, Path, Count, YES
-              rows.push(`${safe(sub.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},${sub.count},Subdomain`);
+              // Format: Subdomain Host, Method, Source, State, Path, Count, Type
+              rows.push(`${safe(sub.host || item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(sub.path || item.path)},${sub.count},Sub-Item`);
             }
           }
           // Fallback logic removed as parent row is already added above.
@@ -612,7 +616,9 @@ export default function APIDiscoveryPage() {
                                   .map((item, index) => {
                                     // Use absolute index ID based on data for consistent key
                                     const rowKey = `${item.method}-${item.path}-${index}`;
-                                    const hasVar = (item.host || '').includes('{hostVar1}');
+                                    const hasHostVar = (item.host || '').includes('{hostVar1}');
+                                    const hasPathVar = /\{var\d+\}/.test(item.path || '');
+                                    const hasVar = hasHostVar || hasPathVar;
                                     const isExpanded = expandedItems[rowKey];
                                     const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
                                     const subStats = subdomainCache[cacheKey] || [];
@@ -657,16 +663,19 @@ export default function APIDiscoveryPage() {
                                               <div className="bg-gray-900/50 rounded-lg p-3 border border-purple-500/30">
                                                 <h5 className="text-xs font-bold text-gray-400 mb-2 flex items-center gap-2">
                                                   <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
-                                                  Subdomains for <span className="text-purple-300 font-mono">{item.path}</span>
+                                                  Traffic Breakdown for <span className="text-purple-300 font-mono">{hasPathVar ? item.path : item.host}</span>
                                                 </h5>
                                                 {subStats.length > 0 ? (
                                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                                    {subStats.map((sub, i) => (
-                                                      <div key={i} className="flex justify-between items-center bg-gray-800 p-2 rounded text-xs border border-gray-700">
-                                                        <span className="text-gray-300 truncate font-mono" title={sub.host}>{sub.host}</span>
-                                                        <span className="text-green-400 font-bold bg-green-900/30 px-1.5 rounded">{sub.count}</span>
-                                                      </div>
-                                                    ))}
+                                                    {subStats.map((sub, i) => {
+                                                      const displayStr = hasPathVar && hasHostVar ? `${sub.host}${sub.path}` : (hasPathVar ? sub.path : sub.host);
+                                                      return (
+                                                        <div key={i} className="flex justify-between items-center bg-gray-800 p-2 rounded text-xs border border-gray-700">
+                                                          <span className="text-gray-300 truncate font-mono" title={displayStr}>{displayStr}</span>
+                                                          <span className="text-green-400 font-bold bg-green-900/30 px-1.5 rounded">{sub.count}</span>
+                                                        </div>
+                                                      );
+                                                    })}
                                                   </div>
                                                 ) : (
                                                   <p className="text-xs text-gray-500 italic">No traffic data found for this path pattern.</p>
