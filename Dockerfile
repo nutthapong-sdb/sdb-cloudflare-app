@@ -29,6 +29,9 @@ ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
+# Install LibreOffice and standard fonts for server-side HTML to DOCX conversion
+RUN apk add --no-cache libreoffice font-cantarell ttf-dejavu ttf-droid ttf-freefont ttf-liberation
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 

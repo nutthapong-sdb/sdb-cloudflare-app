@@ -1271,21 +1271,29 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
                 </div>
 
                 {/* Footer */}
-                <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
-                    <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
-                    <button
-                        onClick={() => {
-                            // If NO_SUBDOMAIN is selected, send empty array
-                            // Otherwise, filter out NO_SUBDOMAIN from the selection
-                            const hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
-                            onConfirm(hostsToGenerate, batchTimeRange, selectedTemplateId);
-                        }}
-                        disabled={selected.size === 0}
-                        className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
-                    >
-                        <FileText className="w-3 h-3" />
-                        {selected.has(NO_SUBDOMAIN) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
-                    </button>
+                <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-between items-center gap-3`}>
+                    <div>
+                        <a href="/tools/word-converter.zip" download className={`text-xs ${t.iconAccent || 'text-purple-400'} hover:opacity-80 underline flex items-center gap-1`}>
+                            <Download className="w-3 h-3" />
+                            เครื่องมือแปลงไฟล์ .docx (Mac/Win)
+                        </a>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
+                        <button
+                            onClick={() => {
+                                // If NO_SUBDOMAIN is selected, send empty array
+                                // Otherwise, filter out NO_SUBDOMAIN from the selection
+                                const hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
+                                onConfirm(hostsToGenerate, batchTimeRange, selectedTemplateId);
+                            }}
+                            disabled={selected.size === 0}
+                            className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
+                        >
+                            <FileText className="w-3 h-3" />
+                            {selected.has(NO_SUBDOMAIN) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2477,9 +2485,8 @@ export default function GDCCPage() {
 
             // 6. Download the final Word document
             updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-            updateProgress(`Generating final .docx document...`, 'step');
+            updateProgress(`Generating final .doc document...`, 'step');
             console.log(`\n${'='.repeat(60)}`);
-            console.log(`📥 Generating final .doc document (Legacy Mode)...`);
             // cleanHeader now contains the legacy structure
             // cleanHeader (legacy structure) is still good HTML source
             const sourceHTML = cleanHeader + combinedHtml + footer;
