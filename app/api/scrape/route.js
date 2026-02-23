@@ -169,7 +169,7 @@ export async function POST(request) {
 
                     if (accounts.length > 0) {
                         allAccounts = allAccounts.concat(accounts);
-                        
+
                         // Check pagination using result_info
                         if (resultInfo) {
                             if (page >= resultInfo.total_pages) {
@@ -178,7 +178,7 @@ export async function POST(request) {
                                 page++;
                             }
                         } else {
-                             // Fallback logic
+                            // Fallback logic
                             if (accounts.length < perPage) {
                                 hasMore = false;
                             } else {
@@ -189,7 +189,7 @@ export async function POST(request) {
                         hasMore = false;
                     }
                 }
-                
+
                 console.log(`\n✅ Total Accounts Fetched: ${allAccounts.length}`);
                 return NextResponse.json({ success: true, data: allAccounts });
 
@@ -536,19 +536,34 @@ export async function POST(request) {
             }
         }
 
-        // 7.1 Get Subdomain Stats (GraphQL for {hostVar1})
+        // 7.1 Get Subdomain Stats (GraphQL for {hostVar1} and/or path {var1})
         else if (action === 'get-subdomain-stats') {
-            const { zoneId, method, path, limit } = body;
+            const { zoneId, method, path, host, limit } = body;
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
 
             // Default 7 days scan to find subdomains
             const now = new Date();
             const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days
 
-            console.log(`🔍 Fetching Subdomain Stats for Path: ${path}, Method: ${method}...`);
+            const hasPathVar = typeof path === 'string' && path.includes('{var1}');
+            const hasHostVar = typeof host === 'string' && host.includes('{hostVar1}');
+
+            console.log(`🔍 Fetching Subdomain/Path Stats for Path: ${path} [hasVar:${hasPathVar}], Host: ${host} [hasVar:${hasHostVar}], Method: ${method}...`);
+
+            let hostFilter = hasHostVar ? '' : `clientRequestHTTPHost: $host,`;
+            let pathFilter = hasPathVar ? `clientRequestPath_like: $pathLike` : `clientRequestPath: $path`;
+
+            let queryArgs = `$zoneTag: String, $since: String, $until: String, $method: String`;
+            if (!hasHostVar && host) queryArgs += `, $host: String`;
+            if (hasPathVar) queryArgs += `, $pathLike: String`;
+            else queryArgs += `, $path: String`;
+
+            const dimensionHost = hasHostVar ? `clientRequestHTTPHost` : ``;
+            const dimensionPath = hasPathVar ? `clientRequestPath` : ``;
+            const dimensions = [dimensionHost, dimensionPath].filter(Boolean).join('\n                                    ');
 
             const query = `
-                query GetSubdomains($zoneTag: String, $since: String, $until: String, $method: String, $path: String, $limit: Int) {
+                query GetStats(${queryArgs}) {
                     viewer {
                         zones(filter: { zoneTag: $zoneTag }) {
                             httpRequestsAdaptiveGroups(
@@ -556,14 +571,15 @@ export async function POST(request) {
                                     datetime_geq: $since,
                                     datetime_leq: $until,
                                     clientRequestHTTPMethodName: $method,
-                                    clientRequestPath: $path
+                                    ${hostFilter}
+                                    ${pathFilter}
                                 }
-                                limit: $limit
+                                limit: ${limit || 50}
                                 orderBy: [count_DESC]
                             ) {
                                 count
                                 dimensions {
-                                    clientRequestHTTPHost
+                                    ${dimensions || 'clientRequestHTTPHost'}
                                 }
                             }
                         }
@@ -575,10 +591,11 @@ export async function POST(request) {
                 zoneTag: zoneId,
                 since: since.toISOString(),
                 until: now.toISOString(),
-                method: method,
-                path: path,
-                limit: limit || 50
+                method: method
             };
+            if (!hasHostVar && host) variables.host = host;
+            if (hasPathVar) variables.pathLike = path.replace(/\{var\d+\}/g, '%');
+            else variables.path = path;
 
             try {
                 const response = await axios({
@@ -592,21 +609,21 @@ export async function POST(request) {
                 });
 
                 if (response.data.errors) {
-                    // console.error('❌ Cloudflare GraphQL Errors:', response.data.errors);
                     return NextResponse.json({ success: false, message: 'GraphQL Error', error: response.data.errors }, { status: 500 });
                 }
 
                 const groups = response.data.data.viewer.zones[0].httpRequestsAdaptiveGroups || [];
                 const subdomains = groups.map(g => ({
-                    host: g.dimensions.clientRequestHTTPHost,
+                    host: hasHostVar && g.dimensions.clientRequestHTTPHost ? g.dimensions.clientRequestHTTPHost : host,
+                    path: hasPathVar && g.dimensions.clientRequestPath ? g.dimensions.clientRequestPath : path,
                     count: g.count
                 }));
 
                 return NextResponse.json({ success: true, data: subdomains });
 
             } catch (error) {
-                console.error('Subdomain Stats Error:', error.response?.data || error.message);
-                return NextResponse.json({ success: false, message: 'Failed to fetch subdomain stats' }, { status: 500 });
+                console.error('Subdomain/Path Stats Error:', error.response?.data || error.message);
+                return NextResponse.json({ success: false, message: 'Failed to fetch subdomain/path stats' }, { status: 500 });
             }
         }
 
