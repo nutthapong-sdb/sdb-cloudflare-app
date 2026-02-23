@@ -124,10 +124,18 @@ export default function APIDiscoveryPage() {
   const [rawDiscoveryData, setRawDiscoveryData] = useState(null);
   const [loadingDiscovery, setLoadingDiscovery] = useState(false);
 
+  // State for API Endpoints (Saved Operations)
+  const [endpointsData, setEndpointsData] = useState([]);
+  const [loadingEndpoints, setLoadingEndpoints] = useState(false);
+
   // Feature: Subdomain Expansion
   const [expandedItems, setExpandedItems] = useState({}); // { [rowId]: boolean }
   const [subdomainCache, setSubdomainCache] = useState({}); // { [key]: Array }
   const [loadingSubdomains, setLoadingSubdomains] = useState({}); // { [rowId]: boolean }
+
+  // State for CSV downloading
+  const [downloadingCsvType, setDownloadingCsvType] = useState(null); // 'discovery' | 'endpoints'
+  const [downloadTimer, setDownloadTimer] = useState(0);
 
   // State for Filtering & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -223,6 +231,7 @@ export default function APIDiscoveryPage() {
     setSelectedZone('');
     setZones([]);
     setDiscoveryData([]);
+    setEndpointsData([]);
     setExpandedItems({});
     setSubdomainCache({});
 
@@ -265,7 +274,21 @@ export default function APIDiscoveryPage() {
       setLoadingDiscovery(false);
     };
 
+    const loadEndpoints = async () => {
+      setLoadingEndpoints(true);
+      console.log('🔍 กำลังดึงข้อมูล Endpoints สำหรับ Zone:', selectedZone);
+
+      const result = await callAPI('get-api-endpoints', { zoneId: selectedZone }, null, true);
+      if (result && result.data) {
+        setEndpointsData(result.data);
+      } else {
+        setEndpointsData([]);
+      }
+      setLoadingEndpoints(false);
+    };
+
     loadDiscovery();
+    loadEndpoints();
   }, [selectedZone]);
 
   // Handle Expand Subdomains
@@ -321,7 +344,11 @@ export default function APIDiscoveryPage() {
     }
 
     showToast('กำลังเตรียมข้อมูล CSV (อาจใช้เวลาสักครู่)...', 'success');
-    setLoading(true);
+    setDownloadingCsvType('discovery');
+    setDownloadTimer(0);
+    const timerInterval = setInterval(() => {
+      setDownloadTimer(prev => prev + 1);
+    }, 1000);
 
     try {
       // CSV Header
@@ -395,7 +422,80 @@ export default function APIDiscoveryPage() {
       console.error('❌ CSV Download Error:', error);
       showToast('เกิดข้อผิดพลาดในการดาวน์โหลด CSV', 'error');
     } finally {
-      setLoading(false);
+      clearInterval(timerInterval);
+      setDownloadingCsvType(null);
+    }
+  };
+
+  // ฟังก์ชันดาวน์โหลด CSV สำหรับ Endpoints (with Subdomains logic like Discovery)
+  const handleDownloadEndpointsCSV = async () => {
+    if (!endpointsData || endpointsData.length === 0) {
+      showToast('ไม่มีข้อมูลสำหรับดาวน์โหลด', 'error');
+      return;
+    }
+
+    setDownloadingCsvType('endpoints');
+    setDownloadTimer(0);
+    const timerInterval = setInterval(() => {
+      setDownloadTimer(prev => prev + 1);
+    }, 1000);
+
+    try {
+      const headers = ['Hostname,Method,Source,State,Path,RequestCount,Type'];
+      const rows = [];
+      const safe = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+
+      for (const item of endpointsData) {
+        const hasHostVar = (item.host || '').includes('{hostVar1}');
+        const hasPathVar = /\{var\d+\}/.test(item.path || '');
+        const isVariableType = hasHostVar || hasPathVar;
+
+        if (isVariableType) {
+          rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Parent`);
+
+          const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
+          let subs = subdomainCache[cacheKey];
+
+          if (!subs) {
+            const res = await callAPI('get-subdomain-stats', {
+              zoneId: selectedZone,
+              method: item.method,
+              path: item.path,
+              host: item.host
+            }, null, true);
+            subs = res?.data || [];
+            setSubdomainCache(prev => ({ ...prev, [cacheKey]: subs }));
+          }
+
+          if (subs.length > 0) {
+            for (const sub of subs) {
+              rows.push(`${safe(sub.host || item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(sub.path || item.path)},${sub.count},Sub-Item`);
+            }
+          }
+        } else {
+          rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Normal`);
+        }
+      }
+
+      const csvContent = [headers, ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `api_endpoints_${selectedZone}_expanded_${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('ดาวน์โหลด CSV ของ Endpoints เรียบร้อยแล้ว', 'success');
+    } catch (error) {
+      console.error('❌ CSV Download Error:', error);
+      showToast('เกิดข้อผิดพลาดในการดาวน์โหลด CSV', 'error');
+    } finally {
+      clearInterval(timerInterval);
+      setDownloadingCsvType(null);
     }
   };
 
@@ -565,14 +665,14 @@ export default function APIDiscoveryPage() {
 
                             <button
                               onClick={handleDownloadCSV}
-                              className={`bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              disabled={loading}
+                              className={`bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500 ${downloadingCsvType ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={downloadingCsvType !== null}
                               title="Download Extended CSV"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                               </svg>
-                              <span>CSV</span>
+                              <span>{downloadingCsvType === 'discovery' ? `Downloading... (${downloadTimer}s)` : 'CSV'}</span>
                             </button>
                           </div>
                         )}
@@ -696,6 +796,154 @@ export default function APIDiscoveryPage() {
                             <span className="text-gray-400 text-xs">Page {currentPage}</span>
                             <button onClick={() => setCurrentPage(c => c + 1)} className="text-gray-400 hover:text-white">Next</button>
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* API Endpoints Data */}
+              {selectedZone && (
+                <div className="bg-gradient-to-br from-indigo-900/50 to-blue-900/50 border-2 border-indigo-600 rounded-2xl p-6 mt-6 animate-slide-in">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-6 h-6 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    <div className="flex-1">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 w-full">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-indigo-300">API Endpoints (Saved / Manual)</h4>
+                          {endpointsData.length > 0 && (
+                            <span className="bg-indigo-900/50 text-indigo-200 text-xs px-2 py-0.5 rounded-full border border-indigo-700/50">
+                              {endpointsData.length} endpoints
+                            </span>
+                          )}
+                        </div>
+                        {endpointsData.length > 0 && (
+                          <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <button
+                              onClick={handleDownloadEndpointsCSV}
+                              className={`bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500 ${downloadingCsvType ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={downloadingCsvType !== null}
+                              title="Download Endpoints CSV"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              <span>{downloadingCsvType === 'endpoints' ? `Downloading... (${downloadTimer}s)` : 'CSV'}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {loadingEndpoints ? (
+                        <div className="flex items-center justify-center p-8">
+                          <svg className="animate-spin -ml-1 mr-3 h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span className="text-gray-400 font-medium">กำลังโหลด Endpoints...</span>
+                        </div>
+                      ) : endpointsData.length === 0 ? (
+                        <div className="bg-gray-800/80 rounded-xl p-8 text-center border mt-2 border-gray-700">
+                          <p className="text-gray-400">ไม่พบ API Endpoints หรือไม่มีสิทธิ์เข้าถึง (API Gateway)</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-gray-700 mt-2">
+                          <table className="w-full text-sm text-left text-gray-400">
+                            <thead className="bg-gray-800 text-gray-300 uppercase">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-indigo-300 font-semibold w-8"></th>
+                                <th className="px-4 py-3 text-left text-indigo-300 font-semibold">Hostname</th>
+                                <th className="px-4 py-3 text-left text-indigo-300 font-semibold">Method</th>
+                                <th className="px-4 py-3 text-left text-indigo-300 font-semibold">Source</th>
+                                <th className="px-4 py-3 text-left text-indigo-300 font-semibold">State</th>
+                                <th className="px-4 py-3 text-left text-indigo-300 font-semibold">Path</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-700">
+                              {endpointsData.map((item, index) => {
+                                const rowKey = `ep-${item.id || index}`;
+                                const hasHostVar = (item.host || '').includes('{hostVar1}');
+                                const hasPathVar = /\{var\d+\}/.test(item.path || '');
+                                const hasVar = hasHostVar || hasPathVar;
+                                const isExpanded = expandedItems[rowKey];
+                                const cacheKey = `${selectedZone}-${item.path}-${item.method}`;
+                                const subStats = subdomainCache[cacheKey] || [];
+                                const isLoadingSubs = loadingSubdomains[rowKey];
+
+                                return (
+                                  <Fragment key={rowKey}>
+                                    <tr className={`hover:bg-gray-700/30 transition-colors ${isExpanded ? 'bg-gray-700/50' : ''}`}>
+                                      <td className="px-2 py-3 text-center">
+                                        {hasVar && (
+                                          <button
+                                            onClick={() => handleExpand(rowKey, item)}
+                                            className="text-indigo-400 hover:text-white transition-colors focus:outline-none"
+                                          >
+                                            {isLoadingSubs ? (
+                                              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            ) : (
+                                              <svg className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                              </svg>
+                                            )}
+                                          </button>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-300 text-xs font-semibold">{item.host}</td>
+                                      <td className="px-4 py-3">
+                                        <span className={`px-2 py-1 text-[10px] font-bold rounded ${item.method === 'GET' ? 'bg-blue-900/50 text-blue-400'
+                                          : item.method === 'POST' ? 'bg-green-900/50 text-green-400'
+                                            : item.method === 'PUT' ? 'bg-yellow-900/50 text-yellow-400'
+                                              : item.method === 'DELETE' ? 'bg-red-900/50 text-red-400'
+                                                : 'bg-gray-800 text-gray-300 border border-gray-600'
+                                          }`}>
+                                          {item.method}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-400 text-xs">{item.source || '-'}</td>
+                                      <td className="px-4 py-3">
+                                        <span className="px-2 py-0.5 bg-indigo-900/30 text-indigo-300 border border-indigo-700/50 rounded-full text-[10px] font-medium uppercase tracking-wider">
+                                          {item.state}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 font-mono text-xs text-indigo-300 break-all">{item.path}</td>
+                                    </tr>
+
+                                    {isExpanded && (
+                                      <tr key={`${rowKey}-ex`} className="bg-gray-800/80 animate-fade-in-fast">
+                                        <td colSpan="6" className="px-4 py-3 pl-12">
+                                          <div className="bg-gray-900/50 rounded-lg p-3 border border-indigo-500/30">
+                                            <h5 className="text-xs font-bold text-gray-400 mb-2 flex items-center gap-2">
+                                              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                                              Traffic Breakdown for <span className="text-indigo-300 font-mono">{hasPathVar ? item.path : item.host}</span>
+                                            </h5>
+                                            {subStats.length > 0 ? (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                {subStats.map((sub, i) => {
+                                                  const displayStr = hasPathVar && hasHostVar ? `${sub.host}${sub.path}` : (hasPathVar ? sub.path : sub.host);
+                                                  return (
+                                                    <div key={i} className="flex justify-between items-center bg-gray-800 p-2 rounded text-xs border border-gray-700">
+                                                      <span className="text-gray-300 truncate font-mono" title={displayStr}>{displayStr}</span>
+                                                      <span className="text-green-400 font-bold bg-green-900/30 px-1.5 rounded">{sub.count}</span>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <p className="text-xs text-gray-500 italic">No traffic data found for this path pattern.</p>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       )}
                     </div>

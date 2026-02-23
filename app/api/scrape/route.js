@@ -536,6 +536,52 @@ export async function POST(request) {
             }
         }
 
+        // 7.0b Get API Endpoints (Saved endpoints in API Gateway)
+        else if (action === 'get-api-endpoints') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+
+            console.log(`🔍 Fetching Saved API Endpoints for Zone: ${zoneId}...`);
+
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            };
+
+            try {
+                // Use the API Gateway Operations Endpoint
+                const response = await axios.get(
+                    `${CLOUDFLARE_API_BASE}/zones/${zoneId}/api_gateway/operations`,
+                    { headers }
+                );
+
+                const result = response.data;
+                console.log('📦 Raw API Endpoints Success:', result.success);
+
+                if (result.success && Array.isArray(result.result)) {
+                    let endpoints = result.result.map(op => ({
+                        id: op.id,
+                        host: op.host || '-',
+                        method: op.method || '-',
+                        path: op.endpoint || '-',
+                        source: 'saved', // Since it's in the operations list
+                        state: 'saved',
+                        last_seen: op.last_updated || '-', // match discovery field name
+                    }));
+
+                    return NextResponse.json({ success: true, data: endpoints });
+                } else {
+                    return NextResponse.json({ success: true, data: [] });
+                }
+            } catch (error) {
+                console.error('API Endpoints Error:', error.response?.data || error.message);
+                return NextResponse.json({
+                    success: true,
+                    data: [],
+                    message: 'API Endpoints not available for this zone'
+                });
+            }
+        }
+
         // 7.1 Get Subdomain Stats (GraphQL for {hostVar1} and/or path {var1})
         else if (action === 'get-subdomain-stats') {
             const { zoneId, method, path, host, limit } = body;
