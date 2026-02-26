@@ -52,7 +52,7 @@ async function login(page) {
     // Check if already logged in (redirected)
     if (page.url().includes('/login')) {
         await page.waitForSelector('input[type="text"]', { visible: true }); // Ensure input visible
-        await page.type('input[type="text"]', 'admin');
+        await page.type('input[type="text"]', 'root');
         await page.type('input[type="password"]', 'password');
 
         await Promise.all([

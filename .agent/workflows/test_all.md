@@ -45,11 +45,14 @@ description: เรียก workflow นี้ทุกครั้งที่
    - DNS check should display total records by type and proxy status.
    - Firewall Logs check should display "found" for Account and Zone, and fetch logs successfully.
 
-7. Run new feature verification tests (API Discovery Subdomain).
+7. Run new feature verification tests (API Discovery Subdomain & GDCC Historical Sync).
    // turbo
    ```bash
    node scripts/test-all/api_discovery/test-api-subdomain-backend.js
    node scripts/test-all/api_discovery/test-api-subdomain-ui.js
+
+   node scripts/test-all/gdcc/test-gdcc-history-backend.js
+   node scripts/test-all/gdcc/test-gdcc-history-ui.js
    ```
 
 9. Review the Feature Test output.

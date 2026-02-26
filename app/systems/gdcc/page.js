@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
@@ -14,7 +14,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -175,8 +175,8 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Mode check removed here as we pass safeData specifically for processing
     let html = tmpl;
 
-    const startDate = new Date(now.getTime() - (safeData.timeRange || 1440) * 60 * 1000);
-    const endDate = now;
+    const startDate = safeData.startDate ? new Date(safeData.startDate + 'T00:00:00.000Z') : new Date(now.getTime() - 1440 * 60 * 1000);
+    const endDate = safeData.endDate ? new Date(Math.min(new Date(safeData.endDate + 'T23:59:59.999Z').getTime(), now.getTime())) : now;
     const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
     const avgTimeSec = safeData.avgTime ? (safeData.avgTime / 1000).toFixed(3) : "0.000";
     const totalFirewall = (safeData.blockedEvents || 0) + (safeData.logEvents || 0);
@@ -670,15 +670,15 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     // Safely handle missing data for static mode or initial load
     // Use spread to merge defaults with incoming data
     const safeData = {
-        domain: '-', timeRange: 0, totalRequests: 0, avgTime: 0,
+        domain: '-', startDate: '', endDate: '', totalRequests: 0, avgTime: 0,
         blockedEvents: 0, logEvents: 0, topUrls: [], topIps: [],
         topRules: [], topAttackers: [], dnsRecords: [],
         ...data  // Override defaults with actual data
     };
 
-    const startDate = new Date(Date.now() - (safeData.timeRange || 1440) * 60 * 1000);
-    const endDate = new Date();
-    const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
+    const sDate = safeData.startDate ? new Date(safeData.startDate + 'T00:00:00.000Z') : new Date(Date.now() - 1440 * 60 * 1000);
+    const eDate = safeData.endDate ? new Date(Math.min(new Date(safeData.endDate + 'T23:59:59.999Z').getTime(), Date.now())) : new Date();
+    const timeRangeStr = `${formatThaiDate(sDate)} - ${formatThaiDate(eDate)}`;
     const avgTimeSec = safeData.avgTime ? (safeData.avgTime / 1000).toFixed(3) : "0.000";
     const totalFirewall = (safeData.blockedEvents || 0) + (safeData.logEvents || 0);
     const blockPct = totalFirewall > 0 ? ((safeData.blockedEvents / totalFirewall) * 100).toFixed(2) : "0.00";
@@ -1053,7 +1053,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 // Batch Report Modal Component
 const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
     const [selected, setSelected] = useState(new Set());
-    const [batchTimeRange, setBatchTimeRange] = useState(1440);
+    const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [searchTerm, setSearchTerm] = useState('');
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
@@ -1191,16 +1192,27 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
                     {/* Time Range Selector */}
                     <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
                         <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Time Range</label>
-                        <div className="flex gap-2">
-                            {[{ label: '1 Day', val: 1440 }, { label: '7 Days', val: 10080 }, { label: '30 Days', val: 43200 }].map(tObj => (
-                                <button
-                                    key={tObj.val}
-                                    onClick={() => setBatchTimeRange(tObj.val)}
-                                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors border ${batchTimeRange === tObj.val ? `${t.dropdown.active || 'bg-blue-600 text-white'} border-transparent` : `${t.dropdown.bg} ${t.dropdown.border} ${t.subText} hover:border-gray-500`}`}
-                                >
-                                    {tObj.label}
-                                </button>
-                            ))}
+                        <div className="flex gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className={`text-xs ${t.subText}`}>Start:</span>
+                                <input
+                                    type="date"
+                                    value={batchStartDate}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    onChange={(e) => setBatchStartDate(e.target.value)}
+                                    className={`px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-xs ${t.subText}`}>End:</span>
+                                <input
+                                    type="date"
+                                    value={batchEndDate}
+                                    max={new Date().toISOString().split('T')[0]}
+                                    onChange={(e) => setBatchEndDate(e.target.value)}
+                                    className={`px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -1285,7 +1297,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
                                 // If NO_SUBDOMAIN is selected, send empty array
                                 // Otherwise, filter out NO_SUBDOMAIN from the selection
                                 const hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
-                                onConfirm(hostsToGenerate, batchTimeRange, selectedTemplateId);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -1297,6 +1309,758 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
                 </div>
             </div>
         </div>
+    );
+};
+
+const ZoneRow = ({ zoneId, zoneData, fetchSyncStatus, apiToken, isManageMode }) => {
+    const [expanded, setExpanded] = useState(false);
+    const handleDelete = async (domain, e) => {
+        e.stopPropagation();
+        const confirmation = await Swal.fire({
+            title: 'Delete Data?',
+            text: `Remove backup data for ${domain}?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#4b5563',
+            confirmButtonText: 'Yes, Delete',
+            background: '#1f2937',
+            color: '#fff'
+        });
+
+        if (confirmation.isConfirmed) {
+            try {
+                const res = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete-sync-data',
+                        zoneId: zoneId,
+                        subdomain: domain,
+                        apiToken: apiToken
+                    })
+                });
+                const body = await res.json();
+                if (body.success) {
+                    Swal.fire({ title: 'Deleted', icon: 'success', text: 'Data has been deleted.', background: '#1f2937', color: '#fff', timer: 1500, showConfirmButton: false });
+                    fetchSyncStatus();
+                } else {
+                    Swal.fire({ title: 'Error', icon: 'error', text: body.message, background: '#1f2937', color: '#fff' });
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    };
+    return (
+        <>
+            <tr className="hover:bg-gray-800/50">
+                <td className="p-2 text-center align-middle">
+                    <button
+                        onClick={() => setExpanded(!expanded)}
+                        className="text-gray-400 hover:text-white transition"
+                    >
+                        {expanded ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        )}
+                    </button>
+                </td>
+                <td className="p-2 text-gray-300 text-xs font-semibold">
+                    <div className="flex flex-col">
+                        <span>{zoneData.name}</span>
+                        <span className="text-[10px] text-gray-500 font-normal">{zoneData.accountName}</span>
+                    </div>
+                </td>
+                <td className="p-2 text-gray-400 font-mono text-xs flex items-center gap-2">
+                    {zoneId}
+                    <button
+                        onClick={() => { navigator.clipboard.writeText(zoneId); }}
+                        className="opacity-50 hover:opacity-100 hover:text-blue-400"
+                        title="Copy Zone ID"
+                    >
+                        <Copy className="w-3 h-3" />
+                    </button>
+                </td>
+                <td className="p-2 text-blue-400 text-xs text-right whitespace-nowrap">
+                    <div className="flex justify-end items-center gap-2">
+                        <span className="text-right leading-tight">
+                            {zoneData.earliest && zoneData.earliest !== zoneData.latest
+                                ? <>{new Date(zoneData.earliest).toLocaleDateString()}<br /><span className="text-gray-500">→</span> {new Date(zoneData.latest).toLocaleDateString()}</>
+                                : new Date(zoneData.latest).toLocaleDateString()
+                            }
+                        </span>
+                        {isManageMode && (
+                            <button onClick={(e) => handleDelete('ALL_DOMAINS', e)} className="text-red-500 hover:text-red-400 p-1 flex items-center justify-center rounded hover:bg-red-900/30 transition-colors" title="Delete All Zone Data">
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+                </td>
+            </tr>
+            {expanded && (
+                <tr className="bg-gray-800/20">
+                    <td colSpan={4} className="p-0 border-t border-gray-800">
+                        <div className="pl-8 pr-4 py-2 text-xs text-gray-400 space-y-1">
+                            {/* Header row */}
+                            <div className="flex items-center justify-between py-1 border-b border-gray-800/60 text-gray-500 font-semibold text-[10px] uppercase tracking-wider">
+                                <span className="flex-1">Subdomain</span>
+                                <span className="text-right w-48">Backed Up Range</span>
+                                <div className="w-8"></div>
+                            </div>
+                            {[...zoneData.domains]
+                                .sort((a, b) => {
+                                    if (a.domain === 'ALL_SUBDOMAINS') return -1;
+                                    if (b.domain === 'ALL_SUBDOMAINS') return 1;
+                                    return a.domain.localeCompare(b.domain);
+                                })
+                                .map(d => {
+                                    const displayName = d.domain === 'ALL_SUBDOMAINS' ? `${zoneData.name} (zone overview)` : d.domain;
+                                    const isZoneOverview = d.domain === 'ALL_SUBDOMAINS';
+                                    const dateRange = d.first_date && d.first_date !== d.last_date
+                                        ? `${new Date(d.first_date).toLocaleDateString()} → ${new Date(d.last_date).toLocaleDateString()}`
+                                        : new Date(d.last_date).toLocaleDateString();
+                                    return (
+                                        <div key={d.domain} className="flex items-center justify-between hover:text-gray-200 py-0.5 group">
+                                            <span className={`flex-1 flex items-center gap-1 ${isZoneOverview ? 'text-blue-400/80 italic' : ''}`}>
+                                                {isZoneOverview ? '🌐' : '↳'} {displayName}
+                                            </span>
+                                            <span className="text-right w-48 font-mono text-[10px] text-gray-400 group-hover:text-gray-200">{dateRange}</span>
+                                            <div className="w-8 flex justify-end">
+                                                {isManageMode && (
+                                                    <button onClick={(e) => handleDelete(d.domain, e)} className="text-red-500 hover:text-red-400 p-1 flex items-center justify-center rounded hover:bg-red-900/30 transition-colors" title="Delete Data">
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    </td>
+                </tr>
+            )}
+        </>
+    );
+};
+
+const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => {
+    const [selectedAccounts, setSelectedAccounts] = useState(new Set());
+    const [zones, setZones] = useState([]);
+    const [loadingZones, setLoadingZones] = useState(false);
+    const [selectedZones, setSelectedZones] = useState(new Set());
+    const [syncStatusData, setSyncStatusData] = useState([]);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncProgress, setSyncProgress] = useState(0);
+    const [currentSyncIndex, setCurrentSyncIndex] = useState(0);
+    const [currentSyncZoneName, setCurrentSyncZoneName] = useState('');
+    const [currentSyncDate, setCurrentSyncDate] = useState('');
+    const [currentSyncLabel, setCurrentSyncLabel] = useState('');
+    const [currentSyncPhase, setCurrentSyncPhase] = useState('');
+    const [subdomainProgress, setSubdomainProgress] = useState({ current: 0, total: 0 });
+    const [isManageMode, setIsManageMode] = useState(false);
+
+    const [searchQuery, setSearchQuery] = useState('');
+    const [accountSearchQuery, setAccountSearchQuery] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 20;
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
+
+    const paginatedSyncDataList = useMemo(() => {
+        if (!syncStatusData) return { data: [], totalPages: 0 };
+
+        const grouped = Object.entries(
+            syncStatusData.reduce((acc, curr) => {
+                if (!acc[curr.zone_id]) acc[curr.zone_id] = { name: curr.zone_name || 'Unknown Zone', accountName: curr.account_name || 'Unknown Account', domains: [], latest: curr.last_date, earliest: curr.first_date };
+                acc[curr.zone_id].domains.push(curr);
+                if (new Date(curr.last_date) > new Date(acc[curr.zone_id].latest)) {
+                    acc[curr.zone_id].latest = curr.last_date;
+                }
+                if (curr.first_date && (!acc[curr.zone_id].earliest || new Date(curr.first_date) < new Date(acc[curr.zone_id].earliest))) {
+                    acc[curr.zone_id].earliest = curr.first_date;
+                }
+                return acc;
+            }, {})
+        ).map(([zoneId, zoneData]) => ({ zoneId, ...zoneData }));
+
+        let filtered = grouped;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            filtered = grouped.filter(item =>
+                item.zoneId.toLowerCase().includes(q) ||
+                item.name.toLowerCase().includes(q) ||
+                item.domains.some(d => d.domain.toLowerCase().includes(q))
+            );
+        }
+
+        const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+        const data = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+        return { data, totalPages };
+    }, [syncStatusData, searchQuery, currentPage]);
+
+    const t = theme?.modal || {
+        overlay: 'bg-black/80',
+        content: 'bg-gray-900 border-gray-700 text-gray-100',
+        title: 'text-white',
+        input: 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500',
+        button: 'bg-gray-800 hover:bg-gray-700 text-gray-300',
+        buttonPrimary: 'bg-blue-600 hover:bg-blue-700 text-white'
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchSyncStatus();
+            setSelectedAccounts(new Set());
+            setZones([]);
+            setSelectedZones(new Set());
+            setSyncProgress(0);
+            setCurrentSyncIndex(0);
+            setCurrentSyncZoneName('');
+            setSearchQuery('');
+            setCurrentPage(1);
+        }
+    }, [isOpen]);
+
+    const fetchSyncStatus = async () => {
+        try {
+            const response = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get-all-sync-status',
+                    apiToken: currentUser?.cloudflare_api_token
+                })
+            });
+            const res = await response.json();
+            if (res.success && res.data) {
+                setSyncStatusData(res.data);
+            }
+        } catch (e) {
+            console.error('Failed to fetch sync status', e);
+        }
+    };
+
+    const handleAccountChange = async (accId) => {
+        const next = new Set(selectedAccounts);
+        if (next.has(accId)) next.delete(accId);
+        else next.add(accId);
+        setSelectedAccounts(next);
+    };
+
+    useEffect(() => {
+        const fetchZonesForAccounts = async () => {
+            if (selectedAccounts.size === 0) {
+                setZones([]);
+                setSelectedZones(new Set());
+                return;
+            }
+
+            setLoadingZones(true);
+            try {
+                const fetchPromises = Array.from(selectedAccounts).map(accId =>
+                    fetch('/api/scrape', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'list-zones',
+                            accountId: accId,
+                            apiToken: currentUser?.cloudflare_api_token
+                        })
+                    }).then(res => res.json())
+                );
+
+                const results = await Promise.all(fetchPromises);
+                let allZones = [];
+                results.forEach(res => {
+                    if (res.success && res.data) {
+                        allZones = [...allZones, ...res.data];
+                    }
+                });
+
+                setZones(allZones);
+                setSelectedZones(prev => {
+                    const next = new Set();
+                    allZones.forEach(z => {
+                        if (prev.has(z.id)) next.add(z.id);
+                    });
+                    return next;
+                });
+            } catch (e) {
+                console.error('Failed to fetch zones', e);
+            } finally {
+                setLoadingZones(false);
+            }
+        };
+
+        if (isOpen) {
+            fetchZonesForAccounts();
+        }
+    }, [selectedAccounts, isOpen, currentUser]);
+
+    const toggleZone = (zoneId) => {
+        const next = new Set(selectedZones);
+        if (next.has(zoneId)) next.delete(zoneId);
+        else next.add(zoneId);
+        setSelectedZones(next);
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && !isSyncing) onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isSyncing, onClose]);
+
+    const handleSync = async () => {
+        if (selectedZones.size === 0) return;
+        setIsSyncing(true);
+        setSyncProgress(0);
+        setCurrentSyncIndex(0);
+        setCurrentSyncZoneName('');
+
+        let successCount = 0;
+        const zonesArray = Array.from(selectedZones);
+
+        for (let i = 0; i < zonesArray.length; i++) {
+            const zoneId = zonesArray[i];
+            const zone = zones.find(z => z.id === zoneId);
+            const zoneName = zone?.name || 'Unknown Zone';
+
+            setCurrentSyncIndex(i + 1);
+            setCurrentSyncZoneName(zoneName);
+            setCurrentSyncDate('Connecting...');
+
+            const accountName = zone?.account?.name || accounts.find(a => selectedAccounts.has(a.id))?.name || 'Unknown Account';
+
+            try {
+                const response = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'sync-gdcc-history',
+                        zoneId: zoneId,
+                        zoneName: zoneName,
+                        accountName: accountName,
+                        subdomain: 'ALL_SUBDOMAINS',
+                        apiToken: currentUser?.cloudflare_api_token
+                    })
+                });
+
+                if (!response.ok) throw new Error('Network error');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let done = false;
+
+                while (!done) {
+                    const { value, done: streamDone } = await reader.read();
+                    if (streamDone) {
+                        done = true;
+                        break;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.type === 'phase') {
+                                setCurrentSyncPhase(data.phase);
+                                setCurrentSyncLabel(data.label);
+                                setCurrentSyncDate('');
+                                if (data.phase === 'subdomain' && data.total) {
+                                    setSubdomainProgress({ current: data.index || 0, total: data.total });
+                                } else if (data.phase === 'zone') {
+                                    setSubdomainProgress({ current: 0, total: 0 });
+                                }
+                            } else if (data.type === 'progress') {
+                                setCurrentSyncDate(data.date);
+                                setCurrentSyncLabel(data.label || '');
+                                if (data.total > 0) {
+                                    const progressFraction = Math.min(data.current / data.total, 1);
+                                    const overallProgress = ((i + progressFraction) / zonesArray.length) * 100;
+                                    setSyncProgress(Math.min(overallProgress, ((i + 0.99) / zonesArray.length) * 100));
+                                }
+                            } else if (data.type === 'discovered') {
+                                console.log(`🔍 Discovered ${data.count} subdomains:`, data.subdomains);
+                            } else if (data.type === 'done') {
+                                successCount++;
+                            } else if (data.type === 'error') {
+                                // error from pending/deactivated zone — log and continue to next zone
+                                console.warn(`⚠️ Zone ${zoneId} sync error:`, data.message);
+                                // Don't stop — outer loop will move on
+                            } else if (data.type === 'warning') {
+                                console.warn('Sync Warning:', data.message);
+                            }
+                        } catch (e) { }
+                    }
+                }
+            } catch (e) {
+                console.error('Error syncing zone', zoneId, e);
+            }
+            setSyncProgress(((i + 1) / zonesArray.length) * 100);
+        }
+
+        // Add a small delay at 100% so users can see it finish
+        setSyncProgress(100);
+        await new Promise(r => setTimeout(r, 500));
+
+        setIsSyncing(false);
+        setSelectedAccounts(new Set());
+        setSelectedZones(new Set());
+        await fetchSyncStatus();
+
+        Swal.fire({
+            title: 'Sync Complete',
+            text: `Successfully synced ${successCount} out of ${zonesArray.length} zones.`,
+            icon: 'success',
+            background: '#111827',
+            color: '#fff'
+        });
+    };
+
+    if (!isOpen) return null;
+
+    const getLastSync = (zoneId) => {
+        const match = syncStatusData.find(s => s.zone_id === zoneId && s.domain === 'ALL_SUBDOMAINS');
+        if (!match || !match.last_date) return 'Never';
+        const start = match.first_date ? new Date(match.first_date).toLocaleDateString() : 'Unknown';
+        const end = new Date(match.last_date).toLocaleDateString();
+        return `${start} - ${end}`;
+    };
+
+    return (
+        <div
+            className={`fixed inset-0 z-[100] flex items-center justify-center ${t.overlay} p-4 backdrop-blur-sm`}
+            onMouseDown={(e) => { if (e.target === e.currentTarget && !isSyncing) onClose(); }}
+        >
+            <div className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl shadow-2xl overflow-hidden border ${t.content} relative`}>
+
+                {/* Syncing Overlay */}
+                {isSyncing && (
+                    <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-md z-[200] flex flex-col items-center justify-center text-center p-6">
+                        <Activity className="w-16 h-16 animate-spin text-blue-500 mb-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                        <h3 className="text-2xl font-bold text-white mb-2">Syncing Data...</h3>
+                        <p className="text-gray-400 mb-4 text-sm">
+                            Zone <span className="font-semibold text-gray-200">{currentSyncIndex}</span> of <span className="font-semibold text-gray-200">{selectedZones.size}</span>
+                        </p>
+
+                        {subdomainProgress.total > 0 && (
+                            <p className="text-blue-400 mb-4 text-xs font-medium">
+                                Subdomain <span className="font-bold">{subdomainProgress.current}</span> of <span className="font-bold">{subdomainProgress.total}</span>
+                            </p>
+                        )}
+
+                        <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-5 max-w-md w-full shadow-2xl mb-8">
+                            <div className="text-xs text-blue-400 uppercase font-bold tracking-wider mb-2 flex items-center justify-center gap-2">
+                                <Globe className="w-4 h-4" /> {currentSyncZoneName || 'Preparing...'}
+                            </div>
+                            {/* Phase indicator */}
+                            <div className={`text-xs px-2 py-1 rounded-full inline-block mb-3 font-semibold ${currentSyncPhase === 'check' ? 'bg-gray-700 text-gray-300' :
+                                currentSyncPhase === 'zone' ? 'bg-blue-900/50 text-blue-300' :
+                                    currentSyncPhase === 'discover' ? 'bg-yellow-900/50 text-yellow-300' :
+                                        currentSyncPhase === 'subdomain' ? 'bg-purple-900/50 text-purple-300' : 'bg-gray-700 text-gray-400'
+                                }`}>
+                                {currentSyncPhase === 'check' ? '🔎 Checking Zone Status' :
+                                    currentSyncPhase === 'zone' ? '📊 Zone Overview' :
+                                        currentSyncPhase === 'discover' ? '🔍 Discovering Subdomains' :
+                                            currentSyncPhase === 'subdomain' ? `🌐 Subdomain` : '⏳ Starting...'}
+                            </div>
+                            {currentSyncLabel && currentSyncPhase === 'subdomain' && (
+                                <div className="text-sm text-purple-300 font-mono truncate mb-2" title={currentSyncLabel}>{currentSyncLabel}</div>
+                            )}
+                            {currentSyncDate && (
+                                <div className="text-xs text-gray-400 bg-gray-900/50 rounded p-2 border border-gray-700 font-mono flex items-center justify-between">
+                                    <span>Date:</span>
+                                    <span className="text-green-400">{currentSyncDate}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Progress Bar inside Overlay */}
+                        <div className="w-full max-w-md">
+                            <div className="flex justify-between text-xs text-gray-400 mb-2 font-mono">
+                                <span>PROGRESS</span>
+                                <span>{Math.round(syncProgress)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden border border-gray-700 shadow-inner">
+                                <div className="bg-blue-500 h-2.5 transition-all duration-300 shadow-[0_0_10px_rgba(59,130,246,0.6)]" style={{ width: `${syncProgress}%` }}></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className={`p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50`}>
+                    <h2 className={`text-xl font-bold flex items-center gap-2 ${t.title}`}>
+                        <Database className="w-5 h-5 text-green-400" />
+                        Sync Historical Data
+                    </h2>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-800 text-gray-400 hover:text-white rounded transition" disabled={isSyncing}>
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto space-y-6 bg-gray-900 flex-1">
+                    <div className="grid grid-cols-1 gap-4">
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-xs font-semibold uppercase text-gray-400 flex items-center gap-2">
+                                    <span>Select Accounts</span>
+                                    {accounts.length > 0 && selectedAccounts.size > 0 && (
+                                        <span className="text-gray-500 font-normal normal-case">({selectedAccounts.size} selected)</span>
+                                    )}
+                                </label>
+                                {/* Account Search Box */}
+                                <div className="relative">
+                                    <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search accounts..."
+                                        value={accountSearchQuery}
+                                        onChange={(e) => setAccountSearchQuery(e.target.value)}
+                                        className={`pl-7 pr-3 py-1 rounded w-48 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 bg-gray-800 border ${theme?.modal?.border || 'border-gray-700'} text-white`}
+                                    />
+                                </div>
+                            </div>
+                            <div className={`w-full max-h-48 overflow-y-auto rounded p-2 text-sm border ${t.input} bg-gray-800 flex flex-wrap gap-2`}>
+                                {accounts
+                                    .filter(acc => acc.name.toLowerCase().includes(accountSearchQuery.toLowerCase()))
+                                    .map(acc => (
+                                        <label key={acc.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-700/50 rounded cursor-pointer transition-colors border border-gray-700 bg-gray-900 w-[calc(50%-0.5rem)] md:w-[calc(33.33%-0.5rem)] lg:w-[calc(25%-0.5rem)]">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedAccounts.has(acc.id)}
+                                                onChange={() => handleAccountChange(acc.id)}
+                                                disabled={isSyncing}
+                                                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                            <span className="text-gray-300 font-medium text-xs truncate" title={acc.name}>{acc.name}</span>
+                                        </label>
+                                    ))}
+                                {accounts.filter(acc => acc.name.toLowerCase().includes(accountSearchQuery.toLowerCase())).length === 0 && (
+                                    <div className="text-center w-full p-4 text-gray-500 text-xs">No accounts found matching "{accountSearchQuery}"</div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {selectedAccounts.size > 0 && (
+                        <div className="border border-gray-700 rounded-lg overflow-hidden flex flex-col max-h-[400px]">
+                            <div className="p-3 bg-gray-800 border-b border-gray-700 flex justify-between items-center sticky top-0 z-10">
+                                <h3 className="text-sm font-semibold text-white">Zones ({zones.length})</h3>
+                                <div className="space-x-2">
+                                    <button
+                                        onClick={() => setSelectedZones(new Set(zones.filter(z => z.status === 'active').map(z => z.id)))}
+                                        className="text-xs text-blue-400 hover:text-blue-300"
+                                        disabled={isSyncing || zones.filter(z => z.status === 'active').length === 0}
+                                    >Select All</button>
+                                    <span className="text-gray-600">|</span>
+                                    <button
+                                        onClick={() => setSelectedZones(new Set())}
+                                        className="text-xs text-gray-400 hover:text-gray-300"
+                                        disabled={isSyncing || selectedZones.size === 0}
+                                    >Clear</button>
+                                </div>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 bg-gray-900/50 p-0">
+                                {loadingZones ? (
+                                    <div className="p-10 text-center text-gray-400 flex flex-col items-center">
+                                        <Activity className="w-8 h-8 animate-spin mb-3 text-blue-400" />
+                                        Fetching zones from Cloudflare...
+                                    </div>
+                                ) : zones.length === 0 ? (
+                                    <div className="p-10 text-center text-gray-500">No zones found for this account.</div>
+                                ) : (
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-gray-900/90 text-gray-400 sticky top-0 z-10 hidden md:table-header-group">
+                                            <tr>
+                                                <th className="p-3 w-12 text-center"><Database className="w-3 h-3 opacity-0" /></th>
+                                                <th className="p-3">Zone Name</th>
+                                                <th className="p-3">Status</th>
+                                                <th className="p-3 text-right">Backed Up Range</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-800">
+                                            {[...zones]
+                                                .sort((a, b) => {
+                                                    const order = s => s === 'active' ? 0 : 1;
+                                                    return order(a.status) - order(b.status) || a.name.localeCompare(b.name);
+                                                })
+                                                .map(z => {
+                                                    const isPending = z.status !== 'active';
+                                                    const isSelected = selectedZones.has(z.id);
+                                                    const lastSync = getLastSync(z.id);
+                                                    const hasData = lastSync !== 'Never';
+
+                                                    return (
+                                                        <tr
+                                                            key={z.id}
+                                                            title={isPending ? `Zone is "${z.status}" — cannot be selected for sync` : ''}
+                                                            className={`transition-colors ${isPending
+                                                                ? 'opacity-40 cursor-not-allowed bg-gray-900/30'
+                                                                : `hover:bg-gray-800/80 cursor-pointer ${isSelected ? 'bg-blue-900/10' : ''}`
+                                                                }`}
+                                                            onClick={() => !isSyncing && !isPending && toggleZone(z.id)}
+                                                        >
+                                                            <td className="p-3 text-center align-middle">
+                                                                <div className="flex items-center justify-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        readOnly
+                                                                        disabled={isPending}
+                                                                        className={`w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 ${isPending ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                    />
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-3 font-medium text-gray-200">
+                                                                <div className="flex flex-col">
+                                                                    <span>{z.name}</span>
+                                                                    <span className="text-[10px] text-gray-500 md:hidden mt-1">{hasData ? `Range: ${lastSync}` : 'Never synced'}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-3 hidden md:table-cell">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${z.status === 'active' ? 'bg-green-900/50 text-green-400' :
+                                                                    z.status === 'pending' ? 'bg-yellow-900/50 text-yellow-500' :
+                                                                        'bg-red-900/50 text-red-500'
+                                                                    }`}>
+                                                                    {z.status.toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                            <td className={`p-3 text-right text-xs hidden md:table-cell ${hasData ? 'text-blue-400 font-medium' : 'text-gray-500'}`}>
+                                                                {hasData ? <span className="flex items-center justify-end gap-1 text-[11px]"><Check className="w-3 h-3" /> {lastSync}</span> : 'Never'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="border border-gray-800 rounded-lg p-4 bg-gray-900/30 flex flex-col min-h-[200px]">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-300">
+                                <Database className="w-4 h-4 text-blue-400" />
+                                Currently Backed Up Zones ({syncStatusData.length > 0 ? Object.keys(syncStatusData.reduce((acc, curr) => { acc[curr.zone_id] = true; return acc; }, {})).length : 0} total)
+                            </h3>
+                            {/* Search & Manage Toggle */}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsManageMode(!isManageMode)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1 border ${isManageMode ? 'bg-red-900/40 text-red-400 border-red-800/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white hover:bg-gray-700'}`}
+                                    title="Toggle Manage Mode to delete data"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                    Manage zones
+                                </button>
+                                <div className="relative">
+                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search zones..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className={`pl-9 pr-4 py-1.5 rounded-full text-xs w-64 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-gray-800 border ${theme?.modal?.border || 'border-gray-700'} text-white`}
+                                    />
+                                    {searchQuery && (
+                                        <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white pb-1">×</button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="overflow-hidden rounded border border-gray-800 flex-1">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-800 text-gray-400 text-xs">
+                                    <tr>
+                                        <th className="p-2 w-10 text-center"></th>
+                                        <th className="p-2 flex-1">Zone / Account Name</th>
+                                        <th className="p-2 w-2/5">Zone ID</th>
+                                        <th className="p-2 w-1/4 text-right">Backed Up Range</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800 bg-gray-900 block w-full table-fixed overflow-y-auto" style={{ display: 'table-row-group' }}>
+                                    {paginatedSyncDataList.data.length > 0 ? paginatedSyncDataList.data.map((zone) => (
+                                        <ZoneRow key={zone.zoneId} zoneId={zone.zoneId} zoneData={zone} fetchSyncStatus={fetchSyncStatus} apiToken={currentUser?.cloudflare_api_token} isManageMode={isManageMode} />
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={4} className="p-8 text-center text-gray-500 text-sm">
+                                                {searchQuery
+                                                    ? `No zones found matching "${searchQuery}"`
+                                                    : 'No synced data yet. Select accounts and zones above, then click Sync to begin.'}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Pagination Controls */}
+                        {paginatedSyncDataList.totalPages > 1 && (
+                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-800 text-xs text-gray-400">
+                                <span>
+                                    Showing page <span className="text-gray-200 font-semibold">{currentPage}</span> of <span className="text-gray-200 font-semibold">{paginatedSyncDataList.totalPages}</span>
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        Prev
+                                    </button>
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.min(paginatedSyncDataList.totalPages, p + 1))}
+                                        disabled={currentPage === paginatedSyncDataList.totalPages}
+                                        className="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+
+                <div className="p-4 border-t border-gray-800 bg-gray-900 shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
+                    {/* Progress Bar (Hidden when syncing since overlay is active) */}
+                    {!isSyncing && syncProgress > 0 && syncProgress < 100 && (
+                        <div className="mb-4">
+                            <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>Sync Progress...</span>
+                                <span>{Math.round(syncProgress)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden border border-gray-700">
+                                <div className="bg-blue-500 h-1.5 transition-all duration-300" style={{ width: `${syncProgress}%` }}></div>
+                            </div>
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-3">
+                        <button onClick={onClose} disabled={isSyncing} className={`px-4 py-2 rounded text-xs font-medium transition-colors ${t.button}`}>Cancel</button>
+                        <button
+                            onClick={handleSync}
+                            disabled={selectedZones.size === 0 || isSyncing}
+                            className={`px-4 py-2 rounded text-xs font-bold transition-all flex items-center gap-2
+                                ${selectedZones.size === 0
+                                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                    : 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20'}`}
+                        >
+                            {isSyncing ? <Activity className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                            {isSyncing ? 'Syncing data...' : `Sync ${selectedZones.size} Zone${selectedZones.size > 1 ? 's' : ''}`}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div >
     );
 };
 
@@ -1539,6 +2303,7 @@ export default function GDCCPage() {
     const [staticReportTemplate, setStaticReportTemplate] = useState(''); // Will be loaded from JSON file only
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -1602,7 +2367,10 @@ export default function GDCCPage() {
     const [selectedAccount, setSelectedAccount] = useState('');
     const [selectedZone, setSelectedZone] = useState('');
     const [selectedSubDomain, setSelectedSubDomain] = useState('');
-    const [timeRange, setTimeRange] = useState(1440); // Default 1d
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [lastSyncDate, setLastSyncDate] = useState(null);
+    const [syncing, setSyncing] = useState(false);
 
     // Additional Traffic Stats (Current View)
     const [totalDataTransfer, setTotalDataTransfer] = useState(0);
@@ -1618,17 +2386,59 @@ export default function GDCCPage() {
     const [zoneWideTopCountriesBytes, setZoneWideTopCountriesBytes] = useState([]);
     const [fwEvents, setFwEvents] = useState({ total: 0, managed: 0, custom: 0, bic: 0, access: 0 });
 
-    const fetchAndApplyTrafficData = async (subdomain, zoneId, timeRange) => {
+    const loadLastSyncDate = async (zoneId, subdomain) => {
+        try {
+            const res = await callAPI('get-sync-status', { zoneId, subdomain });
+            if (res && res.data) {
+                setLastSyncDate(res.data.lastSync);
+            } else {
+                setLastSyncDate(null);
+            }
+        } catch (err) {
+            console.error('Failed to load sync date', err);
+            setLastSyncDate(null);
+        }
+    };
+
+    const handleSyncHistoricalData = async () => {
+        if (!selectedZone) {
+            Swal.fire('Error', 'Please select a zone first.', 'error');
+            return;
+        }
+        if (!selectedSubDomain) {
+            Swal.fire('Error', 'Please select a subdomain.', 'error');
+            return;
+        }
+
+        setSyncing(true);
+        try {
+            const res = await callAPI('sync-gdcc-history', { zoneId: selectedZone, subdomain: selectedSubDomain });
+            if (res && res.success) {
+                let msg = res.message || 'Historical data synced successfully.';
+                Swal.fire('Success', msg, 'success');
+                loadLastSyncDate(selectedZone, selectedSubDomain);
+            } else if (res && !res.success) {
+                Swal.fire('Info', res.message || 'Sync failed or no data returned.', 'info');
+            }
+        } catch (err) {
+            // Error handled by callAPI
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const fetchAndApplyTrafficData = async (subdomain, zoneId, p_startDate, p_endDate) => {
         setLoadingStats(true); // Start manual generation spinner
         const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
-        console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (Range: ${timeRange}m)`);
+        console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (${p_startDate} to ${p_endDate})`);
 
         let zReq = 0, zBytes = 0, zCacheReq = 0, zCacheBytes = 0;
         let zTopReq = [], zTopBytes = [];
 
         const result = await callAPI('get-traffic-analytics', {
             zoneId: zoneId,
-            timeRange: timeRange,
+            startDate: p_startDate,
+            endDate: p_endDate,
             subdomain: isAllSubdomains ? null : subdomain,
             apiToken: currentUser?.cloudflare_api_token // Pass user token
         });
@@ -1753,6 +2563,12 @@ export default function GDCCPage() {
             let totalReqLogs = 0;
             let totalTimeSum = 0;
             filteredData.forEach(item => {
+                if (item.isSummary) {
+                    const req = item.totals?.requests || 0;
+                    totalReqLogs += req;
+                    totalTimeSum += (item.totals?.avgResponseTime || 0) * req;
+                    return;
+                }
                 const count = item.count;
                 const avgTime = item.avg?.edgeTimeToFirstByteMs || 0;
                 totalReqLogs += count;
@@ -1826,17 +2642,23 @@ export default function GDCCPage() {
         const statusTotals = {};
 
         // 1. Time Buckets Generation (4 Hours for 24h view)
-        let bucketSizeMs = 60 * 60 * 1000;
-        if (timeRange <= 60) bucketSizeMs = 1 * 60 * 1000;
-        else if (timeRange <= 360) bucketSizeMs = 15 * 60 * 1000;
-        else if (timeRange <= 720) bucketSizeMs = 30 * 60 * 1000;
-        else if (timeRange <= 1440) bucketSizeMs = 240 * 60 * 1000; // 4 Hours for 24h
-
         const now = new Date();
-        const startTime = new Date(now.getTime() - timeRange * 60 * 1000);
+        const stDate = p_startDate ? new Date(p_startDate + 'T00:00:00.000Z') : new Date(now.getTime() - 1440 * 60 * 1000);
+        let enDate = p_endDate ? new Date(p_endDate + 'T23:59:59.999Z') : now;
+        if (enDate > now) enDate = now;
+
+        const diffMinutes = (enDate.getTime() - stDate.getTime()) / (60 * 1000);
+
+        let bucketSizeMs = 60 * 60 * 1000;
+        if (diffMinutes <= 60) bucketSizeMs = 1 * 60 * 1000;
+        else if (diffMinutes <= 360) bucketSizeMs = 15 * 60 * 1000;
+        else if (diffMinutes <= 720) bucketSizeMs = 30 * 60 * 1000;
+        else bucketSizeMs = 240 * 60 * 1000; // 4 Hours for 24h+
+
+        const startTime = stDate;
 
         const alignedStart = new Date(Math.floor(startTime.getTime() / bucketSizeMs) * bucketSizeMs);
-        const alignedEnd = new Date(Math.ceil(now.getTime() / bucketSizeMs) * bucketSizeMs);
+        const alignedEnd = new Date(Math.ceil(enDate.getTime() / bucketSizeMs) * bucketSizeMs);
 
         // Helpers
         const createBuckets = () => {
@@ -1859,6 +2681,30 @@ export default function GDCCPage() {
 
         // HTTP DATA
         filteredData.forEach(item => {
+            if (item.isSummary) {
+                // If it's a pre-aggregated summary, just add the tops
+                (item.topUrls || []).forEach(u => urlCounts[u.key] = (urlCounts[u.key] || 0) + u.count);
+                (item.topIps || []).forEach(i => ipCounts[i.key] = (ipCounts[i.key] || 0) + i.count);
+                (item.totals?.countries || []).forEach(c => countryCounts[c.clientCountryName || 'Unknown'] = (countryCounts[c.clientCountryName || 'Unknown'] || 0) + c.requests);
+                (item.topUAs || []).forEach(ua => uaCounts[ua.key] = (uaCounts[ua.key] || 0) + ua.count);
+                (item.topHosts || []).forEach(h => hostCounts[h.key] = (hostCounts[h.key] || 0) + h.count);
+
+                Object.entries(item.statusDistribution || {}).forEach(([status, count]) => {
+                    statusTotals[status] = (statusTotals[status] || 0) + count;
+                    allCodes.add(status);
+                });
+
+                // Populate Timeline from summary buckets
+                (item.hourlyTimeline || []).forEach(bucket => {
+                    const hTime = new Date(item.report_date).setUTCHours(bucket.hour, 0, 0, 0);
+                    const bTime = Math.floor(hTime / bucketSizeMs) * bucketSizeMs;
+                    if (throughputBuckets.has(bTime)) {
+                        throughputBuckets.get(bTime).count += bucket.count;
+                    }
+                });
+                return;
+            }
+
             const count = item.count;
             const dims = item.dimensions;
 
@@ -1934,6 +2780,24 @@ export default function GDCCPage() {
         const realAttackEvents = [];
 
         firewallGroups.forEach(g => {
+            if (g.isSummary) {
+                // If it's a summary, populate attack charts from its aggregated activity
+                const fw = g.firewall || {};
+                (fw.activity || []).forEach(act => {
+                    const itemTime = new Date(act.dimensions?.datetimeMinute).getTime();
+                    const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
+                    if (attackBuckets.has(bucketTime)) {
+                        attackBuckets.get(bucketTime).count += act.count;
+                    }
+                    realAttackEvents.push({
+                        time: new Date(act.dimensions?.datetimeMinute),
+                        action: act.dimensions?.action || 'unknown',
+                        count: act.count
+                    });
+                });
+                return;
+            }
+
             const action = g.dimensions?.action;
             const targetActions = new Set(['block', 'challenge', 'js_challenge', 'jschallenge', 'managed_challenge']);
 
@@ -2071,69 +2935,72 @@ export default function GDCCPage() {
         return stats;
     };
 
-    // Updated handleBatchReport to accept timeRange and templateId
-    const handleBatchReport = async (selectedHosts, batchTimeRange, templateId = 'default') => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default') => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
-        // Progress tracking
-        // Progress tracking
-        let progressLogs = []; // Full history for final summary
-        let displayLogs = [];  // Current display state for modal
+        let processedCount = 0;
+        let failedHosts = [];
+        let currentStep = 'Initializing...';
+        let currentProgress = 0;
 
-        const updateProgress = (message, type = 'info', isReplace = false, showSpinner = true) => {
-            const icons = { info: '📝', success: '✅', warning: '⚠️', error: '❌', step: '🔄' };
-            const icon = icons[type] || '📝';
-            const logEntry = `${icon} ${message}`;
-
-            // Always add to full history
-            progressLogs.push(logEntry);
-
-            // Update display logs
-            if (isReplace && displayLogs.length > 0) {
-                displayLogs[displayLogs.length - 1] = logEntry;
-            } else {
-                displayLogs.push(logEntry);
-            }
-
-            if (message.includes('Processing:')) {
-                displayLogs = [logEntry];
-            }
-
-            // Update modal content
-            const logHtml = displayLogs.join('<br/>');
+        // Overlay element handling via Swal
+        const updateOverlay = (hostName, index, total, progress, statusMsg) => {
+            const percentage = Math.round(progress);
             Swal.update({
                 html: `
-                    <div style="text-align: left; font-family: monospace; font-size: 14px; min-height: 100px; display: flex; flex-direction: column; justify-content: center;">
-                        ${logHtml}
+                    <div style="font-family: inherit;">
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 24px; font-weight: bold; color: white; margin-bottom: 8px;">Generating Batch Reports...</h3>
+                            <p style="color: #9CA3AF; font-size: 14px;">
+                                Processing domain <span style="font-weight: 600; color: #E5E7EB;">${index}</span> of <span style="font-weight: 600; color: #E5E7EB;">${total}</span>
+                            </p>
+                        </div>
+                        
+                        <div style="background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(55, 65, 81, 0.5); border-radius: 12px; padding: 20px; max-width: 400px; margin: 0 auto 32px auto; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
+                            <div style="font-size: 12px; color: #60A5FA; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span>🌐</span> Currently Generating
+                            </div>
+                            <div style="font-size: 18px; color: white; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hostName}">
+                                ${hostName || 'Preparing...'}
+                            </div>
+                            <div style="font-size: 12px; color: #9CA3AF; margin-top: 8px; font-style: italic;">
+                                ${statusMsg}
+                            </div>
+                        </div>
+
+                        <div style="width: 100%; max-width: 400px; margin: 0 auto;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #9CA3AF; margin-bottom: 8px; font-family: monospace;">
+                                <span>PROGRESS</span>
+                                <span>${percentage}%</span>
+                            </div>
+                            <div style="width: 100%; background: #1F2937; border-radius: 9999px; height: 10px; overflow: hidden; border: 1px solid #374151; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);">
+                                <div style="background: #3B82F6; height: 10px; transition: width 0.3s ease; width: ${percentage}%; box-shadow: 0 0 10px rgba(59,130,246,0.6);"></div>
+                            </div>
+                        </div>
                     </div>
                 `
             });
-            // Conditionally show spinner
-            if (showSpinner) {
-                Swal.showLoading();
-            } else {
-                Swal.hideLoading();
-            }
         };
 
-        // Show blocked loading popup
+        // Show the initial full-screen-like Swal overlay
         Swal.fire({
-            title: 'Generating Batch Reports...',
-            html: `
-                <div style="text-align: left; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;">
-                    📝 Initializing batch report generation...
-                </div>
-                <div class="text-sm text-gray-400 mt-4">Do not close this window.</div>
-            `,
+            title: '',
+            html: 'Initializing...', // Will be replaced by updateOverlay immediately
             allowOutsideClick: false,
             allowEscapeKey: false,
             showConfirmButton: false,
+            background: 'rgba(17, 24, 39, 0.95)',
+            backdrop: 'rgba(0,0,0,0.8)',
+            color: '#fff',
+            customClass: {
+                popup: 'rounded-2xl border border-gray-700 shadow-2xl',
+                htmlContainer: 'p-4'
+            },
             didOpen: () => {
                 Swal.showLoading();
-            },
-            background: '#111827',
-            color: '#fff'
+                updateOverlay('Preparing Document...', 0, selectedHosts.length, 0, 'Loading templates and settings...');
+            }
         });
 
         const legacyHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
@@ -2173,7 +3040,7 @@ export default function GDCCPage() {
 
         try {
             // 0. Generate Domain Report (First Page)
-            updateProgress('Step 0: Creating Document Structure...', 'step');
+            updateOverlay('Preparing Document...', 0, selectedHosts.length, 0, 'Step 1: Creating Document Structure');
             console.log('Creating Document Structure from staticReportTemplate.json...');
 
             // ALWAYS load from JSON file - no fallback
@@ -2186,8 +3053,7 @@ export default function GDCCPage() {
                 if (!domainTemplateContent || !subReportTemplateContent) {
                     throw new Error('Template file is empty or invalid (ID: ' + tid + ')');
                 }
-                updateProgress('✓ Loaded Report Templates (Domain & Sub-reports)', 'success');
-                console.log('✓ Loaded Report Templates');
+                updateOverlay('Preparing Document...', 0, selectedHosts.length, 2, 'Loaded Report Templates');
             } catch (e) {
                 const errorMsg = e?.message || 'Unknown error loading template';
                 console.error("Failed to load domain template from JSON file:", e);
@@ -2206,7 +3072,7 @@ export default function GDCCPage() {
             }
 
             // Prepare basic data for Domain Report using current state/props + zoneSettings if available
-            updateProgress('Fetching zone configurations...', 'step');
+            updateOverlay('Preparing Document...', 0, selectedHosts.length, 5, 'Fetching zone configurations...');
 
             // --- PRE-STEP: ENSURE DATA IS LOADED ---
             // Ensure Zone Data is loaded (DNS & Settings) for both Domain Report (Cover) and Batch Reports
@@ -2216,7 +3082,6 @@ export default function GDCCPage() {
             try {
                 if (!localDnsRecords || localDnsRecords.length === 0) {
                     console.log('⚠️ DNS Records missing in state, fetching for report...');
-                    updateProgress('Fetching DNS Records...', 'step');
                     const dnsRes = await callAPI('get-dns-records', { zoneId: selectedZone });
                     if (dnsRes && dnsRes.data) {
                         localDnsRecords = dnsRes.data;
@@ -2225,7 +3090,6 @@ export default function GDCCPage() {
 
                 if (!localZoneSettings || !localZoneSettings.ipAccessRules || !localZoneSettings.customRules) {
                     console.log('⚠️ Zone Settings missing/incomplete in state, fetching for report...');
-                    updateProgress('Fetching Zone Settings...', 'step');
                     const settingsRes = await callAPI('get-zone-settings', { zoneId: selectedZone });
                     if (settingsRes && settingsRes.data) {
                         localZoneSettings = settingsRes.data;
@@ -2237,8 +3101,8 @@ export default function GDCCPage() {
 
             // Use verified LOCAL data
             // Fetch Zone-Wide Stats FIRST (Fix: stats is not defined)
-            updateProgress('Fetching Zone-wide Statistics...', 'step');
-            const zoneStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', selectedZone, batchTimeRange) || {
+            updateOverlay('Preparing Document...', 0, selectedHosts.length, 8, 'Fetching Zone-wide Statistics...');
+            const zoneStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', selectedZone, batchStartDate, batchEndDate) || {
                 zoneWideRequests: 0,
                 zoneWideCacheRequests: 0,
                 zoneWideDataTransfer: 0,
@@ -2270,7 +3134,8 @@ export default function GDCCPage() {
                 topFirewallSources: topFirewallSources,
                 zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
                 accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
-                timeRange: timeRange,
+                startDate: batchStartDate,
+                endDate: batchEndDate,
                 dnsRecords: localDnsRecords,
                 // Add zone settings (using localZoneSettings)
                 botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
@@ -2321,46 +3186,31 @@ export default function GDCCPage() {
 
 
             // Process HTML
-            updateProgress('Filling the Document Template using zone configurations...', 'step');
+            // Process HTML
             const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date());
 
 
             // Add to combined HTML
             combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
-            updateProgress('✓ Filled the Document Template using zone configurations', 'success');
 
-
-
-
-
-            let processedCount = 0;
-            let failedHosts = [];
-
-            updateProgress(`Starting to process ${selectedHosts.length} hosts...`, 'info');
 
             for (let i = 0; i < selectedHosts.length; i++) {
                 const host = selectedHosts[i];
-                updateProgress(`[${i + 1}/${selectedHosts.length}] Processing: ${host}`, 'info');
-                console.log(`\n${'='.repeat(60)}`);
-                console.log(`📊 [${i + 1}/${selectedHosts.length}] Processing: ${host}`);
+                const baseProgress = ((i) / selectedHosts.length) * 100;
+
+                updateOverlay(host, i + 1, selectedHosts.length, baseProgress, 'Starting generation...');
                 console.log(`${'='.repeat(60)}`);
 
                 try {
                     const hostStartTime = performance.now();
 
                     // 1. Switch Domain and Fetch Data
-                    updateProgress(`Step 1/5: Fetching traffic data...`, 'step');
-                    console.log(`🔄 Step 1/5: Switching to domain and fetching traffic data...`);
-
+                    updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 10, 'Fetching Traffic Data from Cloudflare...');
                     const apiStart = performance.now();
                     setSelectedSubDomain(host);
                     // USE batchTimeRange HERE
-                    const stats = await fetchAndApplyTrafficData(host, selectedZone, batchTimeRange);
+                    const stats = await fetchAndApplyTrafficData(host, selectedZone, batchStartDate, batchEndDate);
                     const apiEnd = performance.now();
-                    const apiDuration = ((apiEnd - apiStart) / 1000).toFixed(2);
-
-                    updateProgress(`Step 1/5: Data fetched (${apiDuration}s)`, 'step', true); // Replace previous line
-                    console.log(`✅ Data fetched in ${apiDuration}s`);
 
                     // Use data even if empty (show zeros instead of skipping)
                     const safeStats = stats || {
@@ -2381,19 +3231,11 @@ export default function GDCCPage() {
                     };
 
                     // 2. Wait for animations and rendering
-                    const renderStart = performance.now();
-                    updateProgress(`Step 2/5: Waiting for render (2s)...`, 'step', true); // Replace previous line
-                    console.log(`⏳ Step 2/5: Waiting for dashboard render (2s)...`);
+                    updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 40, 'Rendering Dashboard UI...');
                     await new Promise(resolve => setTimeout(resolve, 2000));
-                    const renderEnd = performance.now();
-                    const renderDuration = ((renderEnd - renderStart) / 1000).toFixed(2);
-                    updateProgress(`Step 2/5: Render wait complete (${renderDuration}s)`, 'success', true);
-                    console.log(`✅ Render complete in ${renderDuration}s`);
 
                     // 3. Capture Screenshot
-                    const screenStart = performance.now();
-                    updateProgress(`Step 3/5: Capturing screenshot...`, 'step', true); // Replace previous line
-                    console.log(`📸 Step 3/5: Capturing screenshot...`);
+                    updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 60, 'Capturing Dashboard Snapshot...');
                     let imgData = null;
                     if (dashboardRef.current) {
                         try {
@@ -2408,25 +3250,17 @@ export default function GDCCPage() {
                             ]);
 
                             const screenEnd = performance.now();
-                            const screenDuration = ((screenEnd - screenStart) / 1000).toFixed(2);
-                            updateProgress(`Step 3/5: Screenshot captured (${screenDuration}s)`, 'success', true);
-                            console.log(`✅ Screenshot captured in ${screenDuration}s`);
                         } catch (imgError) {
                             console.warn(`⚠️ Screenshot failed for ${host}:`, imgError);
-                            updateProgress(`Step 3/5: Screenshot failed (Timeout), continuing...`, 'warning', true);
-                            console.log(`⚠️ Continuing without screenshot`);
                         }
-                    } else {
-                        updateProgress(`Step 3/5: Skipped screenshot (No ref)`, 'warning', true);
-                        console.log(`⚠️ Dashboard ref not available, skipping screenshot`);
                     }
 
                     // 4. Prepare Data for Template
-                    updateProgress(`Step 4/5: Preparing template data...`, 'step', true);
-                    console.log(`📋 Step 4/5: Preparing template data...`);
+                    updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 80, 'Preparing final document template...');
                     const currentReportData = {
                         domain: host,
-                        timeRange: timeRange,
+                        startDate: batchStartDate,
+                        endDate: batchEndDate,
                         totalRequests: safeStats.totalRequests,
                         blockedEvents: safeStats.blockedEvents,
                         logEvents: safeStats.logEvents,
@@ -2452,22 +3286,12 @@ export default function GDCCPage() {
                         customRules: localZoneSettings?.customRules,
                         rateLimits: localZoneSettings?.rateLimits
                     };
-                    updateProgress(`Step 4/5: Data prepared`, 'success', true);
-                    console.log(`✅ Data prepared`);
 
                     // 5. Generate HTML
-                    const htmlStart = performance.now();
-                    updateProgress(`Step 5/5: Generating HTML...`, 'step', true);
-                    console.log(`🔨 Step 5/5: Generating HTML report using template: ${templateId}...`);
+                    updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 90, 'Writing data into Word Document...');
                     let reportHtml = processTemplate(subReportTemplateContent, currentReportData, new Date(), imgData);
 
-
-
-                    const htmlEnd = performance.now();
-                    const htmlDuration = ((htmlEnd - htmlStart) / 1000).toFixed(2);
-
                     const hostTotalTime = ((performance.now() - hostStartTime) / 1000).toFixed(2);
-                    updateProgress(`Step 5/5: Completed in ${hostTotalTime}s`, 'success', true);
                     console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed in ${hostTotalTime}s`);
 
                     // Add to combined HTML with page break
@@ -2476,26 +3300,20 @@ export default function GDCCPage() {
 
                 } catch (hostError) {
                     console.error(`❌ Error processing ${host}:`, hostError);
-                    updateProgress(`❌ Error processing ${host}: ${hostError.message}`, 'error');
                     failedHosts.push(host);
-                    // Continue with next host instead of failing entire batch
                     continue;
                 }
             }
 
+            // Let it hit 100% just to be smooth
+            updateOverlay('Finalizing...', selectedHosts.length, selectedHosts.length, 100, 'Packing final Word Document (.doc)...');
+            await new Promise(r => setTimeout(r, 800)); // Small delay for effect
+
             // 6. Download the final Word document
-            updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-            updateProgress(`Generating final .doc document...`, 'step');
-            console.log(`\n${'='.repeat(60)}`);
-            // cleanHeader now contains the legacy structure
-            // cleanHeader (legacy structure) is still good HTML source
             const sourceHTML = cleanHeader + combinedHtml + footer;
             const filename = `batch_report_${new Date().getTime()}.doc`;
 
             try {
-                // Legacy .doc Method (MHTML/HTML masquerading as .doc)
-                console.log('Using Legacy .doc export method');
-
                 const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
                 const a = document.createElement("a");
                 a.href = source;
@@ -2503,42 +3321,35 @@ export default function GDCCPage() {
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                updateProgress(`✓ .doc download initiated`, 'success', true);
             } catch (error) {
                 console.error('Batch Word export error:', error);
-                updateProgress(`❌ Export failed: ${error.message}`, 'error');
+                throw error;
             }
 
-            console.log(`✅ File download initiated`);
-
-
-
-
-            // Final Update to the EXISTING modal (keep logs visible)
-            updateProgress(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
-            updateProgress(`Summary: ${processedCount}/${selectedHosts.length} completed`, 'success', false, false);
-
-            // Show OK button and update title
-            Swal.update({
-                title: 'Batch Report Completed',
-                icon: processedCount > 0 ? 'success' : 'warning',
-                showConfirmButton: true,
-                confirmButtonText: 'OK, Close',
-                allowOutsideClick: true,
-                didOpen: () => {
-                    Swal.hideLoading(); // FORCE HIDE SPINNER
-                },
+            // Final Summary Modal
+            Swal.fire({
+                title: 'Batch Report Completed!',
+                icon: failedHosts.length === 0 ? 'success' : 'warning',
+                background: '#111827',
+                color: '#fff',
                 html: `
-                    <div style="text-align: left;">
-                        <p class="mb-2">✅ Generated: <b>${processedCount}</b> / ${selectedHosts.length} hosts.</p>
-                        ${failedHosts.length > 0 ? `<p class="text-red-400 mb-2">❌ Failed: ${failedHosts.join(', ')}</p>` : ''}
-                        
-                        <div style="font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; background: #0f172a; padding: 10px; rounded: 4px; border: 1px solid #334155;">
-                            ${progressLogs.join('<br/>')}
-                        </div>
-                        <div class="text-sm text-green-400 mt-4 text-center">Batch process finished. You can close this window.</div>
+                    <div style="text-align: center; margin-top: 10px;">
+                        <p style="font-size: 16px; margin-bottom: 12px;">Successfully generated reports for <b>${processedCount}</b> out of ${selectedHosts.length} domains.</p>
+                        ${failedHosts.length > 0 ? `
+                            <div style="background: rgba(2ef, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 10px; border-radius: 8px; margin-top: 15px; text-align: left;">
+                                <p style="color: #F87171; font-weight: bold; margin-bottom: 5px; font-size: 14px;">Failed Domains (${failedHosts.length}):</p>
+                                <ul style="color: #FCA5A5; font-size: 13px; padding-left: 20px; list-style-type: disc; max-height: 100px; overflow-y: auto;">
+                                    ${failedHosts.map(h => `<li>${h}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
                     </div>
-                `
+                `,
+                confirmButtonText: 'Great!',
+                confirmButtonColor: '#3B82F6',
+                customClass: {
+                    popup: 'rounded-xl border border-gray-700 shadow-xl'
+                }
             });
 
         } catch (error) {
@@ -2787,6 +3598,7 @@ export default function GDCCPage() {
         // Manual Generation Requested: Do not auto-fetch on selection change
         // Only reset data to avoid showing stale data for wrong domain
         resetDashboardData();
+        loadLastSyncDate(selectedZone, selectedSubDomain);
     }, [selectedSubDomain, selectedZone]); // Removed timeRange/token dependency to prevent auto-fetch
 
     useEffect(() => {
@@ -2942,7 +3754,8 @@ export default function GDCCPage() {
     // Data for Report Modal
     const reportData = {
         domain: selectedSubDomain || 'No Domain Selected',
-        timeRange: timeRange,
+        startDate: startDate,
+        endDate: endDate,
         totalRequests: totalRequests,
         blockedEvents: blockedEvents,
         logEvents: logEvents,
@@ -3001,7 +3814,7 @@ export default function GDCCPage() {
 
                         {/* GENERATE DASHBOARD BUTTON */}
                         <button
-                            onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, timeRange)}
+                            onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, startDate, endDate)}
                             disabled={!selectedSubDomain || loadingStats}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${!selectedSubDomain || loadingStats
                                 ? (theme.buttonDisabled || 'bg-gray-700 text-gray-500 cursor-not-allowed')
@@ -3031,6 +3844,12 @@ export default function GDCCPage() {
                                             className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
                                         >
                                             <FileText className="w-3 h-3" /> Manage Template
+                                        </button>
+                                        <button
+                                            onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsSyncModalOpen(true); }}
+                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                        >
+                                            <Database className="w-3 h-3" /> Sync History
                                         </button>
                                     </div>
 
@@ -3143,6 +3962,14 @@ export default function GDCCPage() {
                 theme={theme}
             />
 
+            <SyncHistoryModal
+                isOpen={isSyncModalOpen}
+                onClose={() => setIsSyncModalOpen(false)}
+                accounts={accounts}
+                theme={theme}
+                currentUser={currentUser}
+            />
+
             <main ref={dashboardRef} className="p-4 min-h-screen">
 
                 {/* SELECTORS */}
@@ -3156,18 +3983,32 @@ export default function GDCCPage() {
                 {/* TIME RANGE SELECTOR */}
                 <div className="flex justify-end items-center mb-4">
                     <div className={`${theme.dropdown?.bg || 'bg-gray-900'} border ${theme.dropdown?.border || 'border-gray-800'} rounded-lg p-1 flex gap-1`}>
-                        {[{ label: '1d', val: 1440 }, { label: '7d', val: 10080 }, { label: '30d', val: 43200 }].map(t => (
-                            <button
-                                key={t.val}
-                                onClick={() => setTimeRange(t.val)}
-                                className={`px-3 py-1.5 text-xs font-mono rounded transition-colors ${timeRange === t.val
-                                    ? (theme.dropdown?.active || 'bg-blue-600 text-white') + ' shadow-lg'
-                                    : (theme.dropdown?.text || 'text-gray-400') + ' hover:' + (theme.dropdown?.inputText || 'text-white') + ' ' + (theme.dropdown?.hover || 'hover:bg-gray-800')
-                                    }`}
-                            >
-                                {t.label}
-                            </button>
-                        ))}
+                        {/* Date Picker Start */}
+                        <div className="flex items-center gap-1">
+                            <span className={`text-xs ${theme.subText || 'text-gray-400'}`}>Start:</span>
+                            <input
+                                type="date"
+                                value={startDate}
+                                max={new Date().toISOString().split('T')[0]} // Prevents future dates
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className={`px-2 py-1 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500
+                                ${theme.dropdown?.bg || 'bg-gray-800'} ${theme.dropdown?.text || 'text-white'} ${theme.dropdown?.border || 'border-gray-700'}`}
+                            />
+                        </div>
+
+                        {/* Date Picker End */}
+                        <div className="flex items-center gap-1">
+                            <span className={`text-xs ml-2 ${theme.subText || 'text-gray-400'}`}>End:</span>
+                            <input
+                                type="date"
+                                value={endDate}
+                                max={new Date().toISOString().split('T')[0]} // Prevents future dates
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className={`px-2 py-1 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500
+                                ${theme.dropdown?.bg || 'bg-gray-800'} ${theme.dropdown?.text || 'text-white'} ${theme.dropdown?.border || 'border-gray-700'}`}
+                            />
+                        </div>
+
                     </div>
                 </div>
 
@@ -3353,7 +4194,7 @@ export default function GDCCPage() {
                     </div>
 
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 }

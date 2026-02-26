@@ -1,7 +1,372 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+import { getLatestSyncDate, saveDailyStats, getStatsInRange, getAllSyncStatus, deleteSyncData, checkDateExists } from '../../../lib/gdcc-db';
+
 
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
+
+const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, until) => {
+    const query = `
+       query GetZoneAnalytics($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
+         viewer {
+           zones(filter: { zoneTag: $zoneTag }) {
+             zoneSummary: httpRequests1dGroups(
+                limit: 1000, filter: { date_geq: $since_date, date_leq: $until_date }
+             ) {
+                sum {
+                  requests bytes cachedRequests cachedBytes
+                  countryMap { clientCountryName requests bytes }
+                }
+             }
+             httpRequestsAdaptiveGroups(
+               filter: { datetime_geq: $since, datetime_leq: $until ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
+               limit: 8000, orderBy: [count_DESC]
+             ) {
+               count avg { edgeTimeToFirstByteMs }
+               dimensions {
+                 clientRequestHTTPHost clientIP clientRequestPath clientCountryName userAgent clientDeviceType userAgentOS edgeResponseStatus datetimeMinute
+               }
+             }
+             firewallActivity: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
+                limit: 5000, orderBy: [datetimeMinute_ASC]
+             ) { count dimensions { action datetimeMinute } }
+             firewallRules: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
+                limit: 500, orderBy: [count_DESC]
+             ) { count dimensions { description ruleId source } }
+             firewallIPs: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
+                limit: 100, orderBy: [count_DESC]
+             ) { count dimensions { clientIP clientCountryName action } }
+             firewallSources: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
+                limit: 100, orderBy: [count_DESC]
+             ) { count dimensions { source } }
+           }
+         }
+       }
+     `;
+
+    const variables = {
+        zoneTag: zoneId,
+        since: since.toISOString(),
+        until: until.toISOString(),
+        since_date: since.toISOString().split('T')[0],
+        until_date: until.toISOString().split('T')[0],
+    };
+    if (targetSubdomain) { variables.host = targetSubdomain; }
+
+    const response = await axios({
+        method: 'POST',
+        url: `${CLOUDFLARE_API_BASE}/graphql`,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { query, variables }
+    });
+
+    if (response.data.errors) {
+        console.error('❌ Cloudflare GraphQL Errors:', JSON.stringify(response.data.errors, null, 2));
+    }
+
+    const zoneData = response.data?.data?.viewer?.zones?.[0];
+    const result = {
+        httpRequestsAdaptiveGroups: zoneData?.httpRequestsAdaptiveGroups || [],
+        zoneSummary: zoneData?.zoneSummary || [],
+        firewallActivity: zoneData?.firewallActivity || [],
+        firewallRules: zoneData?.firewallRules || [],
+        firewallIPs: zoneData?.firewallIPs || [],
+        firewallSources: zoneData?.firewallSources || []
+    };
+
+    // Limit detection — warn if result count is at or near the query limit
+    const LIMITS = {
+        httpRequestsAdaptiveGroups: targetSubdomain ? 8000 : 8000,
+        firewallActivity: targetSubdomain ? 5000 : 5000,
+        firewallRules: 500,
+        firewallIPs: 100,
+        firewallSources: 100,
+    };
+    const label = targetSubdomain ? `[${targetSubdomain}]` : '[ZoneOverview]';
+    let hitLimit = false;
+    for (const [key, limit] of Object.entries(LIMITS)) {
+        const count = result[key]?.length || 0;
+        if (count >= limit) {
+            console.warn(`⚠️ LIMIT HIT ${label} ${key}: ${count}/${limit} rows — data may be TRUNCATED`);
+            hitLimit = true;
+        }
+    }
+    if (!hitLimit) {
+        const counts = Object.entries(LIMITS)
+            .map(([k, lim]) => `${k.replace('httpRequests', 'req').replace('AdaptiveGroups', '').replace('firewall', 'fw')}: ${result[k]?.length || 0}/${lim}`)
+            .join(' | ');
+        console.log(`✅ ${label} fetchAnalytics OK — ${counts}`);
+    }
+
+    return result;
+};
+
+// Lightweight analytics for per-subdomain syncing (avoids 502 by splitting the query)
+// Only fetches httpRequestsAdaptiveGroups with host filter (no heavy firewall tables combined)
+const fetchSubdomainAnalytics = async (token, zoneId, host, since, until) => {
+    const trafficQuery = `
+        query GetSubdomainTraffic($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String, $host: String) {
+          viewer {
+            zones(filter: { zoneTag: $zoneTag }) {
+              zoneSummary: httpRequests1dGroups(
+                limit: 1, filter: { date_geq: $since_date, date_leq: $until_date }
+              ) {
+                sum { requests bytes cachedRequests cachedBytes }
+              }
+              httpRequestsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until, clientRequestHTTPHost: $host }
+                limit: 5000, orderBy: [count_DESC]
+              ) {
+                count avg { edgeTimeToFirstByteMs }
+                dimensions {
+                  clientRequestHTTPHost clientIP clientRequestPath clientCountryName
+                  userAgent clientDeviceType userAgentOS edgeResponseStatus datetimeMinute
+                }
+              }
+            }
+          }
+        }
+    `;
+
+    const firewallQuery = `
+        query GetSubdomainFirewall($zoneTag: String, $since: String, $until: String, $host: String) {
+          viewer {
+            zones(filter: { zoneTag: $zoneTag }) {
+              firewallActivity: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until, clientRequestHTTPHost: $host }
+                limit: 2000, orderBy: [datetimeMinute_ASC]
+              ) { count dimensions { action datetimeMinute } }
+              firewallRules: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until, clientRequestHTTPHost: $host }
+                limit: 200, orderBy: [count_DESC]
+              ) { count dimensions { description ruleId source } }
+              firewallIPs: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until, clientRequestHTTPHost: $host }
+                limit: 100, orderBy: [count_DESC]
+              ) { count dimensions { clientIP clientCountryName action } }
+              firewallSources: firewallEventsAdaptiveGroups(
+                filter: { datetime_geq: $since, datetime_leq: $until, clientRequestHTTPHost: $host }
+                limit: 50, orderBy: [count_DESC]
+              ) { count dimensions { source } }
+            }
+          }
+        }
+    `;
+
+    const variables = {
+        zoneTag: zoneId,
+        since: since.toISOString(),
+        until: until.toISOString(),
+        since_date: since.toISOString().split('T')[0],
+        until_date: until.toISOString().split('T')[0],
+        host
+    };
+
+    // Run traffic and firewall queries in parallel (separate requests = lighter per call)
+    const [trafficResp, firewallResp] = await Promise.all([
+        axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: trafficQuery, variables } }),
+        axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: firewallQuery, variables } })
+    ]);
+
+    if (trafficResp.data?.errors) console.warn(`⚠️ Subdomain traffic GraphQL errors for ${host}:`, JSON.stringify(trafficResp.data.errors));
+    if (firewallResp.data?.errors) console.warn(`⚠️ Subdomain firewall GraphQL errors for ${host}:`, JSON.stringify(firewallResp.data.errors));
+
+    const tZone = trafficResp.data?.data?.viewer?.zones?.[0];
+    const fZone = firewallResp.data?.data?.viewer?.zones?.[0];
+
+    return {
+        httpRequestsAdaptiveGroups: tZone?.httpRequestsAdaptiveGroups || [],
+        zoneSummary: tZone?.zoneSummary || [],
+        firewallActivity: fZone?.firewallActivity || [],
+        firewallRules: fZone?.firewallRules || [],
+        firewallIPs: fZone?.firewallIPs || [],
+        firewallSources: fZone?.firewallSources || []
+    };
+};
+
+// ─── Merge multiple analytics chunks into one ────────────────────────────────
+// Concatenates time-based arrays; aggregates firewall dimensions to avoid duplicates
+const mergeChunks = (...chunks) => {
+    const base = chunks[0];
+    const merged = {
+        zoneSummary: base.zoneSummary || [], // Daily summary is identical across all time-slices of the same day
+        zoneName: base.zoneName,
+        accountName: base.accountName,
+        httpRequestsAdaptiveGroups: [],
+        firewallActivity: [],
+        _fwRules: {}, _fwIPs: {}, _fwSources: {},
+    };
+    for (const chunk of chunks) {
+        merged.httpRequestsAdaptiveGroups.push(...(chunk.httpRequestsAdaptiveGroups || []));
+        merged.firewallActivity.push(...(chunk.firewallActivity || []));
+        for (const r of (chunk.firewallRules || [])) {
+            const k = `${r.dimensions?.ruleId}|${r.dimensions?.description}`;
+            if (!merged._fwRules[k]) merged._fwRules[k] = { ...r };
+            else merged._fwRules[k].count += r.count;
+        }
+        for (const r of (chunk.firewallIPs || [])) {
+            const k = `${r.dimensions?.clientIP}|${r.dimensions?.action}`;
+            if (!merged._fwIPs[k]) merged._fwIPs[k] = { ...r };
+            else merged._fwIPs[k].count += r.count;
+        }
+        for (const r of (chunk.firewallSources || [])) {
+            const k = r.dimensions?.source;
+            if (!merged._fwSources[k]) merged._fwSources[k] = { ...r };
+            else merged._fwSources[k].count += r.count;
+        }
+    }
+    merged.firewallRules = Object.values(merged._fwRules).sort((a, b) => b.count - a.count);
+    merged.firewallIPs = Object.values(merged._fwIPs).sort((a, b) => b.count - a.count);
+    merged.firewallSources = Object.values(merged._fwSources).sort((a, b) => b.count - a.count);
+    delete merged._fwRules; delete merged._fwIPs; delete merged._fwSources;
+    return merged;
+};
+
+// ─── Summarize large raw logs into compact statistics ───────────────────────
+// Reduces 150,000+ rows (~60MB) into top-10 lists and hourly buckets (~50KB)
+const summarizeDailyResult = (raw) => {
+    const summary = {
+        isSummary: true,
+        zoneName: raw.zoneName || '',
+        accountName: raw.accountName || '',
+        // 1. Accurate Totals from zoneSummary (1dGroups)
+        totals: {
+            requests: 0, bytes: 0, cachedRequests: 0, cachedBytes: 0,
+            countries: [], // uses countryMap from 1dGroups (100% accurate)
+            avgResponseTime: 0
+        },
+        // 2. Top-10 lists from adaptive logs
+        topUrls: [], topIps: [], topHosts: [], topUAs: [],
+        statusDistribution: {},
+        // 3. Time Series (Hourly buckets to save space)
+        hourlyTimeline: Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 })),
+        // 4. Firewall Summary
+        firewall: {
+            total: 0,
+            topRules: (raw.firewallRules || []).slice(0, 10),
+            topIPs: (raw.firewallIPs || []).slice(0, 10),
+            topSources: (raw.firewallSources || []).slice(0, 10),
+            activity: (raw.firewallActivity || []).slice(0, 100) // Keep some activity dots
+        }
+    };
+
+    // Use 1d summary for truth metrics (requests, bytes, countries)
+    if (raw.zoneSummary && raw.zoneSummary.length > 0) {
+        const s = raw.zoneSummary[0].sum;
+        summary.totals.requests = s.requests || 0;
+        summary.totals.bytes = s.bytes || 0;
+        summary.totals.cachedRequests = s.cachedRequests || 0;
+        summary.totals.cachedBytes = s.cachedBytes || 0;
+        summary.totals.countries = (s.countryMap || [])
+            .sort((a, b) => b.requests - a.requests)
+            .slice(0, 10);
+    }
+
+    // Process Adaptive Logs for Breakdown (Top 10)
+    const urlMap = {}; const ipMap = {}; const hostMap = {}; const uaMap = {};
+    const adaptive = raw.httpRequestsAdaptiveGroups || [];
+    let weightedAvgSum = 0;
+    let avgCountTotal = 0;
+
+    // Fallback if 1d summary was missing
+    if (summary.totals.requests === 0) {
+        summary.totals.requests = adaptive.reduce((acc, curr) => acc + (curr.count || 0), 0);
+    }
+
+    adaptive.forEach(item => {
+        const c = item.count || 0;
+        const d = item.dimensions || {};
+        const avgTime = item.avg?.edgeTimeToFirstByteMs || 0;
+
+        if (avgTime > 0) {
+            weightedAvgSum += (avgTime * c);
+            avgCountTotal += c;
+        }
+
+        if (d.clientRequestPath) urlMap[d.clientRequestPath] = (urlMap[d.clientRequestPath] || 0) + c;
+        if (d.clientIP) ipMap[d.clientIP] = (ipMap[d.clientIP] || 0) + c;
+        if (d.clientRequestHTTPHost) hostMap[d.clientRequestHTTPHost] = (hostMap[d.clientRequestHTTPHost] || 0) + c;
+        if (d.userAgent) uaMap[d.userAgent] = (uaMap[d.userAgent] || 0) + c;
+
+        if (d.edgeResponseStatus) {
+            summary.statusDistribution[d.edgeResponseStatus] = (summary.statusDistribution[d.edgeResponseStatus] || 0) + c;
+        }
+
+        if (d.datetimeMinute) {
+            const hour = new Date(d.datetimeMinute).getUTCHours();
+            if (summary.hourlyTimeline[hour]) summary.hourlyTimeline[hour].count += c;
+        }
+    });
+
+    // Finalize average
+    if (avgCountTotal > 0) {
+        summary.totals.avgResponseTime = weightedAvgSum / avgCountTotal;
+    }
+
+    const sortSlice = (map) => Object.entries(map)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([k, v]) => ({ key: k, count: v }));
+
+    summary.topUrls = sortSlice(urlMap);
+    summary.topIps = sortSlice(ipMap);
+    summary.topHosts = sortSlice(hostMap);
+    summary.topUAs = sortSlice(uaMap);
+
+    // Sum firewall blocked total
+    summary.firewall.total = (raw.firewallActivity || []).reduce((acc, curr) => acc + (curr.count || 0), 0);
+
+    return summary;
+};
+
+// ─── Adaptive chunking: 1x24h → 2x12h → 4x6h → 6x4h → 12x2h → 24x1h ────────
+// Progressively splits the day into smaller windows until no chunk hits the ADAPTIVE_LIMIT
+const ADAPTIVE_LIMIT = 8000;
+const CHUNK_LEVELS = [1, 2, 4, 6, 12, 24]; // Number of equal slices per day
+const CHUNK_LABELS = ['24h', '12h', '6h', '4h', '2h', '1h'];
+
+const fetchWithAutoChunking = async (token, zoneId, targetFilter, since, until, label = '') => {
+    const dayMs = until.getTime() - since.getTime();
+
+    for (let lvl = 0; lvl < CHUNK_LEVELS.length; lvl++) {
+        const n = CHUNK_LEVELS[lvl];
+        const sliceMs = dayMs / n;
+        const chunkLabel = CHUNK_LABELS[lvl];
+
+        if (lvl > 0) {
+            console.log(`⚡ [${label}] Limit hit — splitting into ${n}x ${chunkLabel}...`);
+        }
+
+        // Fetch all chunks of this level in parallel
+        const chunks = await Promise.all(
+            Array.from({ length: n }, (_, i) => {
+                const chunkSince = new Date(since.getTime() + sliceMs * i);
+                const chunkUntil = i < n - 1
+                    ? new Date(since.getTime() + sliceMs * (i + 1) - 1)
+                    : until;
+                return fetchCloudflareAnalytics(token, zoneId, targetFilter, chunkSince, chunkUntil);
+            })
+        );
+
+        const anyHit = chunks.some(c => c.httpRequestsAdaptiveGroups.length >= ADAPTIVE_LIMIT);
+        const totalRows = chunks.reduce((s, c) => s + c.httpRequestsAdaptiveGroups.length, 0);
+
+        if (!anyHit || lvl === CHUNK_LEVELS.length - 1) {
+            if (n > 1) {
+                const suffix = anyHit ? ' (still hitting limit — max resolution reached)' : ' OK';
+                console.log(`✅ [${label}] ${n}x ${chunkLabel}${suffix} — merged (${totalRows} rows)`);
+            }
+            return n === 1 ? chunks[0] : mergeChunks(...chunks);
+        }
+        // else: continue to next finer level
+    }
+};
+
+
 
 export async function POST(request) {
     try {
@@ -206,196 +571,113 @@ export async function POST(request) {
             // console.log(`📊 Fetching GraphQL Analytics for Zone: ${zoneId}...`);
 
             // Dynamic Time Range
-            const minutes = body.timeRange || 1440;
-            const now = new Date();
-            const since = new Date(now.getTime() - minutes * 60 * 1000);
+            let since, until;
+
+            if (body.startDate && body.endDate) {
+                since = new Date(body.startDate + 'T00:00:00.000Z');
+                until = new Date(body.endDate + 'T23:59:59.999Z');
+                if (until > new Date()) {
+                    until = new Date(); // Cap to current time
+                }
+            } else {
+                const minutes = body.timeRange || 1440;
+                until = new Date();
+                since = new Date(until.getTime() - minutes * 60 * 1000);
+            }
 
             let targetSubdomain = body.subdomain;
             if (targetSubdomain === 'ALL_SUBDOMAINS') targetSubdomain = null;
 
-            const isRoot = !targetSubdomain;
-
-            const query = `
-               query GetZoneAnalytics($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
-                 viewer {
-                   zones(filter: { zoneTag: $zoneTag }) {
-                     # Zone-wide Summary: Always fetched (1dGroups) for report total stats (no host filtering)
-                     zoneSummary: httpRequests1dGroups(
-                        limit: 1000
-                        filter: {
-                            date_geq: $since_date, date_leq: $until_date
-                        }
-                     ) {
-                        sum {
-                          requests
-                          bytes
-                          cachedRequests
-                          cachedBytes
-                          countryMap {
-                            clientCountryName
-                            requests
-                            bytes
-                          }
-                        }
-                     }
-                     # ------------------------------
-
-                     httpRequestsAdaptiveGroups(
-                       filter: {
-                           datetime_geq: $since,
-                           datetime_leq: $until
-                           ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
-                       }
-                       limit: 8000
-                       orderBy: [count_DESC]
-                     ) {
-                       count
-                       avg {
-                         edgeTimeToFirstByteMs
-                       }
-                       dimensions {
-                         clientRequestHTTPHost
-                         clientIP
-                         clientRequestPath
-                         clientCountryName
-                         userAgent
-                         clientDeviceType
-                         userAgentOS
-                         edgeResponseStatus
-                         datetimeMinute
-                       }
-                     }
-                     
-                     firewallActivity: firewallEventsAdaptiveGroups(
-                        filter: {
-                            datetime_geq: $since,
-                            datetime_leq: $until
-                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
-                        }
-                        limit: 5000
-                        orderBy: [datetimeMinute_ASC]
-                     ) {
-                        count
-                        dimensions {
-                          action
-                          datetimeMinute
-                        }
-                     }
-
-                     # RULES: Aggregated by Rule Name & ID (Total Count)
-                     firewallRules: firewallEventsAdaptiveGroups(
-                        filter: {
-                            datetime_geq: $since,
-                            datetime_leq: $until
-                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
-                        }
-                        limit: 500
-                        orderBy: [count_DESC]
-                     ) {
-                        count
-                        dimensions {
-                          description
-                          ruleId
-                          source
-                        }
-                     }
-
-                     firewallIPs: firewallEventsAdaptiveGroups(
-                        filter: {
-                            datetime_geq: $since,
-                            datetime_leq: $until
-                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
-                        }
-                        limit: 100
-                        orderBy: [count_DESC]
-                     ) {
-                        count
-                        dimensions {
-                          clientIP
-                          clientCountryName
-                          action
-                        }
-                     }
-
-                     firewallSources: firewallEventsAdaptiveGroups(
-                        filter: {
-                            datetime_geq: $since,
-                            datetime_leq: $until
-                            ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
-                        }
-                        limit: 100
-                        orderBy: [count_DESC]
-                     ) {
-                        count
-                        dimensions {
-                          source
-                        }
-                     }
-                   }
-                 }
-               }
-             `;
-
-            const variables = {
-                zoneTag: zoneId,
-                since: since.toISOString(),
-                until: now.toISOString(),
-                since_date: since.toISOString().split('T')[0],
-                until_date: now.toISOString().split('T')[0],
-            };
-
-            if (targetSubdomain) {
-                variables.host = targetSubdomain;
-            }
-
             try {
-                const response = await axios({
-                    method: 'POST',
-                    url: `${CLOUDFLARE_API_BASE}/graphql`,
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
-                    data: {
-                        query: query,
-                        variables: variables
-                    }
-                });
+                let finalData = {
+                    httpRequestsAdaptiveGroups: [],
+                    zoneSummary: [],
+                    firewallActivity: [],
+                    firewallRules: [],
+                    firewallIPs: [],
+                    firewallSources: []
+                };
 
-                if (response.data.errors) {
-                    console.error('❌ Cloudflare GraphQL Errors:', JSON.stringify(response.data.errors, null, 2));
+                let sqliteData = [];
+                // Check if history in DB
+                try {
+                    sqliteData = await getStatsInRange(zoneId, targetSubdomain || 'ALL_SUBDOMAINS', since.toISOString().split('T')[0], until.toISOString().split('T')[0]);
+                } catch (e) {
+                    console.warn('Could not fetch from SQLite:', e.message);
                 }
 
-                const zoneData = response.data?.data?.viewer?.zones?.[0];
-                const httpGroups = zoneData?.httpRequestsAdaptiveGroups || [];
+                if (sqliteData.length > 0) {
+                    console.log(`🔹 Found ${sqliteData.length} days of historical data in SQLite.`);
+                    for (const row of sqliteData) {
+                        const d = row.data;
+                        if (d.isSummary) {
+                            // ─── Case 1: Summarized Compressed record ──────
+                            // Push the whole summary as one special item in the list
+                            finalData.httpRequestsAdaptiveGroups.push({ ...d, report_date: row.report_date });
 
-                // Extract separate firewall groups
-                const firewallActivity = zoneData?.firewallActivity || [];
-                const firewallRules = zoneData?.firewallRules || [];
-                const firewallIPs = zoneData?.firewallIPs || [];
-                const firewallSources = zoneData?.firewallSources || [];
+                            // Re-map totals back to the expected structure
+                            if (d.totals) {
+                                finalData.zoneSummary.push({
+                                    sum: { ...d.totals, countryMap: d.totals.countries || [] }
+                                });
+                            }
 
-                // console.log(`✅ GraphQL: ${httpGroups.length} HTTP, ${firewallActivity.length} Activity, ${firewallRules.length} Rules, ${firewallIPs.length} IPs, ${firewallSources.length} Sources`);
+                            // Firewall data
+                            if (d.firewall) {
+                                if (d.firewall.activity) finalData.firewallActivity.push(...d.firewall.activity);
+                                if (d.firewall.topRules) finalData.firewallRules.push(...d.firewall.topRules);
+                                if (d.firewall.topIPs) finalData.firewallIPs.push(...d.firewall.topIPs);
+                                if (d.firewall.topSources) finalData.firewallSources.push(...d.firewall.topSources);
+                            }
+                        } else {
+                            // ─── Case 2: Legacy Raw Record ────────────────
+                            finalData.httpRequestsAdaptiveGroups.push(...(d.httpRequestsAdaptiveGroups || []));
+                            finalData.zoneSummary.push(...(d.zoneSummary || []));
+                            finalData.firewallActivity.push(...(d.firewallActivity || []));
+                            finalData.firewallRules.push(...(d.firewallRules || []));
+                            finalData.firewallIPs.push(...(d.firewallIPs || []));
+                            finalData.firewallSources.push(...(d.firewallSources || []));
+                        }
+                    }
+                }
+
+                // If the requested range includes today, fetch today directly!
+                const todayStr = new Date().toISOString().split('T')[0];
+                const endStr = until.toISOString().split('T')[0];
+                const startStr = since.toISOString().split('T')[0];
+
+                if ((todayStr >= startStr && todayStr <= endStr) || sqliteData.length === 0) {
+                    console.log('🔹 Fetching live data from Cloudflare for actual range...');
+                    let liveSince = since;
+                    if (sqliteData.length > 0) {
+                        const todayMidnight = new Date(todayStr + 'T00:00:00.000Z');
+                        liveSince = since > todayMidnight ? since : todayMidnight;
+                    }
+                    if (liveSince < until) {
+                        const liveData = await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, until);
+
+                        // Combine 
+                        finalData.httpRequestsAdaptiveGroups.push(...liveData.httpRequestsAdaptiveGroups);
+                        finalData.zoneSummary.push(...liveData.zoneSummary);
+                        finalData.firewallActivity.push(...liveData.firewallActivity);
+                        finalData.firewallRules.push(...liveData.firewallRules);
+                        finalData.firewallIPs.push(...liveData.firewallIPs);
+                        finalData.firewallSources.push(...liveData.firewallSources);
+                    }
+                }
 
                 console.log('🔹 API: Sending Traffic Response...');
                 return NextResponse.json({
                     success: true,
-                    data: {
-                        httpRequestsAdaptiveGroups: httpGroups,
-                        zoneSummary: zoneData?.zoneSummary || [],
-                        firewallActivity,
-                        firewallRules,
-                        firewallIPs,
-                        firewallSources
-                    }
+                    data: finalData
                 });
 
             } catch (gqlError) {
-                console.error('GraphQL Error:', gqlError.response?.data || gqlError.message);
+                console.error('API Error:', gqlError.response?.data || gqlError.message);
                 return NextResponse.json({
                     success: false,
-                    message: 'GraphQL Error',
-                    error: gqlError.response?.data
+                    message: 'Analytics Error',
+                    error: gqlError.response?.data || gqlError.message
                 }, { status: 500 });
             }
 
@@ -1091,6 +1373,257 @@ export async function POST(request) {
                     message: 'Failed to fetch zone settings',
                     error: error.message
                 }, { status: 500 });
+            }
+        }
+
+        else if (action === 'get-sync-status') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+            try {
+                const targetSubdomain = body.subdomain || 'ALL_SUBDOMAINS';
+                const latestDateStr = await getLatestSyncDate(zoneId, targetSubdomain);
+                return NextResponse.json({ success: true, data: { lastSync: latestDateStr } });
+            } catch (err) {
+                console.error('Error fetching sync status:', err);
+                return NextResponse.json({ success: false, message: 'Failed to fetch sync status' }, { status: 500 });
+            }
+        }
+
+        else if (action === 'get-all-sync-status') {
+            try {
+                const results = await getAllSyncStatus();
+                return NextResponse.json({ success: true, data: results });
+            } catch (err) {
+                console.error('Error fetching all sync status:', err);
+                return NextResponse.json({ success: false, message: 'Failed to fetch all sync status' }, { status: 500 });
+            }
+        }
+
+        else if (action === 'sync-gdcc-history') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+
+            const encoder = new TextEncoder();
+
+            // Helper to sync one target, per-day for data completeness
+            // Zone overview uses full limits; subdomains use reduced limits (less traffic per host)
+            const syncTarget = async (controller, targetKey, targetFilter, startDate, yesterday, labelPrefix) => {
+                let currentDate = new Date(startDate);
+                let syncedDates = 0;
+                let errorDates = 0;
+
+                const allDates = [];
+                let d = new Date(startDate);
+                while (d.getTime() < yesterday.getTime()) {
+                    allDates.push(d.toISOString().split('T')[0]);
+                    d.setUTCDate(d.getUTCDate() + 1);
+                }
+                const totalDates = allDates.length;
+                if (totalDates === 0) return { syncedDates: 0, errorDates: 0 };
+
+                for (let di = 0; di < allDates.length; di++) {
+                    const dStr = allDates[di];
+                    const dStart = new Date(dStr + 'T00:00:00.000Z');
+                    const dEnd = new Date(dStr + 'T23:59:59.999Z');
+
+                    controller.enqueue(encoder.encode(JSON.stringify({
+                        type: 'progress',
+                        date: dStr,
+                        current: di + 1,
+                        total: totalDates,
+                        label: labelPrefix
+                    }) + '\n'));
+
+                    // ─── Check if already synced (skip re-sync) ───────────────
+                    const alreadySynced = await checkDateExists(zoneId, targetKey, dStr);
+                    if (alreadySynced) {
+                        console.log(`⏭️  [${labelPrefix}] ${dStr} already in DB — skipping`);
+                        syncedDates++;
+                        continue;
+                    }
+
+                    let data = null;
+                    for (let attempt = 1; attempt <= 2; attempt++) {
+                        try {
+                            // Both zone overview and subdomains use the SAME function —
+                            // same pattern as get-traffic-analytics / batch report.
+                            // targetFilter=null for zone overview, hostname string for subdomain.
+                            data = await fetchWithAutoChunking(token, zoneId, targetFilter, dStart, dEnd, labelPrefix);
+                            break;
+                        } catch (fetchErr) {
+                            const status = fetchErr.response?.status;
+                            console.warn(`⚠️ [${labelPrefix}] ${dStr} attempt ${attempt} failed (${status || fetchErr.message})`);
+                            if (attempt < 2 && (status === 502 || status === 503 || status === 504)) {
+                                await new Promise(r => setTimeout(r, 3000));
+                            } else {
+                                errorDates++;
+                                data = null;
+                            }
+                        }
+                    }
+
+                    // Always save a record for each processed date so:
+                    // 1) getLatestSyncDate advances correctly (no re-sync next time)
+                    // 2) Zone appears in Currently Backed Up Zones table
+                    if (data) {
+                        const totalRequests = (data.httpRequestsAdaptiveGroups || []).reduce((s, g) => s + (g.count || 0), 0);
+                        const hasFirewall = (data.firewallActivity || []).length > 0;
+                        if (totalRequests === 0 && !hasFirewall) {
+                            console.log(`⏭️  [${labelPrefix}] ${dStr} — 0 requests, saving empty marker`);
+                        }
+                        if (body.zoneName) data.zoneName = body.zoneName;
+                        if (body.accountName) data.accountName = body.accountName;
+
+                        // SUMMARIZE BEFORE SAVE: Compress 150k rows to stats
+                        const summary = summarizeDailyResult(data);
+                        await saveDailyStats(zoneId, targetKey, dStr, summary);
+                    } else if (data === null && errorDates > 0) {
+                        // Fetch failed — save a minimal marker so we don't retry this date forever
+                        const marker = { isSummary: true, zoneName: body.zoneName || '', accountName: body.accountName || '', totals: { requests: 0, bytes: 0 }, topUrls: [], topIps: [], firewall: { total: 0 }, _fetchError: true };
+                        await saveDailyStats(zoneId, targetKey, dStr, marker);
+                    }
+
+                    syncedDates++;
+                    // Small delay between days to avoid rate-limiting
+                    if (di < allDates.length - 1) {
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                }
+                return { syncedDates, errorDates };
+            };
+
+            // Helper to compute start date for a target
+            const getStartDate = async (targetKey) => {
+                const lastSyncStr = await getLatestSyncDate(zoneId, targetKey);
+                let startDate = new Date();
+                if (lastSyncStr) {
+                    startDate = new Date(lastSyncStr + 'T00:00:00.000Z');
+                    startDate.setUTCDate(startDate.getUTCDate() + 1);
+                } else {
+                    startDate.setUTCDate(startDate.getUTCDate() - 30);
+                }
+                startDate.setUTCHours(0, 0, 0, 0);
+                return startDate;
+            };
+
+            const stream = new ReadableStream({
+                async start(controller) {
+                    try {
+                        const yesterday = new Date();
+                        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+                        yesterday.setUTCHours(23, 59, 59, 999);
+
+                        // ─── Pre-check: Zone status ───────────────────────────
+                        controller.enqueue(encoder.encode(JSON.stringify({ type: 'phase', phase: 'check', label: 'Checking zone status...' }) + '\n'));
+                        let zoneStatus = 'active';
+                        try {
+                            const zoneInfoResp = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            zoneStatus = zoneInfoResp.data?.result?.status || 'active';
+                            console.log(`ℹ️  Zone ${zoneId} status: ${zoneStatus}`);
+                        } catch (e) {
+                            console.warn('Could not check zone status:', e.message);
+                        }
+
+                        if (zoneStatus === 'pending' || zoneStatus === 'deactivated') {
+                            const msg = `Zone is "${zoneStatus}" — subdomain sync will be skipped. Syncing zone overview only.`;
+                            console.warn(`⚠️  ${msg}`);
+                            controller.enqueue(encoder.encode(JSON.stringify({ type: 'warning', message: msg }) + '\n'));
+                        }
+
+                        // Step 1: Sync zone overview (ALL_SUBDOMAINS) — always run, even for pending zones
+                        const zoneStartDate = await getStartDate('ALL_SUBDOMAINS');
+                        controller.enqueue(encoder.encode(JSON.stringify({ type: 'phase', phase: 'zone', label: 'Zone Overview' }) + '\n'));
+                        await syncTarget(controller, 'ALL_SUBDOMAINS', null, zoneStartDate, yesterday, 'Zone Overview');
+
+                        // Step 2: Discover subdomains from DNS Records — skip if zone is pending/deactivated
+                        if (zoneStatus === 'pending' || zoneStatus === 'deactivated') {
+                            console.log(`ℹ️  Zone is ${zoneStatus} — skipping subdomain discovery and sync.`);
+                            controller.enqueue(encoder.encode(JSON.stringify({ type: 'done' }) + '\n'));
+                            controller.close();
+                            return;
+                        }
+
+                        controller.enqueue(encoder.encode(JSON.stringify({ type: 'phase', phase: 'discover', label: 'Discovering subdomains from DNS...' }) + '\n'));
+
+                        let subdomains = [];
+                        try {
+                            // Use REST API DNS records (same as get-dns-records action used by dashboard)
+                            const dnsResp = await axios.get(
+                                `${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?per_page=500`,
+                                { headers: { 'Authorization': `Bearer ${token}` } }
+                            );
+
+                            const dnsRecords = dnsResp.data?.result || [];
+                            console.log(`📋 DNS records found: ${dnsRecords.length} for zone ${zoneId}`);
+
+                            // Extract A, AAAA, CNAME host names — same logic as dashboard
+                            const hostSet = new Set(
+                                dnsRecords
+                                    .filter(r => ['A', 'AAAA', 'CNAME'].includes(r.type))
+                                    .map(r => r.name)
+                                    .filter(Boolean)
+                            );
+
+                            // Optionally remove the bare zone name (root domain) — it has less useful per-subdomain data
+                            const zoneName = body.zoneName;
+                            if (zoneName) hostSet.delete(zoneName);
+
+                            subdomains = Array.from(hostSet).sort();
+                            console.log(`✅ Discovered ${subdomains.length} subdomains from DNS:`, subdomains);
+
+                        } catch (e) {
+                            console.error('❌ DNS-based subdomain discovery failed:', e.message);
+                            controller.enqueue(encoder.encode(JSON.stringify({ type: 'warning', message: `DNS discovery failed: ${e.message}. Continuing without subdomain data.` }) + '\n'));
+                        }
+
+                        controller.enqueue(encoder.encode(JSON.stringify({ type: 'discovered', count: subdomains.length, subdomains }) + '\n'));
+
+                        // Step 3: Sync each subdomain individually
+                        let sdSuccess = 0;
+                        let sdFailed = 0;
+                        for (let si = 0; si < subdomains.length; si++) {
+                            const sd = subdomains[si];
+                            controller.enqueue(encoder.encode(JSON.stringify({ type: 'phase', phase: 'subdomain', label: sd, index: si + 1, total: subdomains.length }) + '\n'));
+                            try {
+                                const sdStartDate = await getStartDate(sd);
+                                await syncTarget(controller, sd, sd, sdStartDate, yesterday, sd);
+                                sdSuccess++;
+                            } catch (sdErr) {
+                                sdFailed++;
+                                const msg = `Skipped ${sd}: ${sdErr.response?.status || sdErr.message}`;
+                                console.error('❌ Subdomain sync failed:', msg);
+                                controller.enqueue(encoder.encode(JSON.stringify({ type: 'warning', message: msg }) + '\n'));
+                            }
+                        }
+
+                        controller.enqueue(encoder.encode(JSON.stringify({ type: 'done', subdomainCount: subdomains.length }) + '\n'));
+                        controller.close();
+                    } catch (err) {
+                        console.error('Error syncing history:', err);
+                        controller.enqueue(encoder.encode(JSON.stringify({ type: 'error', message: err.message }) + '\n'));
+                        controller.close();
+                    }
+                }
+            });
+
+            return new Response(stream, {
+                headers: {
+                    'Content-Type': 'application/x-ndjson',
+                    'Cache-Control': 'no-cache, no-transform',
+                    'Connection': 'keep-alive',
+                },
+            });
+        }
+
+        else if (action === 'delete-sync-data') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+            const targetSubdomain = body.subdomain || 'ALL_SUBDOMAINS';
+            try {
+                await deleteSyncData(zoneId, targetSubdomain);
+                return NextResponse.json({ success: true, message: `Deleted sync data for ${zoneId} (${targetSubdomain})` });
+            } catch (err) {
+                console.error('Error deleting sync data:', err);
+                return NextResponse.json({ success: false, message: 'Failed to delete sync data' }, { status: 500 });
             }
         }
 
