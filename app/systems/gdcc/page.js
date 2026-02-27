@@ -6,6 +6,7 @@ import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
 import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, listTemplates } from '@/app/utils/templateApi';
 import ManageTemplateModal from './ManageTemplateModal';
+import AutoReportModal from './AutoReportModal';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -14,7 +15,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -2164,7 +2165,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 
             <div className="relative" onKeyDown={handleKeyDown}>
                 <div
-                    onClick={() => !loading && setIsOpen(!isOpen)}
+                    onClick={() => setIsOpen(!isOpen)}
                     className={`
              w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all
              flex items-center justify-between
@@ -2281,9 +2282,9 @@ const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) 
 
 // --- DEFAULT CONFIG FOR AUTO-SELECT ---
 const DEFAULT_CONFIG = {
-    accountName: "BDMS Group1",
-    zoneName: "bdms.co.th",
-    subDomain: "ALL_SUBDOMAINS"
+    accountName: "",
+    zoneName: "",
+    subDomain: ""
 };
 
 // --- MAIN COMPONENT ---
@@ -2304,6 +2305,7 @@ export default function GDCCPage() {
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
     const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+    const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -3251,7 +3253,7 @@ export default function GDCCPage() {
 
                             const screenEnd = performance.now();
                         } catch (imgError) {
-                            console.warn(`⚠️ Screenshot failed for ${host}:`, imgError);
+                            console.error(`⚠️ Screenshot failed for ${host}:`, imgError);
                         }
                     }
 
@@ -3314,6 +3316,12 @@ export default function GDCCPage() {
             const filename = `batch_report_${new Date().getTime()}.doc`;
 
             try {
+                // EXPOSE TO E2E RUNNER DIRECTLY
+                if (typeof window !== 'undefined') {
+                    window.__lastBatchReportHTML = sourceHTML;
+                    window.__lastBatchReportReady = true;
+                }
+
                 const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
                 const a = document.createElement("a");
                 a.href = source;
@@ -3434,38 +3442,44 @@ export default function GDCCPage() {
             const result = await response.json();
 
             if (!result.success) {
-                // Show error on webpage
-                Swal.fire({
-                    title: 'API Error',
-                    html: `<div style="text-align: left;">
-                        <p><strong>Action:</strong> ${action}</p>
-                        <p><strong>Message:</strong> ${result.message || 'Unknown error occurred'}</p>
-                        ${result.error ? `<p><strong>Details:</strong> ${result.error}</p>` : ''}
-                    </div>`,
-                    icon: 'error',
-                    confirmButtonColor: '#ef4444',
-                    background: '#111827',
-                    color: '#fff'
-                });
+                console.warn(`⚠️ API Result Failed [${action}]:`, result.message);
+
+                // Show error on webpage only if NOT in the middle of generating a report
+                // This prevents "API Error" Swals from being hijacked by the Batch Progress overlay
+                if (!isGeneratingReport) {
+                    Swal.fire({
+                        title: 'API Error',
+                        html: `<div style="text-align: left;">
+                            <p><strong>Action:</strong> ${action}</p>
+                            <p><strong>Message:</strong> ${result.message || 'Unknown error occurred'}</p>
+                            ${result.error ? `<p><strong>Details:</strong> ${result.error}</p>` : ''}
+                        </div>`,
+                        icon: 'error',
+                        confirmButtonColor: '#ef4444',
+                        background: '#111827',
+                        color: '#fff'
+                    });
+                }
                 return null;
             }
 
             return result;
         } catch (err) {
             console.error('API Error:', err);
-            // Show network error on webpage
-            Swal.fire({
-                title: 'Network Error',
-                html: `<div style="text-align: left;">
-                    <p><strong>Action:</strong> ${action}</p>
-                    <p><strong>Error:</strong> ${err.message || 'Failed to connect to server'}</p>
-                    <p class="text-sm text-gray-400 mt-2">Please check your connection and try again.</p>
-                </div>`,
-                icon: 'error',
-                confirmButtonColor: '#ef4444',
-                background: '#111827',
-                color: '#fff'
-            });
+            if (!isGeneratingReport) {
+                Swal.fire({
+                    title: 'Network Error',
+                    html: `<div style="text-align: left;">
+                        <p><strong>Action:</strong> ${action}</p>
+                        <p><strong>Error:</strong> ${err.message || 'Failed to connect to server'}</p>
+                        <p class="text-sm text-gray-400 mt-2">Please check your connection and try again.</p>
+                    </div>`,
+                    icon: 'error',
+                    confirmButtonColor: '#ef4444',
+                    background: '#111827',
+                    color: '#fff'
+                });
+            }
             return null;
         } finally {
             setLoading(false);
@@ -3479,12 +3493,9 @@ export default function GDCCPage() {
         if (result && result.data) {
             setAccounts(result.data);
             const defaultAcc = result.data.find(a => (a.name || '').trim().toLowerCase() === DEFAULT_CONFIG.accountName.trim().toLowerCase());
-            if (defaultAcc) {
+            if (defaultAcc && DEFAULT_CONFIG.accountName) {
                 console.log('✅ Auto-selecting Account (Config Match):', defaultAcc.name);
                 handleAccountChange(defaultAcc.id, true, tokenOverride);
-            } else if (result.data.length > 0) {
-                console.log('⚠️ Default account not found, falling back to first available account:', result.data[0].name);
-                handleAccountChange(result.data[0].id, true, tokenOverride);
             }
         }
     };
@@ -3504,12 +3515,9 @@ export default function GDCCPage() {
             setZones(result.data);
             if (isAuto && result.data.length > 0) {
                 const defaultZone = result.data.find(z => (z.name || '').trim().toLowerCase() === DEFAULT_CONFIG.zoneName.trim().toLowerCase());
-                if (defaultZone) {
+                if (defaultZone && DEFAULT_CONFIG.zoneName) {
                     console.log('✅ Auto-selecting Zone (Config Match):', defaultZone.name);
                     setSelectedZone(defaultZone.id);
-                } else {
-                    console.log('⚠️ Default zone not found, falling back to first available zone:', result.data[0].name);
-                    setSelectedZone(result.data[0].id);
                 }
             }
         }
@@ -3533,13 +3541,20 @@ export default function GDCCPage() {
     useEffect(() => {
         if (!selectedZone) { resetDashboardData(); setSubDomains([]); return; }
 
-        const loadDNS = async () => {
+        const loadDNSAndSettings = async () => {
             setLoadingDNS(true); setSelectedSubDomain(''); setSubDomains([]);
+
+            // 1. Fetch DNS Records (used for both subdomain list and report data)
             const dnsRes = await callAPI('get-dns-records', { zoneId: selectedZone });
             const allHosts = new Set();
             if (dnsRes && dnsRes.data) {
-                dnsRes.data.forEach(rec => { if (['A', 'AAAA', 'CNAME'].includes(rec.type)) allHosts.add(rec.name); });
+                setDnsRecords(dnsRes.data);
+                console.log('✅ DNS Records Count:', dnsRes.data.length);
+                dnsRes.data.forEach(rec => {
+                    if (['A', 'AAAA', 'CNAME'].includes(rec.type)) allHosts.add(rec.name);
+                });
             }
+
             const hostOptions = Array.from(allHosts).sort().map(h => ({ value: h, label: h }));
 
             // Get root domain (zone name)
@@ -3551,9 +3566,8 @@ export default function GDCCPage() {
                 const idx = hostOptions.findIndex(h => h.value === rootDomain);
                 if (idx !== -1) hostOptions.splice(idx, 1);
             }
-
-            // Add "All Subdomains" option (Rename as requested)
-            hostOptions.unshift({ value: 'ALL_SUBDOMAINS', label: '--- All Subdomains (Root Domain) ---' });
+            // Add "All Subdomains" option
+            hostOptions.unshift({ value: 'ALL_SUBDOMAINS', label: '🌐 Zone Overview (All)' });
 
             setSubDomains(hostOptions);
 
@@ -3566,28 +3580,16 @@ export default function GDCCPage() {
             }
 
             setLoadingDNS(false);
-        };
-        loadDNS();
 
-        // Fetch Zone Settings
-        const fetchSettings = async () => {
-            const result = await callAPI('get-zone-settings', { zoneId: selectedZone });
-            if (result && result.data) {
-                setZoneSettings(result.data);
-                console.log('✅ Zone Settings:', result.data);
+            // 2. Fetch Zone Settings
+            const settingsResult = await callAPI('get-zone-settings', { zoneId: selectedZone });
+            if (settingsResult && settingsResult.data) {
+                setZoneSettings(settingsResult.data);
+                console.log('✅ Zone Settings Loaded');
             }
         };
-        fetchSettings();
 
-        // Fetch DNS Records
-        const fetchDNS = async () => {
-            const result = await callAPI('get-dns-records', { zoneId: selectedZone });
-            if (result && result.data) {
-                setDnsRecords(result.data);
-                console.log('✅ DNS Records Count:', result.data.length);
-            }
-        };
-        fetchDNS();
+        loadDNSAndSettings();
     }, [selectedZone]);
 
 
@@ -3851,6 +3853,12 @@ export default function GDCCPage() {
                                         >
                                             <Database className="w-3 h-3" /> Sync History
                                         </button>
+                                        <button
+                                            onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsAutoReportModalOpen(true); }}
+                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                        >
+                                            <Calendar className="w-3 h-3" /> Auto Gen Report
+                                        </button>
                                     </div>
 
                                     {/* Theme Settings (Refactored to Submenu) */}
@@ -3960,6 +3968,14 @@ export default function GDCCPage() {
                 hosts={getBatchHosts()}
                 onConfirm={handleBatchReport}
                 theme={theme}
+            />
+
+            <AutoReportModal
+                isOpen={isAutoReportModalOpen}
+                onClose={() => setIsAutoReportModalOpen(false)}
+                accounts={accounts}
+                theme={theme}
+                currentUser={currentUser}
             />
 
             <SyncHistoryModal

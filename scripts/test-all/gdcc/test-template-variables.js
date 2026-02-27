@@ -2,7 +2,7 @@ const axios = require('axios');
 const { getApiToken, colors, log } = require('../libs/api-helper');
 
 const BASE_URL = 'http://localhost:8002/api/scrape';
-const DEFAULT_ZONE = 'bdms.co.th';
+const DEFAULT_ZONE = 'dwf.go.th';
 
 async function main() {
     log('🔍 Testing Template Variables', colors.cyan);
@@ -12,7 +12,7 @@ async function main() {
     log(`✅ Token: ${apiToken.substring(0, 4)}...${apiToken.slice(-4)}`, colors.green);
 
     const zoneName = process.argv[3] || DEFAULT_ZONE;
-    const accountName = process.argv[2] || 'BDMS Group1';
+    const accountName = process.argv[2] || 'Government Data Center and Cloud service (GDCC)';
 
     log(`📍 Target: ${accountName} > ${zoneName}`, colors.blue);
     log('═══════════════════════════════════════════════════════\n');
