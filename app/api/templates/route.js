@@ -23,7 +23,7 @@ export async function GET() {
         return Response.json(JSON.parse(content));
     } catch (error) {
         // If file doesn't exist, return default only
-        return Response.json([{ id: 'default', name: 'Default Template' }]);
+        return Response.json([{ id: 'default', name: 'พี่เจ' }]);
     }
 }
 
@@ -39,7 +39,7 @@ export async function POST(req) {
             const content = await fs.readFile(registryFile, 'utf8');
             templates = JSON.parse(content);
         } catch (e) {
-            templates = [{ id: 'default', name: 'Default Template' }];
+            templates = [{ id: 'default', name: 'พี่เจ' }];
         }
 
         if (action === 'create' || action === 'duplicate') {

@@ -1,100 +1,80 @@
-const { setupBrowser, setupPage, login, log, colors, BASE_URL } = require('../../test-all/libs/ui-helper');
+/**
+ * Test: GDCC - Batch Report Generation (Full E2E Flow)
+ * 1. Navigate to GDCC
+ * 2. Select Account → Zone → Subdomain
+ * 3. Generate Dashboard (load traffic data)
+ * 4. Open "Create Report" modal
+ * 5. Select host(s) and click Generate
+ * 6. Verify a .doc file is downloaded
+ */
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { setupBrowser, setupPage, login, log, colors, TMP_DOWNLOAD_DIR } = require('../libs/ui-helper');
+const { navigateToGDCC, selectGDCCFilters, clickGenerateDashboard, generateBatchReport, GDCC_TEST_CONFIG } = require('../libs/gdcc-helper');
 
 (async () => {
-    const browser = await setupBrowser(); // ui-helper returns browser instance
+    log('🚀 Starting Test: GDCC Report Generation (Full E2E)...', colors.cyan);
+    const browser = await setupBrowser();
     try {
-        const page = await setupPage(browser); // pass browser to setupPage
+        const page = await setupPage(browser);
         await login(page);
+        await navigateToGDCC(page);
 
-        log('🔹 Navigating to GDCC System...');
-        await page.goto(`${BASE_URL}/systems/gdcc`, { waitUntil: 'networkidle0' });
+        log('\n🔹 Step 1: Selecting Account/Zone/Subdomain...', colors.blue);
+        await selectGDCCFilters(page, GDCC_TEST_CONFIG);
 
-        log('🔹 Waiting for Dashboard and Zone Selection...');
-        // Wait for zone dropdown or data to load.
-        // We look for the "Create Report" button which should be available
-        const createBtn = await page.waitForXPath('//button[contains(text(), "Create Report")]', { visible: true, timeout: 15000 });
+        log('\n🔹 Step 2: Generating Dashboard Data...', colors.blue);
+        await clickGenerateDashboard(page);
 
-        log('🔹 Opening Create Report Modal...');
-        if (createBtn) await createBtn.click();
-        else throw new Error("Create Report button not found");
+        const today = new Date();
+        const tzOffset = today.getTimezoneOffset() * 60000;
+        const reportDateStr = (new Date(today.getTime() - tzOffset)).toISOString().split('T')[0];
 
-        await page.waitForTimeout(1000); // Wait for animation
+        log('\n🔹 Step 3: Generating Batch Report...', colors.blue);
+        const generateStartTime = Date.now();
+        await generateBatchReport(page, reportDateStr, GDCC_TEST_CONFIG.subdomain);
 
-        log('🔹 Selecting Time Range: 30 Days...');
-        const rangeBtn = await page.waitForXPath('//button[contains(text(), "30 Days")]', { visible: true });
-        if (rangeBtn) await rangeBtn.click();
-        else throw new Error("30 Days button not found");
+        log('\n🔹 Step 4: Waiting for .doc file download (max 2 min)...', colors.blue);
+        const downloadsDir = path.join(os.homedir(), 'Downloads');
+        const start = Date.now();
+        let downloadedFile = null;
+        let downloadDir = TMP_DOWNLOAD_DIR;
 
-        log('🔹 Selecting Host (Just one for testing to be fast)...');
-        // Deselect all first if needed, or find specific label
-        // Button might say "Select All" or "Deselect All".
-        // Let's just click the FIRST available host checkbox to ensure at least one is selected.
+        while (Date.now() - start < 120000) {
+            // Check TMP dir
+            const tmpFiles = fs.readdirSync(TMP_DOWNLOAD_DIR);
+            const foundTmp = tmpFiles.find(f => {
+                if (!(f.endsWith('.docx') || f.endsWith('.doc')) || f.endsWith('.crdownload')) return false;
+                return fs.statSync(path.join(TMP_DOWNLOAD_DIR, f)).mtimeMs >= generateStartTime;
+            });
+            if (foundTmp) { downloadedFile = foundTmp; downloadDir = TMP_DOWNLOAD_DIR; break; }
 
-        // Wait for hosts list
-        const labels = await page.$$('label.cursor-pointer');
-        if (labels.length === 0) {
-            // Check for "No sub-domains available"
-            const noData = await page.$x('//div[contains(text(), "No sub-domains available")]');
-            if (noData.length > 0) {
-                log('⚠️ No subdomains available. Skipping test.', colors.yellow);
-                await browser.close();
-                return;
+            // Check ~/Downloads
+            if (fs.existsSync(downloadsDir)) {
+                const dlFiles = fs.readdirSync(downloadsDir);
+                const foundDl = dlFiles.find(f => {
+                    if (!(f.endsWith('.docx') || f.endsWith('.doc')) || f.endsWith('.crdownload')) return false;
+                    return fs.statSync(path.join(downloadsDir, f)).mtimeMs >= generateStartTime;
+                });
+                if (foundDl) { downloadedFile = foundDl; downloadDir = downloadsDir; break; }
             }
-            throw new Error("No host checkboxes found.");
+            await new Promise(r => setTimeout(r, 2000));
         }
 
-        // Just click the first one if not selected?
-        // Or click "Deselect All" first then click first one?
-        // "Deselect All" button text logic: {selected.size === hosts.length ? 'Deselect All' : 'Select All'}
-        // If it says "Deselect All", click it to clear.
-        const toggleAllBtn = await page.$x('//button[contains(text(), "Deselect All")]');
-        if (toggleAllBtn.length > 0) {
-            await toggleAllBtn[0].click();
-            await page.waitForTimeout(200);
-        }
+        if (!downloadedFile) throw new Error('Timeout: No .doc file downloaded within 2 minutes');
 
-        // Click first host
-        await labels[0].click();
-        log('✅ Selected 1st host for testing.');
+        const fileSize = fs.statSync(path.join(downloadDir, downloadedFile)).size;
+        log(`✅ Downloaded: ${downloadedFile} (${fileSize.toLocaleString()} bytes)`, colors.green);
 
-        log('🔹 Clicking Generate Reports...');
-        const generateBtn = await page.waitForXPath('//button[contains(text(), "Generate")]', { visible: true });
+        // Cleanup
+        try { fs.unlinkSync(path.join(downloadDir, downloadedFile)); } catch (e) { }
 
-        // Monitor Console Errors
-        let hasError = false;
-        page.on('console', msg => {
-            if (msg.type() === 'error') {
-                const text = msg.text();
-                // Filter out non-critical errors if any
-                if (text.includes('stats is not defined') || text.includes('ReferenceError') || text.includes('TypeError')) {
-                    hasError = true;
-                    log(`❌ CRITICAL CONSOLE ERROR: ${text}`, colors.red);
-                }
-            }
-        });
-
-        // Click Generate
-        await generateBtn.click();
-
-        log('⏳ Waiting for report generation (Timeout 60s)...');
-
-        // Wait for "Batch process finished" text in Swal
-        try {
-            await page.waitForXPath('//div[contains(text(), "Batch process finished")]', { visible: true, timeout: 60000 });
-            log('✅ Batch Report Generation Completed Successfully!', colors.green);
-        } catch (e) {
-            if (hasError) {
-                throw new Error("Report generation failed (Console Errors detected).");
-            }
-            throw new Error("Timeout waiting for completion message.");
-        }
-
-        if (hasError) {
-            throw new Error("Report generation finished but Critical Errors were detected.");
-        }
+        log('\n✅ GDCC Report Generation Test PASSED!', colors.green);
 
     } catch (error) {
-        log(`❌ Test Failed: ${error.message}`, colors.red);
+        log(`❌ Test FAILED: ${error.message}`, colors.red);
+        if (error.stack) console.error(error.stack);
         process.exit(1);
     } finally {
         await browser.close();
