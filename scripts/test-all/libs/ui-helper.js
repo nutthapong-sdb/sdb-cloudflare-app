@@ -25,7 +25,13 @@ async function setupBrowser() {
     log('🚀 Setting up Browser...', colors.cyan);
     const browser = await puppeteer.launch({
         headless: false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding'
+        ],
         defaultViewport: { width: 1280, height: 800 }
     });
     return browser;

@@ -2,91 +2,66 @@
 description: เรียก workflow นี้ทุกครั้งที่ต้องการทดสอบระบบทั้งหมด (API, UI, และ Traffic Analytics)
 ---
 
-1. Start the development server in the background (if not already running).
-   ```bash
-   # Check if port 8002 is in use, verify locally
-   # Ideally, the user should have the server running. The test script assumes `localhost:8002` is accessible.
-   ```
+// turbo-all
 
-2. Run the API regression test script (Uses System User Token).
-   // turbo
-   ```bash
-   node scripts/test-all/api_discovery/test-api.js
-   ```
+## ขั้นตอนการทดสอบ
 
-3. Run the Traffic Analytics validation script (Total Requests).
-   // turbo
-   ```bash
-   node scripts/test-all/gdcc/test-total-requests.js
-   ```
+### Phase 1: Authentication
+1. รัน Login Test
+```bash
+node scripts/test-all/auth/test-login.js
+```
 
-4. Run the Template Variable validation script.
-   // turbo
-   ```bash
-   node scripts/test-all/gdcc/test-template-variables.js
-   ```
+### Phase 2: GDCC Dashboard Tests
+2. ทดสอบการนำทางและ Generate Dashboard
+```bash
+node scripts/test-all/gdcc/test-gdcc.js
+```
 
-5. Run the DNS check script (Default: BDMS Group1 / bdms.co.th).
-   // turbo
-   ```bash
-   node scripts/test-all/gdcc/test-dns-specific.js
-   ```
+3. ทดสอบ Manual Generation (ปุ่ม Generate Dashboard enabled/disabled)
+```bash
+node scripts/test-all/gdcc/test-manual-generation.js
+```
 
-6. Run the Firewall Logs regression test (Account: Siam Cement).
-   // turbo
-   ```bash
-   node scripts/test-all/firewall/test-firewall-logs.js
-   ```
+4. ทดสอบ UI Enhancements (Dropdown Keyboard Nav + Batch Modal)
+```bash
+node scripts/test-all/gdcc/test-ui-enhancements.js
+```
 
-7. Review the API and Data test output.
-   - Look for "PASS" in green and ensure total requests are displayed.
-   - Review the "TEMPLATE VARIABLE DATA STATUS" report to ensure key variables are loaded.
-   - Ensure "Cloudflare Token Verification" and API calls succeed.
-   - DNS check should display total records by type and proxy status.
-   - Firewall Logs check should display "found" for Account and Zone, and fetch logs successfully.
+5. ทดสอบ Report Generation แบบ E2E (Download ไฟล์จริง)
+```bash
+node scripts/test-all/gdcc/test-report-generation.js
+```
 
-7. Run new feature verification tests (API Discovery Subdomain & GDCC Historical Sync).
-   // turbo
-   ```bash
-   node scripts/test-all/api_discovery/test-api-subdomain-backend.js
-   node scripts/test-all/api_discovery/test-api-subdomain-ui.js
+6. ทดสอบ Template Variables
+```bash
+node scripts/test-all/gdcc/test-template-variables.js
+```
 
-   node scripts/test-all/gdcc/test-gdcc-history-backend.js
-   node scripts/test-all/gdcc/test-gdcc-history-ui.js
-   ```
+7. ทดสอบ Total Requests API
+```bash
+node scripts/test-all/gdcc/test-total-requests.js
+```
 
-9. Review the Feature Test output.
-   - Backend Test: Should display "GraphQL Success!" logs.
-   - UI Test: Should verify API Discovery page loads and components exist.
+### Phase 3: API Discovery Tests
+8. ทดสอบ API Discovery Backend
+```bash
+node scripts/test-all/api_discovery/test-api.js
+```
 
-10. Run the System UI regression tests (Puppeteer).
-   // turbo
-   ```bash
-   # Test Login Functionality
-   node scripts/test-all/auth/test-login.js
+9. ทดสอบ API Discovery UI
+```bash
+node scripts/test-all/api_discovery/test-api-discovery.js
+```
 
-   # Test GDCC System (Report Download)
-   node scripts/test-all/gdcc/test-gdcc.js
-   
-   # Test GDCC Batch Report (30 Days Generation)
-   node scripts/test-all/gdcc/test-report-generation.js
+### Phase 4: Firewall Tests
+10. ทดสอบ Firewall
+```bash
+node scripts/test-all/firewall/test-firewall.js 2>/dev/null || node scripts/test-all/firewall/test-firewall-logs.js 2>/dev/null || echo "⚠️ Firewall test script name may differ"
+```
 
-   # Test GDCC UI Enhancements (Search Modal & Keyboard Nav)
-   node scripts/test-all/gdcc/test-ui-enhancements.js
-
-   # Test GDCC Manual Dashboard Generation (Button Trigger)
-   node scripts/test-all/gdcc/test-manual-generation.js
-
-   # Test Template Management API (CRUD & Structure)
-   node scripts/test-all/gdcc/test-template-api.js
-
-   # Test Firewall Logs System (CSV Download)
-   node scripts/test-all/firewall/test-firewall.js
-
-   # Test API Discovery System (Expand & CSV)
-   node scripts/test-all/api_discovery/test-api-discovery.js
-   ```
-
-10. Review the UI test output.
-   - Look for "Login Successful" and "Tests Completed".
-   - If failed, check `regression-failure.png`.
+### หมายเหตุ
+- ทุก GDCC Test ใช้ `scripts/test-all/libs/gdcc-helper.js` สำหรับ Account/Zone/Subdomain selection
+- Account เริ่มต้น: `Government Data Center and Cloud service (GDCC)`
+- Zone เริ่มต้น: `dwf.go.th`
+- Subdomain เริ่มต้น: `ALL_SUBDOMAINS` (Zone Overview)

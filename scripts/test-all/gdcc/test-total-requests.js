@@ -2,8 +2,8 @@ const axios = require('axios');
 const { getApiToken, colors, log } = require('../libs/api-helper');
 
 const BASE_URL = 'http://localhost:8002/api/scrape';
-const DEFAULT_ACCOUNT = 'BDMS Group1';
-const DEFAULT_ZONE = 'bdms.co.th';
+const DEFAULT_ACCOUNT = 'Government Data Center and Cloud service (GDCC)';
+const DEFAULT_ZONE = 'dwf.go.th';
 
 async function main() {
     try {
