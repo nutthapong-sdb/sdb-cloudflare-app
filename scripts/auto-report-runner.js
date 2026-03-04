@@ -381,6 +381,16 @@ require('dotenv').config({ path: '.env.local' });
                 }
                 await new Promise(r => setTimeout(r, 800));
 
+                // --- Wait for subdomain list to load ---
+                log(`⏳ Waiting for subdomain list to populate...`, colors.gray);
+                const listStart = Date.now();
+                while (Date.now() - listStart < 10000) {
+                    const labelCount = await page.$$eval('div.fixed.inset-0 label', els => els.length);
+                    if (labelCount > 4) break; // Basic headers + No Subdomain + at least one real subdomain
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                // ----------------------------------------
+
                 const selectTargetHost = async (target) => {
                     // Try exact match on labels first
                     const labels = await page.$$('div.fixed.inset-0 label');
@@ -473,16 +483,25 @@ require('dotenv').config({ path: '.env.local' });
                         return html;
                     }
                     return null;
+                }).catch(e => {
+                    log(`  [Warning] Page evaluation failed: ${e.message}`, colors.yellow);
+                    return null;
                 });
 
                 if (sourceHTML) break;
 
-                if (Date.now() - lastDebugAt > 10000) {
+                if (Date.now() - lastDebugAt > 15000) {
                     const elapsed = Math.round((Date.now() - start) / 1000);
-                    log(`  [${elapsed}s] Waiting for report generation...`, colors.gray);
+                    // Heartbeat check
+                    try {
+                        const title = await page.title();
+                        log(`  [${elapsed}s] Waiting for report generation... (Page: ${title})`, colors.gray);
+                    } catch (e) {
+                        log(`  [${elapsed}s] Waiting for report generation... (Renderer Stalled!)`, colors.red);
+                    }
                     lastDebugAt = Date.now();
                 }
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 3000));
             }
 
             if (sourceHTML) {

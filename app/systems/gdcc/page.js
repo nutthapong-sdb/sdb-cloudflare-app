@@ -2691,7 +2691,8 @@ export default function GDCCPage() {
                 (item.topUAs || []).forEach(ua => uaCounts[ua.key] = (uaCounts[ua.key] || 0) + ua.count);
                 (item.topHosts || []).forEach(h => hostCounts[h.key] = (hostCounts[h.key] || 0) + h.count);
 
-                Object.entries(item.statusDistribution || {}).forEach(([status, count]) => {
+                Object.entries(item.statusDistribution || {}).forEach(([rawStatus, count]) => {
+                    const status = String(rawStatus);
                     statusTotals[status] = (statusTotals[status] || 0) + count;
                     allCodes.add(status);
                 });
@@ -2733,7 +2734,7 @@ export default function GDCCPage() {
                     b.count += count;
                 }
 
-                const status = dims.edgeResponseStatus;
+                const status = item.dimensions.edgeResponseStatus ? String(item.dimensions.edgeResponseStatus) : null;
                 if (status) { // Always track status for chart
                     const bucket = httpCodeBuckets.get(bucketTime);
                     if (bucket) {
@@ -3244,9 +3245,9 @@ export default function GDCCPage() {
                             // Race between screenshot and 15s timeout
                             imgData = await Promise.race([
                                 htmlToImage.toJpeg(dashboardRef.current, {
-                                    quality: 0.6, // Reduce quality slightly for speed
+                                    quality: 0.6,
                                     backgroundColor: '#000000',
-                                    pixelRatio: 1.0 // Reduce pixel ratio for speed (was 1.5)
+                                    pixelRatio: 1.0
                                 }),
                                 new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (15s)')), 15000))
                             ]);
@@ -4131,7 +4132,7 @@ export default function GDCCPage() {
                                         <Legend wrapperStyle={{ fontSize: '10px' }} />
                                         {httpStatusSeriesData.keys && httpStatusSeriesData.keys.map((code, index) => (
                                             <Area
-                                                key={code}
+                                                key={`status-area-${code}-${index}`}
                                                 type="monotone"
                                                 dataKey={code}
                                                 name={String(code)}

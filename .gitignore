@@ -42,3 +42,5 @@ next-env.d.ts
 
 # vendor
 /public/tinymce
+scripts/test-all/tmp_downloads/batch_report_1772594003299.doc
+*.doc
