@@ -11,7 +11,10 @@ export async function GET(request) {
 
     let filePath = defaultFile;
     if (id && id !== 'default') {
-        filePath = path.join(templatesDir, `t_${id}_domain.json`);
+        // --- Security: Prevent Path Traversal ---
+        const safeId = path.basename(id).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeId) return Response.json({ template: null });
+        filePath = path.join(templatesDir, `t_${safeId}_domain.json`);
     }
 
     try {
@@ -30,8 +33,12 @@ export async function POST(request) {
 
     let filePath = defaultFile;
     if (id && id !== 'default') {
+        // --- Security: Prevent Path Traversal ---
+        const safeId = path.basename(id).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeId) return Response.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+
         try { await fs.mkdir(templatesDir, { recursive: true }); } catch (e) { }
-        filePath = path.join(templatesDir, `t_${id}_domain.json`);
+        filePath = path.join(templatesDir, `t_${safeId}_domain.json`);
     }
 
     try {

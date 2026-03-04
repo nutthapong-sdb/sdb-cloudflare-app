@@ -12,7 +12,10 @@ export async function GET(request) {
     let filePath = defaultFile;
     // If ID provided and valid, use custom template
     if (id && id !== 'default') {
-        filePath = path.join(templatesDir, `t_${id}_sub.json`);
+        // --- Security: Prevent Path Traversal ---
+        const safeId = path.basename(id).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeId) return Response.json({ template: null });
+        filePath = path.join(templatesDir, `t_${safeId}_sub.json`);
     }
 
     try {
@@ -32,9 +35,13 @@ export async function POST(request) {
 
     let filePath = defaultFile;
     if (id && id !== 'default') {
+        // --- Security: Prevent Path Traversal ---
+        const safeId = path.basename(id).replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeId) return Response.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+
         // Ensure directory exists
         try { await fs.mkdir(templatesDir, { recursive: true }); } catch (e) { }
-        filePath = path.join(templatesDir, `t_${id}_sub.json`);
+        filePath = path.join(templatesDir, `t_${safeId}_sub.json`);
     }
 
     try {

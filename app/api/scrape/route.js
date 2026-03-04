@@ -376,8 +376,16 @@ export async function POST(request) {
         // Determine which token to use
         let token = apiToken;
 
-        if (!token) {
-            return NextResponse.json({ success: false, message: 'Missing Cloudflare API Token' }, { status: 401 });
+        if (!token || typeof token !== 'string') {
+            return NextResponse.json({ success: false, message: 'Missing or Invalid Cloudflare API Token' }, { status: 401 });
+        }
+
+        // --- Security: Input Validation ---
+        if (zoneId && !/^[a-zA-Z0-9_-]+$/.test(zoneId)) {
+            return NextResponse.json({ success: false, message: 'Invalid zoneId format' }, { status: 400 });
+        }
+        if (accountId && !/^[a-zA-Z0-9_-]+$/.test(accountId)) {
+            return NextResponse.json({ success: false, message: 'Invalid accountId format' }, { status: 400 });
         }
 
         // console.log(`🔔 API Action: ${action}`);

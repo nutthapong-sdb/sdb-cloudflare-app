@@ -58,10 +58,14 @@ export async function DELETE(request) {
             // 2. Delete physical files
             for (const file of files) {
                 try {
-                    const filePath = path.join(process.cwd(), 'public', 'reports', file.file_name);
-                    if (fs.existsSync(filePath)) {
-                        fs.unlinkSync(filePath);
-                        console.log(`🗑️ Deleted config file: ${file.file_name}`);
+                    // --- Security: Prevent Path Traversal (defense in depth) ---
+                    const safeFileName = path.basename(file.file_name).replace(/[^a-zA-Z0-9_\\-\\.]/g, '');
+                    if (safeFileName) {
+                        const filePath = path.join(process.cwd(), 'public', 'reports', safeFileName);
+                        if (fs.existsSync(filePath)) {
+                            fs.unlinkSync(filePath);
+                            console.log(`🗑️ Deleted config file: ${safeFileName}`);
+                        }
                     }
                 } catch (err) {
                     console.error(`❌ Failed to delete file ${file.file_name}:`, err.message);
@@ -77,9 +81,13 @@ export async function DELETE(request) {
             // Try to delete physical file if name is provided
             if (fileName) {
                 try {
-                    const filePath = path.join(process.cwd(), 'public', 'reports', fileName);
-                    if (fs.existsSync(filePath)) {
-                        fs.unlinkSync(filePath);
+                    // --- Security: Prevent Path Traversal ---
+                    const safeFileName = path.basename(fileName).replace(/[^a-zA-Z0-9_\\-\\.]/g, '');
+                    if (safeFileName) {
+                        const filePath = path.join(process.cwd(), 'public', 'reports', safeFileName);
+                        if (fs.existsSync(filePath)) {
+                            fs.unlinkSync(filePath);
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to delete physical file:', err.message);
