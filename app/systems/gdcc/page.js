@@ -1002,7 +1002,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 )) : (
                                                     <tr>
                                                         <td colSpan={3} className="p-4 text-center text-gray-500 italic">
-                                                            No variables found matching "{searchTerm}"
+                                                            No variables found matching &quot;{searchTerm}&quot;
                                                         </td>
                                                     </tr>
                                                 )}
@@ -1103,13 +1103,6 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
     const displayHosts = [NO_SUBDOMAIN, ...filteredHosts];
 
     // console.log('🔍 Modal Render:', { term: searchTerm, total: hosts.length, visible: filteredHosts.length });
-
-    useEffect(() => {
-        if (isOpen) {
-            setSelected(new Set()); // Reset on open
-            setSearchTerm(''); // Reset search
-        }
-    }, [isOpen]);
 
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);
@@ -1845,7 +1838,7 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                                         </label>
                                     ))}
                                 {accounts.filter(acc => acc.name.toLowerCase().includes(accountSearchQuery.toLowerCase())).length === 0 && (
-                                    <div className="text-center w-full p-4 text-gray-500 text-xs">No accounts found matching "{accountSearchQuery}"</div>
+                                    <div className="text-center w-full p-4 text-gray-500 text-xs">No accounts found matching &quot;{accountSearchQuery}&quot;</div>
                                 )}
                             </div>
                         </div>
@@ -2105,6 +2098,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 
     // Reset focus when options change or open
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFocusedIndex(-1);
     }, [isOpen, searchTerm]);
 
@@ -3964,6 +3958,7 @@ export default function GDCCPage() {
             />
 
             <BatchReportModal
+                key={isBatchModalOpen ? 'batch-open' : 'batch-closed'}
                 isOpen={isBatchModalOpen}
                 onClose={() => setIsBatchModalOpen(false)}
                 hosts={getBatchHosts()}
