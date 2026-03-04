@@ -1054,6 +1054,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 // Batch Report Modal Component
 const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
     const [selected, setSelected] = useState(new Set());
+    const [promotedHosts, setPromotedHosts] = useState(new Set());
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -1138,11 +1139,28 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
             newSet.delete(NO_SUBDOMAIN);
             if (newSet.has(host)) {
                 newSet.delete(host);
+                // Also remove it from promotedHosts if unchecked
+                const newPromoted = new Set(promotedHosts);
+                if (newPromoted.has(host)) {
+                    newPromoted.delete(host);
+                    setPromotedHosts(newPromoted);
+                }
             } else {
                 newSet.add(host);
             }
         }
         setSelected(newSet);
+    };
+
+    const togglePromoteOne = (e, host) => {
+        // e.stopPropagation() prevents the click from bubbling up to the row label
+        const newPromoted = new Set(promotedHosts);
+        if (newPromoted.has(host)) {
+            newPromoted.delete(host);
+        } else {
+            newPromoted.add(host);
+        }
+        setPromotedHosts(newPromoted);
     };
 
     if (!isOpen) return null;
@@ -1258,18 +1276,37 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
                                 const regularCheckBorder = t.dropdown?.border || 'border-gray-600';
 
                                 return (
-                                    <label key={host} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
-                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
-                                            {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            checked={selected.has(host)}
-                                            onChange={() => toggleOne(host)}
-                                            className="hidden"
-                                        />
-                                        <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
-                                    </label>
+                                    <div key={host} className={`flex items-center justify-between p-3 rounded-lg transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
+                                        <label className={`flex flex-1 items-center gap-3 cursor-pointer`}>
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
+                                                {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={selected.has(host)}
+                                                onChange={() => toggleOne(host)}
+                                                className="hidden"
+                                            />
+                                            <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
+                                        </label>
+
+                                        {/* Toggle for Promoting to Domain */}
+                                        {!isNoSubdomain && selected.has(host) && (
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <label className="flex items-center cursor-pointer relative" title="Use staticReportTemplate.json for this subdomain instead of the sub-report template">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        checked={promotedHosts.has(host)}
+                                                        onChange={(e) => togglePromoteOne(e, host)}
+                                                    />
+                                                    <div className={`w-9 h-5 rounded-full peer ${promotedHosts.has(host) ? 'bg-indigo-600' : 'bg-gray-600'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 transition-colors`}></div>
+                                                    <div className={`absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${promotedHosts.has(host) ? 'translate-x-full' : ''}`}></div>
+                                                </label>
+                                                <span className={`text-xs ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Use Domain Template</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 );
                             })}
                         </div>
@@ -1291,7 +1328,8 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
                                 // If NO_SUBDOMAIN is selected, send empty array
                                 // Otherwise, filter out NO_SUBDOMAIN from the selection
                                 const hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId);
+                                const promotedArray = Array.from(promotedHosts);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -2932,7 +2970,7 @@ export default function GDCCPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default') => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = []) => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
@@ -3182,13 +3220,15 @@ export default function GDCCPage() {
             };
 
 
-            // Process HTML
-            // Process HTML
-            const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date());
+            // Add to combined HTML only if they don't have promoted subdomains, or if there's no selection (NO_SUBDOMAIN checked)
+            let shouldGenerateCover = true;
+            if (selectedHosts.length > 0 && promotedHosts.length > 0) {
+                shouldGenerateCover = false;
+            }
 
-
-            // Add to combined HTML
-            combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
+            if (shouldGenerateCover) {
+                combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
+            }
 
 
             for (let i = 0; i < selectedHosts.length; i++) {
@@ -3286,7 +3326,38 @@ export default function GDCCPage() {
 
                     // 5. Generate HTML
                     updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 90, 'Writing data into Word Document...');
-                    let reportHtml = processTemplate(subReportTemplateContent, currentReportData, new Date(), imgData);
+
+                    const isPromoted = promotedHosts.includes(host);
+                    const templateContentToUse = isPromoted ? domainTemplateContent : subReportTemplateContent;
+
+                    let dataToUse = currentReportData;
+                    if (isPromoted) {
+                        dataToUse = {
+                            ...domainReportData,
+                            ...currentReportData,
+                            domain: host,
+                            zoneName: host,
+
+                            // Map subdomain-specific traffic stats to the zone-wide variables expected by domain template
+                            zoneTotalRequests: (safeStats.totalRequests || 0).toLocaleString(),
+                            zoneCacheHitRequests: 'N/A',
+                            zoneCacheHitRequestsRatio: 'N/A',
+                            zoneTotalDataTransfer: 'N/A',
+                            zoneCacheHitDataTransfer: 'N/A',
+                            zoneCacheHitDataTransferRatio: 'N/A',
+
+                            // Map subdomain firewall events
+                            fwEvents: {
+                                total: (safeStats.blockedEvents || 0) + (safeStats.logEvents || 0),
+                                managed: (safeStats.topManagedRules || []).reduce((acc, r) => acc + r.count, 0) || 0,
+                                custom: (safeStats.topCustomRules || []).reduce((acc, r) => acc + r.count, 0) || 0,
+                                bic: 0,
+                                access: 0
+                            }
+                        };
+                    }
+
+                    let reportHtml = processTemplate(templateContentToUse, dataToUse, new Date(), imgData);
 
                     const hostTotalTime = ((performance.now() - hostStartTime) / 1000).toFixed(2);
                     console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed in ${hostTotalTime}s`);
