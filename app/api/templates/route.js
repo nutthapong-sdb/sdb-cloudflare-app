@@ -60,8 +60,12 @@ export async function POST(req) {
                 let srcDomain = defaultDomainPath;
 
                 if (sourceId && sourceId !== 'default') {
-                    srcSub = path.join(templatesDir, `t_${sourceId}_sub.json`);
-                    srcDomain = path.join(templatesDir, `t_${sourceId}_domain.json`);
+                    // --- Security: Prevent Path Traversal ---
+                    const safeSourceId = path.basename(sourceId).replace(/[^a-zA-Z0-9_-]/g, '');
+                    if (safeSourceId) {
+                        srcSub = path.join(templatesDir, `t_${safeSourceId}_sub.json`);
+                        srcDomain = path.join(templatesDir, `t_${safeSourceId}_domain.json`);
+                    }
                 }
 
                 // Read source content
@@ -93,12 +97,16 @@ export async function POST(req) {
         if (action === 'delete') {
             if (id === 'default') return Response.json({ success: false, error: 'Cannot delete default template' }, { status: 400 });
 
+            // --- Security: Prevent Path Traversal ---
+            const safeId = path.basename(id).replace(/[^a-zA-Z0-9_-]/g, '');
+            if (!safeId) return Response.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+
             templates = templates.filter(t => t.id !== id);
             await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
 
             // Delete files
-            try { await fs.unlink(path.join(templatesDir, `t_${id}_sub.json`)); } catch (e) { }
-            try { await fs.unlink(path.join(templatesDir, `t_${id}_domain.json`)); } catch (e) { }
+            try { await fs.unlink(path.join(templatesDir, `t_${safeId}_sub.json`)); } catch (e) { }
+            try { await fs.unlink(path.join(templatesDir, `t_${safeId}_domain.json`)); } catch (e) { }
 
             return Response.json({ success: true });
         }

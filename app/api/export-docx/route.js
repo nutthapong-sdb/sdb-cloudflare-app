@@ -15,11 +15,15 @@ export async function POST(request) {
 
     try {
         const body = await request.json();
-        const { html, filename = 'document.docx' } = body;
+        let { html, filename = 'document.docx' } = body;
 
         if (!html) {
             return NextResponse.json({ success: false, message: 'Missing HTML content' }, { status: 400 });
         }
+
+        // --- Security: Prevent HTTP Header Injection ---
+        const safeFileName = path.basename(filename).replace(/[^a-zA-Z0-9_\\-\\.]/g, '');
+        const finalFileName = safeFileName || 'document.docx';
 
         let docxBuffer = null;
 
@@ -118,7 +122,7 @@ export async function POST(request) {
             status: 200,
             headers: {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Disposition': `attachment; filename="${finalFileName}"`,
                 'Content-Length': docxBuffer.length.toString(),
             },
         });

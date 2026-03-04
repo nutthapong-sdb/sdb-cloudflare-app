@@ -1,0 +1,6 @@
+Findings:
+1. Path Traversal in /api/export-docx
+2. Path Traversal in /api/auto-report/save-file
+3. Path Traversal in /api/static-template
+4. Path Traversal in /api/template
+5. Path Traversal in /api/auto-report (DELETE action, fileName)
