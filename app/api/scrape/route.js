@@ -872,6 +872,61 @@ export async function POST(request) {
             }
         }
 
+        // 7.0c Get OpenAPI Schemas (raw) for export
+        else if (action === 'get-api-openapi-schemas') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+
+            console.log(`📦 Fetching OpenAPI Schemas for Zone: ${zoneId}...`);
+
+            const {
+                hostname,
+                includeLearnedParameters,
+                includeRecommendedThresholds
+            } = body;
+
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            };
+
+            const params = {};
+            if (hostname) params.host = hostname;
+
+            const feature = [];
+            if (includeLearnedParameters) feature.push('parameter_schemas');
+            if (includeRecommendedThresholds) feature.push('thresholds');
+            if (feature.length === 1) params.feature = feature[0];
+            else if (feature.length > 1) params.feature = feature.join(',');
+
+
+            try {
+                const response = await axios.get(
+                    `${CLOUDFLARE_API_BASE}/zones/${zoneId}/api_gateway/schemas`,
+                    { headers, params }
+                );
+
+                const result = response.data;
+
+                if (result.success) {
+                    const schemas = Array.isArray(result?.result?.schemas) ? result.result.schemas : [];
+                    return NextResponse.json({
+                        success: true,
+                        data: schemas,
+                        timestamp: result?.result?.timestamp || null
+                    });
+                }
+
+                return NextResponse.json({ success: true, data: [] });
+            } catch (error) {
+                console.error('OpenAPI Schemas Error:', error.response?.data || error.message);
+                return NextResponse.json({
+                    success: true,
+                    data: [],
+                    message: 'OpenAPI Schemas not available for this zone'
+                });
+            }
+        }
+
         // 7.1 Get Subdomain Stats (GraphQL for {hostVar1} and/or path {var1})
         else if (action === 'get-subdomain-stats') {
             const { zoneId, method, path, host, limit } = body;

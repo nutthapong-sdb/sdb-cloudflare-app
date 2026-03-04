@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
@@ -9,6 +9,7 @@ import { getUserProfileAction } from '@/app/actions/authActions';
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const dropdownRef = useRef(null);
 
   // Filter options based on search term
@@ -24,6 +25,39 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
     onChange(optionValue);
     setIsOpen(false);
     setSearchTerm('');
+    setFocusedIndex(-1);
+  };
+
+  const handleInputKeyDown = (e) => {
+    if (!isOpen) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (filteredOptions.length === 0) return;
+      setFocusedIndex((prev) => (prev + 1) % filteredOptions.length);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (filteredOptions.length === 0) return;
+      setFocusedIndex((prev) => (prev <= 0 ? filteredOptions.length - 1 : prev - 1));
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredOptions.length === 0) return;
+      const target = filteredOptions[focusedIndex] || filteredOptions[0];
+      if (target) handleSelect(target.value);
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsOpen(false);
+      setFocusedIndex(-1);
+    }
   };
 
   return (
@@ -36,17 +70,48 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
       <div className="relative">
         {/* Selected value display / Search input */}
         <div
-          onClick={() => !loading && setIsOpen(!isOpen)}
+          onClick={() => {
+            if (loading) return;
+            setIsOpen((prev) => {
+              const next = !prev;
+              setFocusedIndex(next && filteredOptions.length > 0 ? 0 : -1);
+              return next;
+            });
+          }}
+          onKeyDown={(e) => {
+            if (loading) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setIsOpen((prev) => {
+                const next = !prev;
+                setFocusedIndex(next && filteredOptions.length > 0 ? 0 : -1);
+                return next;
+              });
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setIsOpen(true);
+              setFocusedIndex(filteredOptions.length > 0 ? 0 : -1);
+            }
+          }}
+          role="button"
+          tabIndex={0}
           className="w-full px-4 py-4 text-lg bg-gray-700/50 text-white border-2 border-gray-600 rounded-xl cursor-pointer transition-all hover:border-orange-500 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/30"
         >
           {isOpen ? (
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setFocusedIndex(0);
+              }}
+              onKeyDown={handleInputKeyDown}
               onBlur={(e) => {
                 // ให้เวลาในการคลิกเลือก option ก่อนปิด
-                setTimeout(() => setIsOpen(false), 200);
+                setTimeout(() => {
+                  setIsOpen(false);
+                  setFocusedIndex(-1);
+                }, 200);
               }}
               placeholder="พิมพ์เพื่อค้นหา..."
               className="w-full bg-transparent outline-none"
@@ -84,9 +149,13 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                 <div
                   key={option.value}
                   onMouseDown={() => handleSelect(option.value)}
+                  onMouseEnter={() => {
+                    const idx = filteredOptions.findIndex((item) => item.value === option.value);
+                    setFocusedIndex(idx);
+                  }}
                   className={`
                     px-4 py-3 cursor-pointer transition-all
-                    ${value === option.value
+                    ${value === option.value || filteredOptions[focusedIndex]?.value === option.value
                       ? 'bg-orange-600 text-white'
                       : 'hover:bg-gray-700 text-gray-200'
                     }
@@ -107,6 +176,9 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 }
 
 export default function APIDiscoveryPage() {
+  const DEFAULT_ACCOUNT_NAME = 'Siam Cement Public Company Limited (SCG)';
+  const DEFAULT_ZONE_NAME = 'scg.com';
+
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -118,6 +190,8 @@ export default function APIDiscoveryPage() {
   const [zones, setZones] = useState([]);
   const [selectedZone, setSelectedZone] = useState('');
   const [loadingZones, setLoadingZones] = useState(false);
+  const hasAutoSelectedAccountRef = useRef(false);
+  const hasAutoSelectedZoneRef = useRef(false);
 
   // State for discovery data
   const [discoveryData, setDiscoveryData] = useState([]);
@@ -127,6 +201,17 @@ export default function APIDiscoveryPage() {
   // State for API Endpoints (Saved Operations)
   const [endpointsData, setEndpointsData] = useState([]);
   const [loadingEndpoints, setLoadingEndpoints] = useState(false);
+  const [isDiscoveryCollapsed, setIsDiscoveryCollapsed] = useState(true);
+  const [isEndpointsCollapsed, setIsEndpointsCollapsed] = useState(true);
+
+  // State for OpenAPI export modal
+  const [openApiModalOpen, setOpenApiModalOpen] = useState(false);
+  const [openApiSearchTerm, setOpenApiSearchTerm] = useState('');
+  const [exactSearchOnly, setExactSearchOnly] = useState(false);
+  const [selectedOpenApiHosts, setSelectedOpenApiHosts] = useState([]);
+  const [exportingOpenApi, setExportingOpenApi] = useState(false);
+  const [includeLearnedParameters, setIncludeLearnedParameters] = useState(true);
+  const [includeRecommendedThresholds, setIncludeRecommendedThresholds] = useState(false);
 
   // Feature: Subdomain Expansion
   const [expandedItems, setExpandedItems] = useState({}); // { [rowId]: boolean }
@@ -203,6 +288,31 @@ export default function APIDiscoveryPage() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (hasAutoSelectedAccountRef.current) return;
+    if (!accounts.length || selectedAccount) return;
+
+    const defaultAccount = accounts.find((account) => account.name === DEFAULT_ACCOUNT_NAME);
+    if (defaultAccount) {
+      hasAutoSelectedAccountRef.current = true;
+      handleAccountChange(defaultAccount.id);
+    }
+  }, [accounts, selectedAccount]);
+
+  useEffect(() => {
+    if (hasAutoSelectedZoneRef.current) return;
+    if (!zones.length || selectedZone) return;
+
+    const selectedAccountName = accounts.find((account) => account.id === selectedAccount)?.name;
+    if (selectedAccountName !== DEFAULT_ACCOUNT_NAME) return;
+
+    const defaultZone = zones.find((zone) => zone.name === DEFAULT_ZONE_NAME);
+    if (defaultZone) {
+      hasAutoSelectedZoneRef.current = true;
+      setSelectedZone(defaultZone.id);
+    }
+  }, [zones, selectedZone, selectedAccount, accounts]);
+
   // Check Auth & Load Accounts & Refresh Token
   useEffect(() => {
     const user = auth.requireAuth(router);
@@ -254,6 +364,9 @@ export default function APIDiscoveryPage() {
       setDiscoveryData([]);
       return;
     }
+
+    setIsDiscoveryCollapsed(true);
+    setIsEndpointsCollapsed(true);
 
     const loadDiscovery = async () => {
       setLoadingDiscovery(true);
@@ -335,6 +448,210 @@ export default function APIDiscoveryPage() {
     label: zone.name,
     subtitle: `${zone.status} - ${zone.plan}`
   }));
+
+  const selectedZoneName = useMemo(() => {
+    const zone = zones.find((z) => z.id === selectedZone);
+    return zone?.name || '';
+  }, [zones, selectedZone]);
+
+  const getHostFromSchema = (schema) => {
+    const title = schema?.info?.title;
+    if (typeof title === 'string' && title.startsWith('Schema for ')) {
+      return title.replace('Schema for ', '').trim();
+    }
+    if (schema?.host && typeof schema.host === 'string') return schema.host;
+    return '';
+  };
+
+  const extractSchemasFromRaw = (raw) => {
+    if (!raw) return [];
+    const found = [];
+
+    const walk = (node) => {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      if (typeof node !== 'object') return;
+      if (node.paths && typeof node.paths === 'object') {
+        found.push(node);
+      }
+      Object.values(node).forEach(walk);
+    };
+
+    walk(raw);
+    return found;
+  };
+
+  const openApiSchemasByHost = useMemo(() => {
+    const map = {};
+    const schemas = extractSchemasFromRaw(rawDiscoveryData);
+
+    schemas.forEach((schema) => {
+      const host = getHostFromSchema(schema);
+      if (!host) return;
+      if (!map[host]) map[host] = [];
+      map[host].push(schema);
+    });
+
+    return map;
+  }, [rawDiscoveryData]);
+
+  const openApiHostOptions = useMemo(() => {
+    const fromSchemas = Object.keys(openApiSchemasByHost);
+    const fromEndpoints = endpointsData
+      .map((item) => item.host)
+      .filter((host) => typeof host === 'string' && host && host !== '-' && !host.includes('{hostVar1}'));
+
+    const hostSet = new Set([...fromSchemas, ...fromEndpoints]);
+    if (selectedZoneName) hostSet.add(selectedZoneName);
+
+    return Array.from(hostSet)
+      .sort((a, b) => a.localeCompare(b))
+      .map((host) => ({
+        host,
+        hasSchema: Boolean(openApiSchemasByHost[host]?.length),
+        schemaCount: openApiSchemasByHost[host]?.length || 0
+      }));
+  }, [openApiSchemasByHost, endpointsData, selectedZoneName]);
+
+  const filteredOpenApiHostOptions = useMemo(() => {
+    const q = openApiSearchTerm.trim().toLowerCase();
+    if (!q) return openApiHostOptions;
+    if (exactSearchOnly) {
+      return openApiHostOptions.filter((item) => item.host.trim().toLowerCase() === q);
+    }
+    return openApiHostOptions.filter((item) => item.host.toLowerCase().includes(q));
+  }, [openApiHostOptions, openApiSearchTerm, exactSearchOnly]);
+
+  const toggleOpenApiHost = (host) => {
+    setSelectedOpenApiHosts((prev) =>
+      prev.includes(host) ? prev.filter((h) => h !== host) : [...prev, host]
+    );
+  };
+
+  const allFilteredSelected = filteredOpenApiHostOptions.length > 0 &&
+    filteredOpenApiHostOptions.every((item) => selectedOpenApiHosts.includes(item.host));
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      const filteredHosts = new Set(filteredOpenApiHostOptions.map((item) => item.host));
+      setSelectedOpenApiHosts((prev) => prev.filter((host) => !filteredHosts.has(host)));
+      return;
+    }
+
+    const merged = new Set(selectedOpenApiHosts);
+    filteredOpenApiHostOptions.forEach((item) => merged.add(item.host));
+    setSelectedOpenApiHosts(Array.from(merged));
+  };
+
+  const handleExactSelect = () => {
+    const q = openApiSearchTerm.trim().toLowerCase();
+    if (!q) {
+      showToast('กรุณากรอกคำค้นหาก่อนใช้ Exact', 'error');
+      return;
+    }
+
+    const exactHosts = openApiHostOptions
+      .filter((item) => item.host.trim().toLowerCase() === q)
+      .map((item) => item.host);
+
+    if (exactHosts.length === 0) {
+      showToast(`ไม่พบ host ที่ตรงแบบ exact: ${openApiSearchTerm}`, 'error');
+      return;
+    }
+
+    setExactSearchOnly(true);
+    setSelectedOpenApiHosts(exactHosts);
+  };
+
+  const openOpenApiModal = () => {
+    setSelectedOpenApiHosts([]);
+    setOpenApiSearchTerm('');
+    setExactSearchOnly(false);
+    setOpenApiModalOpen(true);
+  };
+
+  const downloadJsonFile = (filename, data) => {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const groupSchemasByHost = (schemas) => {
+    const map = {};
+    (schemas || []).forEach((schema) => {
+      const host = getHostFromSchema(schema);
+      if (!host) return;
+      if (!map[host]) map[host] = [];
+      map[host].push(schema);
+    });
+    return map;
+  };
+
+  const handleExportOpenApi = async () => {
+    if (!selectedOpenApiHosts.length) {
+      showToast('กรุณาเลือก Sub Domain อย่างน้อย 1 รายการ', 'error');
+      return;
+    }
+
+    setExportingOpenApi(true);
+    const skippedHosts = [];
+    let exportedCount = 0;
+
+    for (const host of selectedOpenApiHosts) {
+      const result = await callAPI('get-api-openapi-schemas', {
+        zoneId: selectedZone,
+        hostname: host,
+        includeLearnedParameters,
+        includeRecommendedThresholds
+      }, null, true);
+
+      const latestSchemas = Array.isArray(result?.data) ? result.data : [];
+      const latestMap = groupSchemasByHost(latestSchemas);
+      const schemas = latestMap[host] || openApiSchemasByHost[host] || [];
+
+      if (!schemas.length) {
+        skippedHosts.push(host);
+        continue;
+      }
+
+      const safeHost = host.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+      if (schemas.length === 1) {
+        const filename = `openapi_${safeHost}_${new Date().toISOString().split('T')[0]}.json`;
+        downloadJsonFile(filename, schemas[0]);
+        exportedCount += 1;
+      } else {
+        schemas.forEach((schema, index) => {
+          const filename = `openapi_${safeHost}_part${index + 1}_${new Date().toISOString().split('T')[0]}.json`;
+          downloadJsonFile(filename, schema);
+          exportedCount += 1;
+        });
+      }
+    }
+
+    if (exportedCount > 0) {
+      showToast(`Export OpenAPI สำเร็จ ${exportedCount} ไฟล์`, 'success');
+    }
+    if (skippedHosts.length > 0) {
+      showToast(`ไม่มี OpenAPI schema สำหรับ: ${skippedHosts.join(', ')}`, 'error');
+    }
+
+    if (exportedCount > 0) {
+      setOpenApiModalOpen(false);
+    }
+
+    setExportingOpenApi(false);
+  };
 
   // ฟังก์ชันดาวน์โหลด CSV (Advanced with Subdomains)
   const handleDownloadCSV = async () => {
@@ -623,7 +940,19 @@ export default function APIDiscoveryPage() {
                           )}
                         </div>
 
-                        {discoveryData.length > 0 && (
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                          <button
+                            onClick={() => setIsDiscoveryCollapsed((prev) => !prev)}
+                            className="px-3 py-2 text-xs font-semibold rounded-lg border border-purple-500/60 text-purple-200 hover:bg-purple-800/30 flex items-center gap-2"
+                            title={isDiscoveryCollapsed ? 'Expand table' : 'Collapse table'}
+                          >
+                            <svg className={`w-4 h-4 transform transition-transform ${isDiscoveryCollapsed ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                            <span>{isDiscoveryCollapsed ? 'Expand' : 'Collapse'}</span>
+                          </button>
+
+                        {discoveryData.length > 0 && !isDiscoveryCollapsed && (
                           <div className="flex items-center gap-3 w-full sm:w-auto">
                             <select
                               value={pageSize}
@@ -676,9 +1005,10 @@ export default function APIDiscoveryPage() {
                             </button>
                           </div>
                         )}
+                        </div>
                       </div>
 
-                      {loadingDiscovery ? (
+                      {!isDiscoveryCollapsed && (loadingDiscovery ? (
                         <div className="flex items-center justify-center py-8">
                           <svg className="animate-spin h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -797,7 +1127,7 @@ export default function APIDiscoveryPage() {
                             <button onClick={() => setCurrentPage(c => c + 1)} className="text-gray-400 hover:text-white">Next</button>
                           </div>
                         </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -820,8 +1150,31 @@ export default function APIDiscoveryPage() {
                             </span>
                           )}
                         </div>
-                        {endpointsData.length > 0 && (
+
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                          <button
+                            onClick={() => setIsEndpointsCollapsed((prev) => !prev)}
+                            className="px-3 py-2 text-xs font-semibold rounded-lg border border-indigo-500/60 text-indigo-200 hover:bg-indigo-800/30 flex items-center gap-2"
+                            title={isEndpointsCollapsed ? 'Expand table' : 'Collapse table'}
+                          >
+                            <svg className={`w-4 h-4 transform transition-transform ${isEndpointsCollapsed ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                            <span>{isEndpointsCollapsed ? 'Expand' : 'Collapse'}</span>
+                          </button>
+
+                        {endpointsData.length > 0 && !isEndpointsCollapsed && (
                           <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <button
+                              onClick={openOpenApiModal}
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-blue-500"
+                              title="Export OpenAPI Schema"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10m-5 4v6m0 0l-3-3m3 3l3-3M5 8h14a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
+                              </svg>
+                              <span>OpenAPI JSON</span>
+                            </button>
                             <button
                               onClick={handleDownloadEndpointsCSV}
                               className={`bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-green-500 ${downloadingCsvType ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -835,9 +1188,10 @@ export default function APIDiscoveryPage() {
                             </button>
                           </div>
                         )}
+                        </div>
                       </div>
 
-                      {loadingEndpoints ? (
+                      {!isEndpointsCollapsed && (loadingEndpoints ? (
                         <div className="flex items-center justify-center p-8">
                           <svg className="animate-spin -ml-1 mr-3 h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -945,7 +1299,7 @@ export default function APIDiscoveryPage() {
                             </tbody>
                           </table>
                         </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -954,6 +1308,138 @@ export default function APIDiscoveryPage() {
           </div>
         </div>
       </div>
+
+      {openApiModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setOpenApiModalOpen(false);
+        }}>
+          <div className="w-full max-w-2xl bg-gray-900 border-2 border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-white text-lg font-bold">Export OpenAPI Schema</h3>
+                <p className="text-blue-100 text-xs">เลือก Sub Domain ได้หลายรายการ แล้ว Export เป็น JSON</p>
+              </div>
+              <button
+                onClick={() => setOpenApiModalOpen(false)}
+                className="text-white/90 hover:text-white"
+                aria-label="Close modal"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={openApiSearchTerm}
+                    onChange={(e) => {
+                      setOpenApiSearchTerm(e.target.value);
+                      if (!e.target.value.trim()) {
+                        setExactSearchOnly(false);
+                      }
+                    }}
+                    placeholder="ค้นหา sub domain แบบ live search..."
+                    className="w-full bg-gray-800 border border-gray-600 text-gray-200 text-sm rounded-lg py-2.5 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                  <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+
+                <button
+                  onClick={handleToggleSelectAll}
+                  className="px-2 py-2.5 text-xs font-semibold text-blue-400 hover:text-blue-300"
+                >
+                  {allFilteredSelected ? 'Deselect All' : 'Select All'}
+                </button>
+                <button
+                  onClick={handleExactSelect}
+                  className={`px-2 py-2.5 text-xs font-semibold ${exactSearchOnly ? 'text-blue-300' : 'text-blue-400 hover:text-blue-300'}`}
+                >
+                  Exact
+                </button>
+              </div>
+
+              <div className="max-h-72 overflow-y-auto border border-gray-700 rounded-xl divide-y divide-gray-700 bg-gray-800/40">
+                {filteredOpenApiHostOptions.length === 0 ? (
+                  <div className="p-4 text-center text-gray-400 text-sm">ไม่พบ sub domain ที่ค้นหา</div>
+                ) : (
+                  filteredOpenApiHostOptions.map((item) => {
+                    const checked = selectedOpenApiHosts.includes(item.host);
+                    return (
+                      <label key={item.host} className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-700/30 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleOpenApiHost(item.host)}
+                            className="w-4 h-4 accent-blue-500"
+                          />
+                          <div>
+                            <div className="text-sm text-gray-200 font-medium">{item.host}</div>
+                            <div className="text-xs text-gray-400">
+                              {item.hasSchema ? `พบ schema ${item.schemaCount} ชุด` : 'ยังไม่พบ schema จาก API Discovery'}
+                            </div>
+                          </div>
+                        </div>
+                        {item.hasSchema ? (
+                          <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">พร้อม export</span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-1 rounded-full bg-gray-700 text-gray-300 border border-gray-600">ไม่มี schema</span>
+                        )}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2 text-xs text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={includeLearnedParameters}
+                    onChange={(e) => setIncludeLearnedParameters(e.target.checked)}
+                    className="w-4 h-4 accent-blue-500"
+                  />
+                  Include learned parameters
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={includeRecommendedThresholds}
+                    onChange={(e) => setIncludeRecommendedThresholds(e.target.checked)}
+                    className="w-4 h-4 accent-blue-500"
+                  />
+                  Include recommended thresholds
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-gray-400">เลือกแล้ว {selectedOpenApiHosts.length} รายการ</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setOpenApiModalOpen(false)}
+                    className="px-4 py-2 text-sm rounded-lg border border-gray-600 text-gray-200 hover:bg-gray-800"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={handleExportOpenApi}
+                    disabled={exportingOpenApi}
+                    className={`px-4 py-2 text-sm rounded-lg text-white font-semibold ${exportingOpenApi ? 'bg-blue-800 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                  >
+                    {exportingOpenApi ? 'Exporting...' : 'Export JSON'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
