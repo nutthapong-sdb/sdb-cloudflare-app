@@ -210,6 +210,7 @@ export default function APIDiscoveryPage() {
   const [exactSearchOnly, setExactSearchOnly] = useState(false);
   const [selectedOpenApiHosts, setSelectedOpenApiHosts] = useState([]);
   const [exportingOpenApi, setExportingOpenApi] = useState(false);
+  const [exportingOpenApiCsv, setExportingOpenApiCsv] = useState(false);
   const [includeLearnedParameters, setIncludeLearnedParameters] = useState(true);
   const [includeRecommendedThresholds, setIncludeRecommendedThresholds] = useState(false);
 
@@ -459,6 +460,17 @@ export default function APIDiscoveryPage() {
     if (typeof title === 'string' && title.startsWith('Schema for ')) {
       return title.replace('Schema for ', '').trim();
     }
+    if (typeof title === 'string' && title.startsWith('Cloudflare Learned Schema for ')) {
+      return title.replace('Cloudflare Learned Schema for ', '').trim();
+    }
+    const serverUrl = schema?.servers?.[0]?.url;
+    if (typeof serverUrl === 'string') {
+      try {
+        return new URL(serverUrl).hostname;
+      } catch (_) {
+        // ignore invalid URL and fallback to other fields
+      }
+    }
     if (schema?.host && typeof schema.host === 'string') return schema.host;
     return '';
   };
@@ -586,6 +598,19 @@ export default function APIDiscoveryPage() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadCsvFile = (filename, rows) => {
+    const csvContent = rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const groupSchemasByHost = (schemas) => {
     const map = {};
     (schemas || []).forEach((schema) => {
@@ -597,6 +622,47 @@ export default function APIDiscoveryPage() {
     return map;
   };
 
+  const extractOpenApiOperationsToCsvRows = (host, schema) => {
+    const rows = [];
+    const paths = schema?.paths;
+    if (!paths || typeof paths !== 'object') return rows;
+
+    const methodOrder = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'];
+
+    Object.entries(paths).forEach(([pathKey, pathItem]) => {
+      if (!pathItem || typeof pathItem !== 'object') return;
+
+      const pathLevelParams = Array.isArray(pathItem.parameters) ? pathItem.parameters : [];
+
+      methodOrder.forEach((method) => {
+        const operation = pathItem[method];
+        if (!operation || typeof operation !== 'object') return;
+
+        const operationParams = Array.isArray(operation.parameters) ? operation.parameters : [];
+        const allParams = [...pathLevelParams, ...operationParams]
+          .map((p) => p?.name)
+          .filter(Boolean);
+
+        const requestBodyContentTypes = Object.keys(operation?.requestBody?.content || {});
+        const responseCodes = Object.keys(operation?.responses || {});
+
+        rows.push({
+          host,
+          method: method.toUpperCase(),
+          path: pathKey,
+          operationId: operation.operationId || '',
+          summary: operation.summary || operation.description || '',
+          tags: Array.isArray(operation.tags) ? operation.tags.join('|') : '',
+          parameters: allParams.join('|'),
+          requestBodyContentTypes: requestBodyContentTypes.join('|'),
+          responseCodes: responseCodes.join('|')
+        });
+      });
+    });
+
+    return rows;
+  };
+
   const handleExportOpenApi = async () => {
     if (!selectedOpenApiHosts.length) {
       showToast('กรุณาเลือก Sub Domain อย่างน้อย 1 รายการ', 'error');
@@ -605,6 +671,7 @@ export default function APIDiscoveryPage() {
 
     setExportingOpenApi(true);
     const skippedHosts = [];
+    const exportWarnings = [];
     let exportedCount = 0;
 
     for (const host of selectedOpenApiHosts) {
@@ -618,6 +685,10 @@ export default function APIDiscoveryPage() {
       const latestSchemas = Array.isArray(result?.data) ? result.data : [];
       const latestMap = groupSchemasByHost(latestSchemas);
       const schemas = latestMap[host] || openApiSchemasByHost[host] || [];
+
+      if (result?.message) {
+        exportWarnings.push(`${host}: ${result.message}`);
+      }
 
       if (!schemas.length) {
         skippedHosts.push(host);
@@ -645,12 +716,94 @@ export default function APIDiscoveryPage() {
     if (skippedHosts.length > 0) {
       showToast(`ไม่มี OpenAPI schema สำหรับ: ${skippedHosts.join(', ')}`, 'error');
     }
+    if (exportWarnings.length > 0) {
+      showToast(exportWarnings[0], 'error');
+    }
 
     if (exportedCount > 0) {
       setOpenApiModalOpen(false);
     }
 
     setExportingOpenApi(false);
+  };
+
+  const handleExportOpenApiCsv = async () => {
+    if (!selectedOpenApiHosts.length) {
+      showToast('กรุณาเลือก Sub Domain อย่างน้อย 1 รายการ', 'error');
+      return;
+    }
+
+    setExportingOpenApiCsv(true);
+    try {
+      const skippedHosts = [];
+      const exportWarnings = [];
+      const csvRows = [];
+
+      for (const host of selectedOpenApiHosts) {
+        const result = await callAPI('get-api-openapi-schemas', {
+          zoneId: selectedZone,
+          hostname: host,
+          includeLearnedParameters,
+          includeRecommendedThresholds
+        }, null, true);
+
+        const latestSchemas = Array.isArray(result?.data) ? result.data : [];
+        const latestMap = groupSchemasByHost(latestSchemas);
+        const schemas = latestMap[host] || openApiSchemasByHost[host] || [];
+
+        if (result?.message) {
+          exportWarnings.push(`${host}: ${result.message}`);
+        }
+
+        if (!schemas.length) {
+          skippedHosts.push(host);
+          continue;
+        }
+
+        schemas.forEach((schema) => {
+          const rows = extractOpenApiOperationsToCsvRows(host, schema);
+          csvRows.push(...rows);
+        });
+      }
+
+      if (csvRows.length > 0) {
+        const headers = ['Host', 'Method', 'Path', 'OperationId', 'Summary', 'Tags', 'Parameters', 'RequestBodyContentTypes', 'ResponseCodes'];
+        const safe = (value) => `"${String(value || '').replace(/"/g, '""')}"`;
+        const dataRows = csvRows.map((row) => [
+          row.host,
+          row.method,
+          row.path,
+          row.operationId,
+          row.summary,
+          row.tags,
+          row.parameters,
+          row.requestBodyContentTypes,
+          row.responseCodes
+        ].map(safe).join(','));
+
+        const zoneName = selectedZoneName || selectedZone;
+        const safeZone = String(zoneName || 'zone').replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filename = `openapi_endpoints_${safeZone}_${new Date().toISOString().split('T')[0]}.csv`;
+        downloadCsvFile(filename, [headers.join(','), ...dataRows]);
+
+        showToast(`Export OpenAPI CSV สำเร็จ ${csvRows.length} endpoint`, 'success');
+        setOpenApiModalOpen(false);
+      } else {
+        showToast('ไม่พบ endpoint สำหรับ export CSV', 'error');
+      }
+
+      if (skippedHosts.length > 0) {
+        showToast(`ไม่มี OpenAPI schema สำหรับ: ${skippedHosts.join(', ')}`, 'error');
+      }
+      if (exportWarnings.length > 0) {
+        showToast(exportWarnings[0], 'error');
+      }
+    } catch (error) {
+      console.error('❌ OpenAPI CSV Export Error:', error);
+      showToast('เกิดข้อผิดพลาดในการ Export CSV', 'error');
+    } finally {
+      setExportingOpenApiCsv(false);
+    }
   };
 
   // ฟังก์ชันดาวน์โหลด CSV (Advanced with Subdomains)
@@ -722,17 +875,8 @@ export default function APIDiscoveryPage() {
         }
       }
 
-      const csvContent = [headers, ...rows].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       const filename = `api_discovery_${selectedZone}_expanded_${new Date().toISOString().split('T')[0]}.csv`;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      downloadCsvFile(filename, [...headers, ...rows]);
 
       showToast('ดาวน์โหลด CSV เรียบร้อยแล้ว', 'success');
     } catch (error) {
@@ -751,6 +895,7 @@ export default function APIDiscoveryPage() {
       return;
     }
 
+    showToast('กำลังเตรียมข้อมูล Endpoints CSV (อาจใช้เวลาสักครู่)...', 'success');
     setDownloadingCsvType('endpoints');
     setDownloadTimer(0);
     const timerInterval = setInterval(() => {
@@ -784,27 +929,18 @@ export default function APIDiscoveryPage() {
             setSubdomainCache(prev => ({ ...prev, [cacheKey]: subs }));
           }
 
-          if (subs.length > 0) {
-            for (const sub of subs) {
-              rows.push(`${safe(sub.host || item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(sub.path || item.path)},${sub.count},Sub-Item`);
+            if (subs.length > 0) {
+              for (const sub of subs) {
+                rows.push(`${safe(sub.host || item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(sub.path || item.path)},${safe(sub.count)},Sub-Item`);
+              }
             }
-          }
         } else {
           rows.push(`${safe(item.host)},${safe(item.method)},${safe(item.source)},${safe(item.state)},${safe(item.path)},-,Normal`);
         }
       }
 
-      const csvContent = [headers, ...rows].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       const filename = `api_endpoints_${selectedZone}_expanded_${new Date().toISOString().split('T')[0]}.csv`;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      downloadCsvFile(filename, [...headers, ...rows]);
 
       showToast('ดาวน์โหลด CSV ของ Endpoints เรียบร้อยแล้ว', 'success');
     } catch (error) {
@@ -1163,17 +1299,17 @@ export default function APIDiscoveryPage() {
                             <span>{isEndpointsCollapsed ? 'Expand' : 'Collapse'}</span>
                           </button>
 
-                        {endpointsData.length > 0 && !isEndpointsCollapsed && (
+                        {endpointsData.length > 0 && (
                           <div className="flex items-center gap-3 w-full sm:w-auto">
                             <button
                               onClick={openOpenApiModal}
                               className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-2 transition-colors border border-blue-500"
-                              title="Export OpenAPI Schema"
+                              title="Export Schema"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10m-5 4v6m0 0l-3-3m3 3l3-3M5 8h14a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
                               </svg>
-                              <span>OpenAPI JSON</span>
+                              <span>Schema</span>
                             </button>
                             <button
                               onClick={handleDownloadEndpointsCSV}
@@ -1429,10 +1565,17 @@ export default function APIDiscoveryPage() {
                   </button>
                   <button
                     onClick={handleExportOpenApi}
-                    disabled={exportingOpenApi}
-                    className={`px-4 py-2 text-sm rounded-lg text-white font-semibold ${exportingOpenApi ? 'bg-blue-800 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    disabled={exportingOpenApi || exportingOpenApiCsv}
+                    className={`px-4 py-2 text-sm rounded-lg text-white font-semibold ${(exportingOpenApi || exportingOpenApiCsv) ? 'bg-blue-800 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                   >
                     {exportingOpenApi ? 'Exporting...' : 'Export JSON'}
+                  </button>
+                  <button
+                    onClick={handleExportOpenApiCsv}
+                    disabled={exportingOpenApi || exportingOpenApiCsv}
+                    className={`px-4 py-2 text-sm rounded-lg text-white font-semibold ${(exportingOpenApi || exportingOpenApiCsv) ? 'bg-emerald-800 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                  >
+                    {exportingOpenApiCsv ? 'Exporting...' : 'Export CSV'}
                   </button>
                 </div>
               </div>
