@@ -918,11 +918,21 @@ export async function POST(request) {
 
                 return NextResponse.json({ success: true, data: [] });
             } catch (error) {
+                const apiErrors = Array.isArray(error?.response?.data?.errors) ? error.response.data.errors : [];
+                const firstApiError = apiErrors[0] || null;
+                const isFeatureUnentitled = firstApiError?.code === 15400;
+                const featureLabel = feature.length > 0 ? feature.join(', ') : 'requested feature';
+
                 console.error('OpenAPI Schemas Error:', error.response?.data || error.message);
+
                 return NextResponse.json({
                     success: true,
                     data: [],
-                    message: 'OpenAPI Schemas not available for this zone'
+                    message: isFeatureUnentitled
+                        ? `OpenAPI schema feature not entitled for this token/zone (${featureLabel})`
+                        : 'OpenAPI Schemas not available for this zone',
+                    errorCode: firstApiError?.code || null,
+                    errorDetail: firstApiError?.message || null
                 });
             }
         }
