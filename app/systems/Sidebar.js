@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Home, LayoutDashboard, Cloud, ChevronLeft, ChevronRight, LogOut, Shield } from 'lucide-react';
+import { Home, LayoutDashboard, Cloud, ChevronLeft, ChevronRight, LogOut, Shield, Users } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 
@@ -9,11 +9,20 @@ import { THEMES } from '@/app/utils/themes';
 export default function Sidebar() {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [themeId, setThemeId] = useState('dark');
+    const [currentUser, setCurrentUser] = useState(null);
     const router = useRouter();
     const pathname = usePathname();
 
     // Theme subscription
     useEffect(() => {
+        // Auth/session (sidebar decides which links to show)
+        try {
+            const user = auth.getCurrentUser();
+            setCurrentUser(user);
+        } catch (_) {
+            setCurrentUser(null);
+        }
+
         // Initial load
         if (typeof window !== 'undefined') {
             const stored = localStorage.getItem('gdcc_theme');
@@ -39,6 +48,10 @@ export default function Sidebar() {
         { name: 'Firewall Logs', icon: Shield, path: '/systems/firewall_logs', color: 'text-red-400' },
         { name: 'Cloudflare Report', icon: Cloud, path: '/systems/gdcc', color: 'text-purple-400' },
     ];
+
+    if (currentUser?.role === 'root') {
+        menuItems.push({ name: 'User Management', icon: Users, path: '/admin/users', color: 'text-cyan-400' });
+    }
 
     return (
         <aside

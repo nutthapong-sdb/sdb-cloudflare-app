@@ -177,9 +177,6 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 }
 
 export default function APIDiscoveryPage() {
-  const DEFAULT_ACCOUNT_NAME = 'Siam Cement Public Company Limited (SCG)';
-  const DEFAULT_ZONE_NAME = 'scg.com';
-
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -191,8 +188,6 @@ export default function APIDiscoveryPage() {
   const [zones, setZones] = useState([]);
   const [selectedZone, setSelectedZone] = useState('');
   const [loadingZones, setLoadingZones] = useState(false);
-  const hasAutoSelectedAccountRef = useRef(false);
-  const hasAutoSelectedZoneRef = useRef(false);
 
   // State for discovery data
   const [discoveryData, setDiscoveryData] = useState([]);
@@ -289,31 +284,6 @@ export default function APIDiscoveryPage() {
     }
     setLoading(false);
   };
-
-  useEffect(() => {
-    if (hasAutoSelectedAccountRef.current) return;
-    if (!accounts.length || selectedAccount) return;
-
-    const defaultAccount = accounts.find((account) => account.name === DEFAULT_ACCOUNT_NAME);
-    if (defaultAccount) {
-      hasAutoSelectedAccountRef.current = true;
-      handleAccountChange(defaultAccount.id);
-    }
-  }, [accounts, selectedAccount]);
-
-  useEffect(() => {
-    if (hasAutoSelectedZoneRef.current) return;
-    if (!zones.length || selectedZone) return;
-
-    const selectedAccountName = accounts.find((account) => account.id === selectedAccount)?.name;
-    if (selectedAccountName !== DEFAULT_ACCOUNT_NAME) return;
-
-    const defaultZone = zones.find((zone) => zone.name === DEFAULT_ZONE_NAME);
-    if (defaultZone) {
-      hasAutoSelectedZoneRef.current = true;
-      setSelectedZone(defaultZone.id);
-    }
-  }, [zones, selectedZone, selectedAccount, accounts]);
 
   // Check Auth & Load Accounts & Refresh Token
   useEffect(() => {
