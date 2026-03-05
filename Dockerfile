@@ -44,10 +44,11 @@ RUN chown -R nextjs:nodejs .next app/data db
 # Ensure the app directory itself is owned by nextjs so it can create the DB if it doesn't exist
 RUN chown nextjs:nodejs /app
 
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy runtime assets for Next.js production server
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/app/data ./app/data
 
 # Copy the database file if it exists, but usually we want to mount it
@@ -61,6 +62,5 @@ ENV PORT 8002
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/next-config-js/output
-CMD ["node", "server.js"]
+# Start Next.js production server
+CMD ["npm", "run", "start"]
