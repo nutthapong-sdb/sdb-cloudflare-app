@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Fragment, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
+import Swal from 'sweetalert2';
 
 // Searchable Dropdown Component
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon }) {
@@ -665,7 +666,7 @@ export default function APIDiscoveryPage() {
 
   const handleExportOpenApi = async () => {
     if (!selectedOpenApiHosts.length) {
-      showToast('กรุณาเลือก Sub Domain อย่างน้อย 1 รายการ', 'error');
+      await Swal.fire('Warning', 'กรุณาเลือก Sub Domain ก่อน Export', 'warning');
       return;
     }
 
@@ -711,7 +712,8 @@ export default function APIDiscoveryPage() {
     }
 
     if (exportedCount > 0) {
-      showToast(`Export OpenAPI สำเร็จ ${exportedCount} ไฟล์`, 'success');
+      setOpenApiModalOpen(false);
+      await Swal.fire('สำเร็จ', `Export JSON สำเร็จ ${exportedCount} ไฟล์`, 'success');
     }
     if (skippedHosts.length > 0) {
       showToast(`ไม่มี OpenAPI schema สำหรับ: ${skippedHosts.join(', ')}`, 'error');
@@ -720,16 +722,12 @@ export default function APIDiscoveryPage() {
       showToast(exportWarnings[0], 'error');
     }
 
-    if (exportedCount > 0) {
-      setOpenApiModalOpen(false);
-    }
-
     setExportingOpenApi(false);
   };
 
   const handleExportOpenApiCsv = async () => {
     if (!selectedOpenApiHosts.length) {
-      showToast('กรุณาเลือก Sub Domain อย่างน้อย 1 รายการ', 'error');
+      await Swal.fire('Warning', 'กรุณาเลือก Sub Domain ก่อน Export', 'warning');
       return;
     }
 
@@ -788,6 +786,7 @@ export default function APIDiscoveryPage() {
 
         showToast(`Export OpenAPI CSV สำเร็จ ${csvRows.length} endpoint`, 'success');
         setOpenApiModalOpen(false);
+        await Swal.fire('สำเร็จ', `Export CSV สำเร็จ ${csvRows.length} endpoint`, 'success');
       } else {
         showToast('ไม่พบ endpoint สำหรับ export CSV', 'error');
       }
