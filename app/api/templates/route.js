@@ -15,6 +15,7 @@ const ensureDir = async () => {
 // Paths for default files
 const defaultSubPath = path.join(dataDir, 'reportTemplate.json');
 const defaultDomainPath = path.join(dataDir, 'staticReportTemplate.json');
+const defaultMiddlePath = path.join(dataDir, 'middleReportTemplate.json');
 
 export async function GET() {
     try {
@@ -49,15 +50,18 @@ export async function POST(req) {
             // Determine source files
             let subContent = '{}';
             let domainContent = '{}';
+            let middleContent = '{"template":""}';
 
             if (sourceId === 'empty') {
                 // Truly empty content
                 subContent = '{}';
                 domainContent = '{}';
+                middleContent = '{"template":""}';
             } else {
                 // Determine source files
                 let srcSub = defaultSubPath;
                 let srcDomain = defaultDomainPath;
+                let srcMiddle = defaultMiddlePath;
 
                 if (sourceId && sourceId !== 'default') {
                     // --- Security: Prevent Path Traversal ---
@@ -65,17 +69,20 @@ export async function POST(req) {
                     if (safeSourceId) {
                         srcSub = path.join(templatesDir, `t_${safeSourceId}_sub.json`);
                         srcDomain = path.join(templatesDir, `t_${safeSourceId}_domain.json`);
+                        srcMiddle = path.join(templatesDir, `t_${safeSourceId}_middle.json`);
                     }
                 }
 
                 // Read source content
                 try { subContent = await fs.readFile(srcSub, 'utf8'); } catch (e) { }
                 try { domainContent = await fs.readFile(srcDomain, 'utf8'); } catch (e) { }
+                try { middleContent = await fs.readFile(srcMiddle, 'utf8'); } catch (e) { }
             }
 
             // Write new files
             await fs.writeFile(path.join(templatesDir, `t_${newId}_sub.json`), subContent, 'utf8');
             await fs.writeFile(path.join(templatesDir, `t_${newId}_domain.json`), domainContent, 'utf8');
+            await fs.writeFile(path.join(templatesDir, `t_${newId}_middle.json`), middleContent, 'utf8');
 
             // Update registry
             templates.push(newTemplate);
@@ -107,6 +114,7 @@ export async function POST(req) {
             // Delete files
             try { await fs.unlink(path.join(templatesDir, `t_${safeId}_sub.json`)); } catch (e) { }
             try { await fs.unlink(path.join(templatesDir, `t_${safeId}_domain.json`)); } catch (e) { }
+            try { await fs.unlink(path.join(templatesDir, `t_${safeId}_middle.json`)); } catch (e) { }
 
             return Response.json({ success: true });
         }

@@ -31,6 +31,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
 
   const handleInputKeyDown = (e) => {
     if (!isOpen) return;
+    e.stopPropagation();
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -81,6 +82,7 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
           }}
           onKeyDown={(e) => {
             if (loading) return;
+            if (isOpen) return;
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               setIsOpen((prev) => {
@@ -146,19 +148,20 @@ function SearchableDropdown({ options, value, onChange, placeholder, label, load
                 ไม่พบข้อมูล
               </div>
             ) : (
-              filteredOptions.map((option) => (
+              filteredOptions.map((option, idx) => (
                 <div
                   key={option.value}
                   onMouseDown={() => handleSelect(option.value)}
-                  onMouseEnter={() => {
-                    const idx = filteredOptions.findIndex((item) => item.value === option.value);
-                    setFocusedIndex(idx);
-                  }}
+                  onMouseEnter={() => setFocusedIndex(idx)}
                   className={`
                     px-4 py-3 cursor-pointer transition-all
-                    ${value === option.value || filteredOptions[focusedIndex]?.value === option.value
+                    ${isOpen
+                      ? (focusedIndex === idx
+                        ? 'bg-orange-600 text-white'
+                        : 'hover:bg-gray-700 text-gray-200')
+                      : (value === option.value
                       ? 'bg-orange-600 text-white'
-                      : 'hover:bg-gray-700 text-gray-200'
+                      : 'hover:bg-gray-700 text-gray-200')
                     }
                   `}
                 >
