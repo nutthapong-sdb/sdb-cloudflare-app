@@ -267,7 +267,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
         // Dashboard Screenshot Image
-        '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6 flex justify-center"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="600" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
+        '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6" style="text-align: center;"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -3283,12 +3283,21 @@ export default function GDCCPage() {
                     let imgData = null;
                     if (dashboardRef.current) {
                         try {
+                            const captureWidth = dashboardRef.current.scrollWidth;
+                            const captureHeight = dashboardRef.current.scrollHeight;
+
                             // Race between screenshot and 15s timeout
                             imgData = await Promise.race([
                                 htmlToImage.toJpeg(dashboardRef.current, {
                                     quality: 0.6,
                                     backgroundColor: '#000000',
-                                    pixelRatio: 1.0
+                                    pixelRatio: 1.0,
+                                    width: captureWidth,
+                                    height: captureHeight,
+                                    style: {
+                                        width: `${captureWidth}px`,
+                                        height: `${captureHeight}px`
+                                    }
                                 }),
                                 new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (15s)')), 15000))
                             ]);
@@ -3804,8 +3813,18 @@ export default function GDCCPage() {
             await new Promise(resolve => setTimeout(resolve, 800)); // Wait for scroll/render
 
             const element = dashboardRef.current;
+            const captureWidth = element.scrollWidth;
+            const captureHeight = element.scrollHeight;
             const imgData = await htmlToImage.toJpeg(element, {
-                quality: 0.8, backgroundColor: '#000000', pixelRatio: 1.5
+                quality: 0.8,
+                backgroundColor: '#000000',
+                pixelRatio: 1.5,
+                width: captureWidth,
+                height: captureHeight,
+                style: {
+                    width: `${captureWidth}px`,
+                    height: `${captureHeight}px`
+                }
             });
 
             setDashboardImage(imgData);
@@ -4084,7 +4103,7 @@ export default function GDCCPage() {
                 currentUser={currentUser}
             />
 
-            <main ref={dashboardRef} className="p-4 min-h-screen">
+            <main className="p-4 min-h-screen">
 
                 {/* SELECTORS */}
                 <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 p-5 rounded-xl border border-dashed ${theme.selectorContainer}`}>
@@ -4127,7 +4146,10 @@ export default function GDCCPage() {
                 </div>
 
                 {/* DASHBOARD */}
-                <div className={`space-y-4 transition-all duration-500 ${selectedSubDomain && hasGenerated && !loadingStats ? 'opacity-100 filter-none' : 'opacity-40 grayscale blur-sm'}`}>
+                <div
+                    ref={dashboardRef}
+                    className={`space-y-4 transition-all duration-500 ${selectedSubDomain && hasGenerated && !loadingStats ? 'opacity-100 filter-none' : 'opacity-40 grayscale blur-sm'}`}
+                >
 
                     {/* STATS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
