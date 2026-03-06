@@ -3,14 +3,25 @@ import { X, Plus, Trash2, Edit2, Copy, FileText, LayoutTemplate, Check, MoreVert
 import Swal from 'sweetalert2';
 import { listTemplates, createTemplate, renameTemplate, deleteTemplate } from '@/app/utils/templateApi';
 
-export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditDomain, theme, userRole }) {
+export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole }) {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(false);
     const [renamingId, setRenamingId] = useState(null);
     const [newName, setNewName] = useState('');
 
+    const fetchTemplates = async () => {
+        setLoading(true);
+        const list = await listTemplates();
+        setTemplates(list);
+        setLoading(false);
+    };
+
     useEffect(() => {
-        if (isOpen) fetchTemplates();
+        if (!isOpen) return;
+        const timer = setTimeout(() => {
+            fetchTemplates();
+        }, 0);
+        return () => clearTimeout(timer);
     }, [isOpen]);
 
     // ESC key to close modal
@@ -29,13 +40,6 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
             document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen, onClose]);
-
-    const fetchTemplates = async () => {
-        setLoading(true);
-        const list = await listTemplates();
-        setTemplates(list);
-        setLoading(false);
-    };
 
     const handleCreateWrapper = async () => {
         const { value: formValues } = await Swal.fire({
@@ -207,21 +211,30 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                         {/* Edit Content Buttons */}
                                         <div className={`flex ${t.sectionHeader || 'bg-gray-900 border-gray-700'} rounded-lg p-1 border`}>
                                             <button
-                                                onClick={() => onEditSub(tmp.id, tmp.name)}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
-                                                title="Edit Sub-domain Report Structure"
-                                            >
-                                                <FileText className="w-3.5 h-3.5 text-orange-400" />
-                                                Sub Report
-                                            </button>
-                                            <div className={`w-px ${t.modalBorder} my-1`}></div>
-                                            <button
                                                 onClick={() => onEditDomain(tmp.id, tmp.name)}
                                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
                                                 title="Edit Domain Summary Report Structure"
                                             >
                                                 <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
                                                 Domain Report
+                                            </button>
+                                            <div className={`w-px ${t.modalBorder} my-1`}></div>
+                                            <button
+                                                onClick={() => onEditMiddle(tmp.id, tmp.name)}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
+                                                title="Edit Middle Report Header Structure"
+                                            >
+                                                <FileText className="w-3.5 h-3.5 text-blue-400" />
+                                                Middle Report
+                                            </button>
+                                            <div className={`w-px ${t.modalBorder} my-1`}></div>
+                                            <button
+                                                onClick={() => onEditSub(tmp.id, tmp.name)}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
+                                                title="Edit Sub-domain Report Structure"
+                                            >
+                                                <FileText className="w-3.5 h-3.5 text-orange-400" />
+                                                Sub Report
                                             </button>
                                         </div>
 

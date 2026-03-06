@@ -89,3 +89,28 @@ export const loadStaticTemplate = async (id = 'default') => {
         return null;
     }
 };
+
+export const saveMiddleTemplate = async (template, id = 'default') => {
+    try {
+        const response = await fetch(`/api/middle-template?id=${id}`, {
+            method: 'POST',
+            body: JSON.stringify({ template }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to save middle template", error);
+        return null;
+    }
+};
+
+export const loadMiddleTemplate = async (id = 'default') => {
+    try {
+        const response = await fetch(`/api/middle-template?id=${id}`);
+        const data = await response.json();
+        return data.template || '';
+    } catch (error) {
+        console.error("Failed to load middle template", error);
+        return null;
+    }
+};

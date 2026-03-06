@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
-import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, listTemplates } from '@/app/utils/templateApi';
+import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates } from '@/app/utils/templateApi';
 import ManageTemplateModal from './ManageTemplateModal';
 import AutoReportModal from './AutoReportModal';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
@@ -616,7 +616,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
 
 // 1. Report Modal Component
 const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName }) => {
-    // mode: 'report' | 'static-template'
+    // mode: 'report' | 'static-template' | 'middle-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
@@ -630,6 +630,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const editorRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
 
+    const isTemplateMode = mode === 'static-template' || mode === 'middle-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
     const filteredVariables = availableVariables.filter(v =>
         v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -719,7 +720,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const handleDownloadWord = async () => {
         if (!reportContentRef.current) return;
 
-        const filename = mode === 'static-template' ? `template.docx` : `report_${safeData.domain || 'report'}.doc`.replace('.doc', '.docx');
+        const filename = isTemplateMode ? `template.docx` : `report_${safeData.domain || 'report'}.doc`.replace('.doc', '.docx');
 
         const legacyHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
@@ -889,6 +890,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             <span>
                                 {mode === 'static-template'
                                     ? 'Domain Report'
+                                    : mode === 'middle-template'
+                                        ? 'Middle Report'
                                     : (isEditing
                                         ? 'Edit Report'
                                         : 'Preview Report'
@@ -1027,7 +1030,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 Cancel
                             </button>
                             <button onClick={handleSave} className={`px-4 py-2 ${t.buttonSuccess} text-xs font-bold rounded flex items-center gap-2`}>
-                                <Edit3 className="w-3 h-3" /> {mode === 'static-template' ? 'Save Template' : 'Save & Preview'}
+                                <Edit3 className="w-3 h-3" /> {isTemplateMode ? 'Save Template' : 'Save & Preview'}
                             </button>
                         </>
                     ) : (
@@ -2334,7 +2337,8 @@ export default function GDCCPage() {
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
     const [staticReportTemplate, setStaticReportTemplate] = useState(''); // Will be loaded from JSON file only
-    const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) or 'static-template'
+    const [middleReportTemplate, setMiddleReportTemplate] = useState('');
+    const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) | 'static-template' | 'middle-template'
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
     const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
@@ -3079,13 +3083,14 @@ export default function GDCCPage() {
             console.log('Creating Document Structure from staticReportTemplate.json...');
 
             // ALWAYS load from JSON file - no fallback
-            let domainTemplateContent, subReportTemplateContent;
+            let domainTemplateContent, middleReportTemplateContent, subReportTemplateContent;
             try {
                 const tid = templateId || 'default';
                 domainTemplateContent = await loadStaticTemplate(tid);
+                middleReportTemplateContent = await loadMiddleTemplate(tid);
                 subReportTemplateContent = await loadTemplate(tid);
 
-                if (!domainTemplateContent || !subReportTemplateContent) {
+                if (!domainTemplateContent || !subReportTemplateContent || middleReportTemplateContent === null) {
                     throw new Error('Template file is empty or invalid (ID: ' + tid + ')');
                 }
                 updateOverlay('Preparing Document...', 0, selectedHosts.length, 2, 'Loaded Report Templates');
@@ -3218,6 +3223,8 @@ export default function GDCCPage() {
                 zoneTopCountriesBytes: zoneStats.zoneWideTopCountriesBytes,
                 fwEvents: zoneStats.fwEvents
             };
+
+            const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
 
 
             // Add to combined HTML only if they don't have promoted subdomains, or if there's no selection (NO_SUBDOMAIN checked)
@@ -3358,6 +3365,11 @@ export default function GDCCPage() {
                     }
 
                     let reportHtml = processTemplate(templateContentToUse, dataToUse, new Date(), imgData);
+
+                    if (!isPromoted && middleReportTemplateContent) {
+                        const middleHtml = processTemplate(middleReportTemplateContent, dataToUse, new Date(), null);
+                        reportHtml = `${middleHtml}${reportHtml}`;
+                    }
 
                     const hostTotalTime = ((performance.now() - hostStartTime) / 1000).toFixed(2);
                     console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed in ${hostTotalTime}s`);
@@ -3703,6 +3715,9 @@ export default function GDCCPage() {
         loadStaticTemplate().then(tmpl => {
             if (tmpl) setStaticReportTemplate(tmpl);
         });
+        loadMiddleTemplate().then(tmpl => {
+            if (tmpl !== null) setMiddleReportTemplate(tmpl);
+        });
     }, []);
 
     // -- TEMPLATE MANAGEMENT STATE --
@@ -3719,6 +3734,12 @@ export default function GDCCPage() {
     const handleSaveStaticTemplate = async (newTemplate) => {
         setStaticReportTemplate(newTemplate);
         await saveStaticTemplate(newTemplate, templateToEditId);
+        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+    };
+
+    const handleSaveMiddleTemplate = async (newTemplate) => {
+        setMiddleReportTemplate(newTemplate);
+        await saveMiddleTemplate(newTemplate, templateToEditId);
         Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
     };
 
@@ -3740,6 +3761,15 @@ export default function GDCCPage() {
         const content = await loadStaticTemplate(id);
         if (content !== null) setStaticReportTemplate(content);
         setReportModalMode('static-template');
+        setIsReportModalOpen(true);
+    };
+
+    const onEditMiddle = async (id, name = 'Middle Report Template') => {
+        setTemplateToEditId(id);
+        setTemplateToEditName(name);
+        const content = await loadMiddleTemplate(id);
+        if (content !== null) setMiddleReportTemplate(content);
+        setReportModalMode('middle-template');
         setIsReportModalOpen(true);
     };
 
@@ -4011,8 +4041,8 @@ export default function GDCCPage() {
                     dnsRecords: dnsRecords || []
                 }}
                 dashboardImage={dashboardImage}
-                template={reportModalMode === 'static-template' ? staticReportTemplate : reportTemplate}
-                onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : handleSaveTemplate}
+                template={reportModalMode === 'static-template' ? staticReportTemplate : reportModalMode === 'middle-template' ? middleReportTemplate : reportTemplate}
+                onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : reportModalMode === 'middle-template' ? handleSaveMiddleTemplate : handleSaveTemplate}
                 onGenerate={captureAndGenerateReport} // NEW PROP
                 mode={reportModalMode}
                 theme={theme}
@@ -4023,6 +4053,7 @@ export default function GDCCPage() {
                 isOpen={isManageTemplateModalOpen}
                 onClose={() => setIsManageTemplateModalOpen(false)}
                 onEditSub={onEditSub}
+                onEditMiddle={onEditMiddle}
                 onEditDomain={onEditDomain}
                 theme={theme}
                 userRole={currentUser?.role}
