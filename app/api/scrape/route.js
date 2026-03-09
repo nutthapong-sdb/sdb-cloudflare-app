@@ -909,9 +909,40 @@ export async function POST(request) {
 
                 if (result.success) {
                     const schemas = Array.isArray(result?.result?.schemas) ? result.result.schemas : [];
+
+                    // Cloudflare dashboard export includes `requestBody: {}` for operations.
+                    // The API may omit this key entirely; we normalize for a consistent export.
+                    const normalizeSchema = (schema) => {
+                        if (!schema || typeof schema !== 'object') return schema;
+                        const paths = schema.paths;
+                        if (!paths || typeof paths !== 'object') return schema;
+
+                        Object.values(paths).forEach((pathItem) => {
+                            if (!pathItem || typeof pathItem !== 'object') return;
+                            Object.values(pathItem).forEach((op) => {
+                                if (!op || typeof op !== 'object') return;
+
+                                // Only normalize requestBody for learned operations.
+                                // Matches Cloudflare dashboard export closer.
+                                if (Object.prototype.hasOwnProperty.call(op, 'x-cf-parameter-schemas')) {
+                                    // Override string to exactly match CF dashboard export
+                                    op['x-cf-parameter-schemas'] = 'automatically learned schema';
+
+                                    // Add requestBody: {} if not present, because CF dashboard adds it
+                                    if (!Object.prototype.hasOwnProperty.call(op, 'requestBody')) {
+                                        op.requestBody = {};
+                                    }
+                                }
+                            });
+                        });
+
+                        return schema;
+                    };
+
+                    const normalized = schemas.map(normalizeSchema);
                     return NextResponse.json({
                         success: true,
-                        data: schemas,
+                        data: normalized,
                         timestamp: result?.result?.timestamp || null
                     });
                 }
