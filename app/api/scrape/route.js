@@ -893,7 +893,13 @@ export async function POST(request) {
             if (hostname) params.host = hostname;
 
             const feature = [];
-            if (includeLearnedParameters) feature.push('parameter_schemas');
+            if (includeLearnedParameters) {
+                // `parameter_schemas` = learned query/path params (enum values)
+                // `body_schema` = learned requestBody content (application/json schema)
+                // Both are required to match the Cloudflare Dashboard's full export format
+                feature.push('parameter_schemas');
+                feature.push('body_schema');
+            }
             if (includeRecommendedThresholds) feature.push('thresholds');
             if (feature.length === 1) params.feature = feature[0];
             else if (feature.length > 1) params.feature = feature.join(',');
@@ -922,16 +928,15 @@ export async function POST(request) {
                             Object.values(pathItem).forEach((op) => {
                                 if (!op || typeof op !== 'object') return;
 
-                                // Only normalize requestBody for learned operations.
-                                // Matches Cloudflare dashboard export closer.
+                                // 1. If it's a learned operation, ensure the labels and placeholder match CF exactly
                                 if (Object.prototype.hasOwnProperty.call(op, 'x-cf-parameter-schemas')) {
-                                    // Override string to exactly match CF dashboard export
                                     op['x-cf-parameter-schemas'] = 'automatically learned schema';
+                                }
 
-                                    // Add requestBody: {} if not present, because CF dashboard adds it
-                                    if (!Object.prototype.hasOwnProperty.call(op, 'requestBody')) {
-                                        op.requestBody = {};
-                                    }
+                                // 2. Cloudflare Dashboard export ALWAYS includes requestBody: {} for both
+                                //    learned and non-learned operations if they are present in the list.
+                                if (!Object.prototype.hasOwnProperty.call(op, 'requestBody')) {
+                                    op.requestBody = {};
                                 }
                             });
                         });
