@@ -1,6 +1,6 @@
 # Project Overview
 
-This is a Next.js application that provides a dashboard for interacting with the Cloudflare API. It allows users to view and manage their Cloudflare zones, DNS records, and view traffic analytics. The application features a user authentication and management system.
+This is a Next.js application that provides a dashboard for interacting with the Cloudflare API. It allows users to view and manage their Cloudflare zones, DNS records, and view traffic analytics. The application features a user authentication and management system. We are currently focusing on improving the accuracy of report generation, specifically ensuring all SSL/TLS and Security placeholders map correctly to real-time Cloudflare settings.
 
 The frontend is built with React and Tailwind CSS, and the backend is powered by Next.js API Routes and Server Actions. It uses `axios` to communicate with the Cloudflare API and `sqlite` for the user database.
 
@@ -10,7 +10,7 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 *   **Traffic Analytics:** Real-time visualization of traffic volume, top URLs, client IPs, and countries using Recharts.
 *   **Security Monitoring:** Track WAF events, blocked attacks, and HTTP status code distributions.
 *   **API Discovery:** Discover and manage API endpoints associated with your zones. Handles permissions gracefully (graceful degradation if feature is unavailable).
-*   **Batch Reporting:** Automatically generate comprehensive reports for multiple sub-domains. This feature captures dashboard snapshots and aggregates data into a single downloadable Word document using Template Variables (e.g., `@TOP_HOST_VAL@`). Includes a "Promote to Domain Template" toggle that allows printing a specific subdomain's data utilizing the comprehensive domain `staticReportTemplate.json` instead of a sub-report template.
+*   **Batch Reporting:** Automatically generate comprehensive reports for multiple sub-domains. This feature captures dashboard snapshots and aggregates data into a single downloadable Word document using Template Variables (e.g., `@TOP_HOST_VAL@`). Supports promotion of subdomains to domain templates and ensures high data fidelity for SSL/TLS and DDoS placeholders.
 *   **Dynamic Theming:** Centralized theme management supporting multiple themes (Dark, Pink Pastel, Corporate Blue). Theming applies globally to Sidebar, Modals, and Dashboard components via `app/utils/themes.js` and custom events.
 *   **Robust API Security:** Explicit input validation of tokens/UUIDs and path traversal protections across all report and template generation endpoints.
 
