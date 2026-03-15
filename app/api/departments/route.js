@@ -4,7 +4,7 @@ import { getGdccDb } from '@/lib/gdcc-db';
 export async function GET(request) {
     try {
         const url = new URL(request.url);
-        const zone_id = url.searchParams.get('zone_id');
+        const account_id = url.searchParams.get('account_id');
 
         const db = await getGdccDb();
         let query = `
@@ -14,9 +14,9 @@ export async function GET(request) {
         `;
         let params = [];
         
-        if (zone_id) {
-            query += ` WHERE d.zone_id = ? OR d.zone_id IS NULL`;
-            params.push(zone_id);
+        if (account_id) {
+            query += ` WHERE d.account_id = ? OR d.account_id IS NULL`;
+            params.push(account_id);
         }
 
         query += `
@@ -34,7 +34,7 @@ export async function GET(request) {
 
 export async function POST(request) {
     try {
-        const { name, zone_id } = await request.json();
+        const { name, account_id } = await request.json();
         
         if (!name || name.trim() === '') {
             return NextResponse.json({ error: 'Department name is required' }, { status: 400 });
@@ -42,18 +42,18 @@ export async function POST(request) {
 
         const db = await getGdccDb();
         
-        // Check for duplicates within the same zone
-        const existing = await db.get('SELECT id FROM gdcc_departments WHERE name = ? AND (zone_id = ? OR zone_id IS NULL)', [name.trim(), zone_id]);
+        // Check for duplicates within the same account
+        const existing = await db.get('SELECT id FROM gdcc_departments WHERE name = ? AND (account_id = ? OR account_id IS NULL)', [name.trim(), account_id]);
         if (existing) {
-            return NextResponse.json({ error: 'Department name already exists in this zone' }, { status: 409 });
+            return NextResponse.json({ error: 'Department name already exists in this account' }, { status: 409 });
         }
 
         const result = await db.run(
-            'INSERT INTO gdcc_departments (name, zone_id) VALUES (?, ?)',
-            [name.trim(), zone_id]
+            'INSERT INTO gdcc_departments (name, account_id) VALUES (?, ?)',
+            [name.trim(), account_id]
         );
         
-        return NextResponse.json({ id: result.lastID, name: name.trim(), zone_id }, { status: 201 });
+        return NextResponse.json({ id: result.lastID, name: name.trim(), account_id }, { status: 201 });
     } catch (error) {
         console.error('Error creating department:', error);
         return NextResponse.json({ error: 'Failed to create department' }, { status: 500 });
@@ -62,7 +62,7 @@ export async function POST(request) {
 
 export async function PUT(request) {
     try {
-        const { id, name, zone_id } = await request.json();
+        const { id, name, account_id } = await request.json();
         
         if (!id || !name || name.trim() === '') {
             return NextResponse.json({ error: 'Department ID and name are required' }, { status: 400 });
@@ -70,10 +70,10 @@ export async function PUT(request) {
 
         const db = await getGdccDb();
         
-        // Check for duplicates (excluding self) within the same zone
-        const existing = await db.get('SELECT id FROM gdcc_departments WHERE name = ? AND id != ? AND (zone_id = ? OR zone_id IS NULL)', [name.trim(), id, zone_id]);
+        // Check for duplicates (excluding self) within the same account
+        const existing = await db.get('SELECT id FROM gdcc_departments WHERE name = ? AND id != ? AND (account_id = ? OR account_id IS NULL)', [name.trim(), id, account_id]);
         if (existing) {
-            return NextResponse.json({ error: 'Department name already exists in this zone' }, { status: 409 });
+            return NextResponse.json({ error: 'Department name already exists in this account' }, { status: 409 });
         }
 
         await db.run(
