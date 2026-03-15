@@ -8,6 +8,7 @@ import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loa
 import ManageTemplateModal from './ManageTemplateModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
+import SearchableDropdown from './SearchableDropdown';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -1056,7 +1057,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 // Moved to '@/app/utils/themes'
 
 // Batch Report Modal Component
-const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZone }) => {
+const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, theme, selectedZone: initialZoneId, selectedAccount: initialAccountId, accounts = [], currentUser }) => {
     const [selected, setSelected] = useState(new Set());
     const [promotedHosts, setPromotedHosts] = useState(new Set());
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1067,15 +1068,47 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZo
     const [mode, setMode] = useState('standard'); // 'standard' or 'department'
     const [departments, setDepartments] = useState([]);
     const [selectedDeptIds, setSelectedDeptIds] = useState(new Set());
+    const [deptMemberHosts, setDeptMemberHosts] = useState([]);
+
+    // Internal selection states
+    const [selectedAccountId, setSelectedAccountId] = useState('');
+    const [zones, setZones] = useState([]);
+    const [loadingZones, setLoadingZones] = useState(false);
+    const [internalZoneId, setInternalZoneId] = useState('');
+    const [internalSubdomains, setInternalSubdomains] = useState([]);
+    const [loadingSubdomains, setLoadingSubdomains] = useState(false);
+
+    const callScrapeApi = async (action, bodyData = {}) => {
+        try {
+            const res = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action,
+                    apiToken: currentUser?.cloudflare_api_token,
+                    ...bodyData
+                })
+            });
+            return await res.json();
+        } catch (e) {
+            return { success: false, message: e.message };
+        }
+    };
 
     useEffect(() => {
         if (isOpen) {
-            // Reset selection states for fresh open or zone change
+            // Reset selection states for fresh open
             setSelected(new Set());
             setPromotedHosts(new Set());
             setSelectedDeptIds(new Set());
+            setDeptMemberHosts([]);
             setSearchTerm('');
             setMode('standard');
+
+            // Initialize from dashboard state
+            setSelectedAccountId(initialAccountId || '');
+            setInternalZoneId(initialZoneId || '');
+            setInternalSubdomains(dashboardHosts || []);
 
             listTemplates().then(list => {
                 setTemplates(list);
@@ -1083,39 +1116,117 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZo
                     setSelectedTemplateId('default'); // Fallback
                 }
             });
-            // Fetch departments for department mode, filtered by zone
-            const url = selectedZone ? `/api/departments?zone_id=${selectedZone}` : '/api/departments';
-            fetch(url).then(res => res.json()).then(data => {
-                if (data.departments) setDepartments(data.departments);
-            });
         }
-    }, [isOpen, selectedZone]);
+    }, [isOpen, initialZoneId, initialAccountId, dashboardHosts]);
+
+    // Fetch departments when account or zone changes
+    useEffect(() => {
+        if (isOpen && (selectedAccountId || internalZoneId)) {
+            const fetchDepts = async () => {
+                const url = selectedAccountId ? `/api/departments?account_id=${selectedAccountId}` : `/api/departments`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.departments) setDepartments(data.departments);
+            };
+            fetchDepts();
+        }
+    }, [isOpen, selectedAccountId, internalZoneId]);
+
+    // Handle Account Change -> Fetch Zones
+    useEffect(() => {
+        if (!isOpen || !selectedAccountId) return;
+        if (selectedAccountId === initialAccountId && zones.length > 0) return;
+
+        let isMounted = true;
+        const fetchZones = async () => {
+            setLoadingZones(true);
+            const result = await callScrapeApi('list-zones', { accountId: selectedAccountId });
+            if (isMounted) {
+                if (result.success && result.data) {
+                    setZones(result.data);
+                } else {
+                    setZones([]);
+                }
+                setLoadingZones(false);
+                if (selectedAccountId !== initialAccountId) {
+                    setInternalZoneId('');
+                    setInternalSubdomains([]);
+                    setSelected(new Set());
+                    setSelectedDeptIds(new Set());
+                    setDeptMemberHosts([]);
+                }
+            }
+        };
+        fetchZones();
+        return () => { isMounted = false; };
+    }, [selectedAccountId, isOpen, initialAccountId]);
+
+    // Handle Zone Change -> Fetch Subdomains
+    useEffect(() => {
+        if (!isOpen || !internalZoneId) return;
+        if (internalZoneId === initialZoneId && internalSubdomains.length > 0) return;
+
+        let isMounted = true;
+        const fetchDns = async () => {
+            setLoadingSubdomains(true);
+            const result = await callScrapeApi('get-dns-records', { zoneId: internalZoneId });
+            if (isMounted) {
+                if (result.success && result.data) {
+                    const hostSet = new Set(
+                        result.data
+                            .filter(r => ['A', 'AAAA', 'CNAME'].includes(r.type))
+                            .map(r => r.name)
+                            .filter(Boolean)
+                    );
+                    const zoneObj = zones.find(z => z.id === internalZoneId);
+                    if (zoneObj && zoneObj.name) hostSet.delete(zoneObj.name);
+
+                    setInternalSubdomains(Array.from(hostSet).filter(Boolean));
+                } else {
+                    setInternalSubdomains([]);
+                }
+                setLoadingSubdomains(false);
+                setSelected(new Set());
+                setSelectedDeptIds(new Set());
+                setDeptMemberHosts([]);
+            }
+        };
+        fetchDns();
+        return () => { isMounted = false; };
+    }, [internalZoneId, isOpen, zones, initialZoneId]);
+
+    // Use internal subdomains if available, otherwise dashboard hosts
+    const hosts = internalSubdomains.length > 0 ? internalSubdomains : dashboardHosts;
 
     // Handle department selection
     useEffect(() => {
         if (mode === 'department' && selectedDeptIds.size > 0) {
-            const allDeptHosts = new Set();
+            const allDeptHosts = [];
             const fetchPromises = Array.from(selectedDeptIds).map(deptId => 
                 fetch(`/api/department-domains?department_id=${deptId}`)
                     .then(res => res.json())
                     .then(data => {
                         if (data.domains) {
-                            data.domains.forEach(d => allDeptHosts.add(d.domain));
+                            data.domains.forEach(d => {
+                                if (!allDeptHosts.some(existing => existing.domain === d.domain && existing.zone_id === d.zone_id)) {
+                                    allDeptHosts.push({ domain: d.domain, zone_id: d.zone_id });
+                                }
+                            });
                         }
                     })
             );
 
             Promise.all(fetchPromises).then(() => {
+                setDeptMemberHosts(allDeptHosts);
                 const newSelected = new Set();
-                hosts.forEach(h => {
-                    if (allDeptHosts.has(h)) newSelected.add(h);
-                });
+                allDeptHosts.forEach(h => newSelected.add(h.domain));
                 setSelected(newSelected);
             });
         } else if (mode === 'department' && selectedDeptIds.size === 0) {
+            setDeptMemberHosts([]);
             setSelected(new Set());
         }
-    }, [selectedDeptIds, mode, hosts]);
+    }, [selectedDeptIds, mode]); // Ignore hosts dependency in department mode
 
     const toggleDept = (deptId) => {
         const newSet = new Set(selectedDeptIds);
@@ -1149,14 +1260,13 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZo
     // FILTER LOGIC & DEBUGGING
     const NO_SUBDOMAIN = '__NO_SUBDOMAIN__'; // Special identifier
 
-    const filteredHosts = hosts.filter(h => {
+    const filteredHosts = (mode === 'department' ? deptMemberHosts.map(dm => dm.domain) : hosts).filter(h => {
         const hStr = String(h || '');
-        const match = hStr.toLowerCase().includes(searchTerm.toLowerCase());
-        return match;
+        return hStr.toLowerCase().includes(searchTerm.toLowerCase());
     });
 
-    // Always prepend "No Subdomain" option at the beginning
-    const displayHosts = [NO_SUBDOMAIN, ...filteredHosts];
+    // Always prepend "No Subdomain" option at the beginning (except in department mode or if no zone selected)
+    const displayHosts = (mode === 'department' || !internalZoneId) ? filteredHosts : [NO_SUBDOMAIN, ...filteredHosts];
 
     // console.log('🔍 Modal Render:', { term: searchTerm, total: hosts.length, visible: filteredHosts.length });
 
@@ -1230,7 +1340,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZo
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] shadow-2xl`}>
+            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl`}>
                 {/* Header */}
                 <div className={`p-4 border-b ${t.modalBorder} ${t.modalHeaderBg} flex justify-between items-center`}>
                     <h3 className={`text-lg font-bold ${t.modalTitle} flex items-center gap-2`}>
@@ -1243,184 +1353,215 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZo
                 </div>
 
                 {/* Body */}
-                <div className="p-4 overflow-y-auto flex-1">
-                    {/* Selection Mode Selector */}
-                    <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
-                        <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Selection Mode</label>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setMode('standard')}
-                                className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'standard' ? t.buttonPrimary : t.button}`}
-                            >
-                                Standard
-                            </button>
-                            <button
-                                onClick={() => setMode('department')}
-                                className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'department' ? t.buttonPrimary : t.button}`}
-                            >
-                                Department
-                            </button>
-                        </div>
-                    </div>
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                    {/* Left Column (40%) */}
+                    <div className={`w-full md:w-[40%] p-6 overflow-y-auto border-r ${t.modalBorder} space-y-6`}>
+                        {/* Account & Zone Selectors */}
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} grid grid-cols-1 gap-4 bg-gray-800/20`}>
+                            <SearchableDropdown
+                                theme={theme}
+                                icon={<Key className="w-3.5 h-3.5 text-blue-400" />}
+                                label="Cloudflare Account"
+                                placeholder="Choose an account..."
+                                options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
+                                value={selectedAccountId}
+                                onChange={setSelectedAccountId}
+                            />
 
-                    {/* Department Selector */}
-                    {mode === 'department' && (
-                        <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} animate-fade-in-up`}>
-                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide flex items-center gap-2`}>
-                                <Users className="w-3.5 h-3.5" /> Select Departments
-                            </label>
-                            <div className={`max-h-40 overflow-y-auto space-y-1 p-2 bg-black/20 rounded border ${t.modalBorder}`}>
-                                {departments.length === 0 ? (
-                                    <p className="text-xs text-gray-500 italic text-center py-2">No departments found for this zone.</p>
-                                ) : (
-                                    departments.map(d => (
-                                        <label key={d.id} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer transition-colors group">
-                                            <input 
-                                                type="checkbox"
-                                                checked={selectedDeptIds.has(d.id)}
-                                                onChange={() => toggleDept(d.id)}
-                                                className="hidden"
-                                            />
-                                            <div 
-                                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selectedDeptIds.has(d.id) ? t.dropdown.active : 'border-gray-600'}`}
-                                            >
-                                                {selectedDeptIds.has(d.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                            </div>
-                                            <span className={`text-xs ${selectedDeptIds.has(d.id) ? 'text-white' : 'text-gray-400'}`}>{d.name}</span>
-                                        </label>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Template Selector */}
-                    <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
-                        <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Report Template</label>
-                        <select
-                            value={selectedTemplateId}
-                            onChange={e => setSelectedTemplateId(e.target.value)}
-                            className={`${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none focus:border-blue-500 transition-colors appearance-none`}
-                        >
-                            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Time Range Selector */}
-                    <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
-                        <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Time Range</label>
-                        <div className="flex gap-4">
-                            <div className="flex items-center gap-2">
-                                <span className={`text-xs ${t.subText}`}>Start:</span>
-                                <input
-                                    type="date"
-                                    value={batchStartDate}
-                                    max={new Date().toISOString().split('T')[0]}
-                                    onChange={(e) => setBatchStartDate(e.target.value)}
-                                    className={`px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
-                                />
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className={`text-xs ${t.subText}`}>End:</span>
-                                <input
-                                    type="date"
-                                    value={batchEndDate}
-                                    max={new Date().toISOString().split('T')[0]}
-                                    onChange={(e) => setBatchEndDate(e.target.value)}
-                                    className={`px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Live Search Input (New) */}
-                    <div className="mb-3">
-                        <div className="relative">
-                            <Search className={`absolute left-3 top-2.5 w-4 h-4 ${t.subText}`} />
-                            <input
-                                type="text"
-                                placeholder="Filter sub-domains..."
-                                value={searchTerm}
-                                onChange={handleSearchChange}
-                                className={`w-full ${t.dropdown.bg} border ${t.dropdown.border} ${t.dropdown.inputText} rounded-lg pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-${t.dropdown.placeholder ? t.dropdown.placeholder.replace('text-', '') : 'gray-600'}`}
+                            <SearchableDropdown
+                                theme={theme}
+                                icon={<Server className="w-3.5 h-3.5 text-green-400" />}
+                                label="Zone (Domain)"
+                                placeholder={!selectedAccountId ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."}
+                                options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))}
+                                value={internalZoneId}
+                                onChange={setInternalZoneId}
+                                loading={loadingZones}
                             />
                         </div>
+
+                        {/* Selection Mode Selector */}
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Selection Mode</label>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setMode('standard')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'standard' ? t.buttonPrimary : t.button}`}
+                                >
+                                    Standard
+                                </button>
+                                <button
+                                    onClick={() => setMode('department')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'department' ? t.buttonPrimary : t.button}`}
+                                >
+                                    Department
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Department Selector */}
+                        {mode === 'department' && (
+                            <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} animate-fade-in-up`}>
+                                <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide flex items-center gap-2`}>
+                                    <Users className="w-3.5 h-3.5" /> Select Departments
+                                </label>
+                                <div className={`max-h-40 overflow-y-auto space-y-1 p-2 bg-black/20 rounded border ${t.modalBorder}`}>
+                                    {departments.length === 0 ? (
+                                        <p className="text-xs text-gray-500 italic text-center py-2">No departments found for this zone.</p>
+                                    ) : (
+                                        departments.map(d => (
+                                            <label key={d.id} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer transition-colors group">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={selectedDeptIds.has(d.id)}
+                                                    onChange={() => toggleDept(d.id)}
+                                                    className="hidden"
+                                                />
+                                                <div 
+                                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selectedDeptIds.has(d.id) ? t.dropdown.active : 'border-gray-600'}`}
+                                                >
+                                                    {selectedDeptIds.has(d.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                </div>
+                                                <span className={`text-xs ${selectedDeptIds.has(d.id) ? 'text-white' : 'text-gray-400'}`}>{d.name}</span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Template Selector */}
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Report Template</label>
+                            <select
+                                value={selectedTemplateId}
+                                onChange={e => setSelectedTemplateId(e.target.value)}
+                                className={`${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none focus:border-blue-500 transition-colors appearance-none`}
+                            >
+                                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Time Range Selector */}
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Time Range</label>
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-xs ${t.subText} w-12`}>Start:</span>
+                                    <input
+                                        type="date"
+                                        value={batchStartDate}
+                                        max={new Date().toISOString().split('T')[0]}
+                                        onChange={(e) => setBatchStartDate(e.target.value)}
+                                        className={`flex-1 px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-xs ${t.subText} w-12`}>End:</span>
+                                    <input
+                                        type="date"
+                                        value={batchEndDate}
+                                        max={new Date().toISOString().split('T')[0]}
+                                        onChange={(e) => setBatchEndDate(e.target.value)}
+                                        className={`flex-1 px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="flex items-center justify-between mb-4">
-                        <span className={`${t.subText} text-sm`}>Select Sub-domains to include:</span>
-                        <button
-                            onClick={() => mode === 'standard' && toggleAll()}
-                            className={`text-xs ${t.iconAccent || 'text-blue-400'} ${mode === 'department' ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 font-bold transition-colors uppercase tracking-wider'}`}
-                        >
-                            {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect All' : 'Select All'}
-                        </button>
+                    {/* Right Column (60%) */}
+                    <div className="w-full md:w-[60%] p-6 overflow-hidden flex flex-col">
+                        {/* Live Search Input (New) */}
+                        <div className="mb-4">
+                            <div className="relative">
+                                <Search className={`absolute left-3 top-2.5 w-4 h-4 ${t.subText}`} />
+                                <input
+                                    type="text"
+                                    placeholder="Filter sub-domains..."
+                                    value={searchTerm}
+                                    onChange={handleSearchChange}
+                                    className={`w-full ${t.dropdown.bg} border ${t.dropdown.border} ${t.dropdown.inputText} rounded-lg pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-${t.dropdown.placeholder ? t.dropdown.placeholder.replace('text-', '') : 'gray-600'}`}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mb-4">
+                            <span className={`${t.subText} text-sm font-bold uppercase tracking-wider`}>Sub-domains selection:</span>
+                            <button
+                                onClick={() => mode === 'standard' && toggleAll()}
+                                className={`text-xs ${t.iconAccent || 'text-blue-400'} ${mode === 'department' ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 font-bold transition-colors uppercase tracking-wider'}`}
+                            >
+                                {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect All' : 'Select All'}
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                            {displayHosts.length === 0 ? (
+                                <div className={`text-center ${t.subText || 'text-gray-500'} py-12 text-sm italic`}>
+                                    No sub-domains available.
+                                </div>
+                            ) : (
+                                displayHosts.map(host => {
+                                    const isNoSubdomain = host === NO_SUBDOMAIN;
+                                    const displayName = isNoSubdomain ? 'No Subdomain (Full Domain Report)' : host;
+
+                                    // Determine styles based on theme
+                                    const isLight = t.id === 'pastel';
+
+                                    // Yellow style for No Subdomain
+                                    const yellowBg = isLight ? 'bg-yellow-50 hover:bg-yellow-100' : 'bg-yellow-900/20 hover:bg-yellow-900/30';
+                                    const yellowBorder = isLight ? 'border-yellow-200 hover:border-yellow-300' : 'border-yellow-700/50 hover:border-yellow-600';
+                                    const yellowText = isLight ? 'text-yellow-700 font-bold' : 'text-yellow-400';
+                                    const yellowCheckBg = isLight ? 'bg-yellow-500 border-yellow-500' : 'bg-yellow-600 border-yellow-600';
+                                    const yellowCheckBorder = isLight ? 'border-yellow-300 group-hover:border-yellow-400' : 'border-yellow-700 group-hover:border-yellow-600';
+
+                                    // Regular host style
+                                    const regularBg = t.card || (isLight ? 'bg-white' : 'bg-gray-800/50');
+                                    const regularBorder = t.dropdown?.border || (isLight ? 'border-pink-200' : 'border-transparent');
+                                    const regularSubText = t.subText;
+                                    const regularCheckBg = t.dropdown?.active || 'bg-blue-600';
+                                    const regularCheckBorder = t.dropdown?.border || 'border-gray-600';
+
+                                    return (
+                                        <div key={host} className={`flex items-center justify-between p-3 rounded-lg transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
+                                            <label className={`flex flex-1 items-center gap-3 ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
+                                                    {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selected.has(host)}
+                                                    disabled={mode === 'department'}
+                                                    onChange={() => mode === 'standard' && toggleOne(host)}
+                                                    className="hidden"
+                                                />
+                                                <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
+                                            </label>
+
+                                            {/* Toggle for Promoting to Domain */}
+                                            {!isNoSubdomain && selected.has(host) && (
+                                                <div className={`flex items-center gap-2 ${mode === 'department' ? 'opacity-50' : ''}`} onClick={(e) => e.stopPropagation()}>
+                                                    <label className={`flex items-center ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'} relative`} title="Use staticReportTemplate.json for this subdomain instead of the sub-report template">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only peer"
+                                                            checked={promotedHosts.has(host)}
+                                                            disabled={mode === 'department'}
+                                                            onChange={(e) => mode === 'standard' && togglePromoteOne(e, host)}
+                                                        />
+                                                        <div className={`w-9 h-5 rounded-full peer ${promotedHosts.has(host) ? 'bg-indigo-600' : 'bg-gray-600'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 transition-colors`}></div>
+                                                        <div className={`absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${promotedHosts.has(host) ? 'translate-x-full' : ''}`}></div>
+                                                    </label>
+                                                    <span className={`text-xs ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Use Domain Template</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
-                    {displayHosts.length === 0 ? (
-                        <div className={`text-center ${t.subText || 'text-gray-500'} py-8 text-sm italic`}>
-                            No sub-domains available.
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {displayHosts.map(host => {
-                                const isNoSubdomain = host === NO_SUBDOMAIN;
-                                const displayName = isNoSubdomain ? 'No Subdomain' : host;
-
-                                // Determine styles based on theme
-                                const isLight = t.id === 'pastel';
-
-                                // Yellow style for No Subdomain
-                                const yellowBg = isLight ? 'bg-yellow-50 hover:bg-yellow-100' : 'bg-yellow-900/20 hover:bg-yellow-900/30';
-                                const yellowBorder = isLight ? 'border-yellow-200 hover:border-yellow-300' : 'border-yellow-700/50 hover:border-yellow-600';
-                                const yellowText = isLight ? 'text-yellow-700 font-bold' : 'text-yellow-400';
-                                const yellowCheckBg = isLight ? 'bg-yellow-500 border-yellow-500' : 'bg-yellow-600 border-yellow-600';
-                                const yellowCheckBorder = isLight ? 'border-yellow-300 group-hover:border-yellow-400' : 'border-yellow-700 group-hover:border-yellow-600';
-
-                                // Regular host style
-                                const regularBg = t.card || (isLight ? 'bg-white' : 'bg-gray-800/50');
-                                const regularBorder = t.dropdown?.border || (isLight ? 'border-pink-200' : 'border-transparent');
-                                const regularSubText = t.subText;
-                                const regularCheckBg = t.dropdown?.active || 'bg-blue-600';
-                                const regularCheckBorder = t.dropdown?.border || 'border-gray-600';
-
-                                return (
-                                    <div key={host} className={`flex items-center justify-between p-3 rounded-lg transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
-                                        <label className={`flex flex-1 items-center gap-3 ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
-                                                {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                            </div>
-                                            <input
-                                                type="checkbox"
-                                                checked={selected.has(host)}
-                                                disabled={mode === 'department'}
-                                                onChange={() => mode === 'standard' && toggleOne(host)}
-                                                className="hidden"
-                                            />
-                                            <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
-                                        </label>
-
-                                        {/* Toggle for Promoting to Domain */}
-                                        {!isNoSubdomain && selected.has(host) && (
-                                            <div className={`flex items-center gap-2 ${mode === 'department' ? 'opacity-50' : ''}`} onClick={(e) => e.stopPropagation()}>
-                                                <label className={`flex items-center ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'} relative`} title="Use staticReportTemplate.json for this subdomain instead of the sub-report template">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={promotedHosts.has(host)}
-                                                        disabled={mode === 'department'}
-                                                        onChange={(e) => mode === 'standard' && togglePromoteOne(e, host)}
-                                                    />
-                                                    <div className={`w-9 h-5 rounded-full peer ${promotedHosts.has(host) ? 'bg-indigo-600' : 'bg-gray-600'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 transition-colors`}></div>
-                                                    <div className={`absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${promotedHosts.has(host) ? 'translate-x-full' : ''}`}></div>
-                                                </label>
-                                                <span className={`text-xs ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Use Domain Template</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
                 </div>
 
                 {/* Footer */}
@@ -1435,17 +1576,31 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZo
                         <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
                         <button
                             onClick={() => {
-                                // If NO_SUBDOMAIN is selected, send empty array
-                                // Otherwise, filter out NO_SUBDOMAIN from the selection
-                                const hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
+                                if (selected.size === 0) {
+                                    Swal.fire('Error', 'Please select at least one sub-domain.', 'error');
+                                    return;
+                                }
+                                
+                                let hostsToGenerate;
+                                if (mode === 'department') {
+                                    // Map selected domain names to objects with their zone IDs
+                                    hostsToGenerate = Array.from(selected).map(hostName => {
+                                        const mapping = deptMemberHosts.find(dm => dm.domain === hostName);
+                                        return { name: hostName, zoneId: mapping ? mapping.zone_id : internalZoneId };
+                                    });
+                                } else {
+                                    // Standard mode: If NO_SUBDOMAIN is selected, send empty array
+                                    hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
+                                }
+
                                 const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
                         >
                             <FileText className="w-3 h-3" />
-                            {selected.has(NO_SUBDOMAIN) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
+                            {(mode !== 'department' && selected.has(NO_SUBDOMAIN)) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
                         </button>
                     </div>
                 </div>
@@ -2208,166 +2363,6 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
 
 
 
-function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon, theme }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [focusedIndex, setFocusedIndex] = useState(-1);
-    const dropdownRef = useRef(null);
-    const listRef = useRef(null);
-
-    // Default theme fallback
-    const t = theme ? theme.dropdown : {
-        bg: 'bg-gray-900',
-        border: 'border-gray-700',
-        menuBg: 'bg-gray-800',
-        menuBorder: 'border-gray-700',
-        hover: 'hover:bg-gray-700',
-        text: 'text-gray-300',
-        active: 'bg-blue-600 text-white',
-        label: 'text-gray-400',
-        placeholder: 'text-gray-500',
-        inputText: 'text-white',
-        focused: 'bg-gray-700 text-white' // Helper for keyboard focus
-    };
-
-    const filteredOptions = options.filter(option =>
-        option.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (option.subtitle && option.subtitle.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-
-    const selectedOption = options.find(opt => opt.value === value);
-
-    const handleSelect = (optionValue) => {
-        onChange(optionValue);
-        setIsOpen(false);
-        setSearchTerm('');
-        setFocusedIndex(-1);
-    };
-
-    // Reset focus when options change or open
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setFocusedIndex(-1);
-    }, [isOpen, searchTerm]);
-
-    const handleKeyDown = (e) => {
-        if (!isOpen) {
-            if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === ' ') {
-                e.preventDefault();
-                setIsOpen(true);
-            }
-            return;
-        }
-
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                setFocusedIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
-                // Scroll logic could go here
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                setFocusedIndex(prev => (prev > 0 ? prev - 1 : prev));
-                break;
-            case 'Enter':
-                e.preventDefault();
-                if (focusedIndex >= 0 && filteredOptions[focusedIndex]) {
-                    handleSelect(filteredOptions[focusedIndex].value);
-                } else if (filteredOptions.length === 1) {
-                    // Auto select single result if enter pressed? Optional but nice.
-                    handleSelect(filteredOptions[0].value);
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                setIsOpen(false);
-                break;
-            case 'Tab':
-                setIsOpen(false);
-                break;
-        }
-    };
-
-    // Scroll focused item into view
-    useEffect(() => {
-        if (isOpen && focusedIndex >= 0 && listRef.current) {
-            const focusedItem = listRef.current.children[focusedIndex];
-            if (focusedItem) {
-                focusedItem.scrollIntoView({ block: 'nearest' });
-            }
-        }
-    }, [focusedIndex, isOpen]);
-
-    return (
-        <div className="space-y-2 relative" ref={dropdownRef}>
-            <label className={`${t.label} text-xs font-semibold uppercase tracking-wider flex items-center gap-2 mb-1`}>
-                {icon}
-                {label}
-            </label>
-
-            <div className="relative" onKeyDown={handleKeyDown}>
-                <div
-                    onClick={() => setIsOpen(!isOpen)}
-                    className={`
-             w-full px-4 py-2.5 rounded-lg cursor-pointer transition-all
-             flex items-center justify-between
-             ${t.bg} border ${t.border}
-             ${isOpen ? 'ring-2 ring-blue-500/50 border-blue-500' : 'hover:opacity-80'}
-          `}
-                    tabIndex={0} // Make accessible/focusable
-                >
-                    {isOpen ? (
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onBlur={() => setTimeout(() => setIsOpen(false), 200)}
-                            placeholder="Search..."
-                            className={`w-full bg-transparent outline-none text-sm ${t.inputText} placeholder-gray-500`}
-                            autoFocus
-                        />
-                    ) : (
-                        <span className={`text-sm ${selectedOption ? t.inputText : t.placeholder}`}>
-                            {selectedOption ? selectedOption.label : placeholder}
-                        </span>
-                    )}
-                    <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${t.placeholder}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                </div>
-
-                {isOpen && (
-                    <div ref={listRef} className={`absolute z-[100] w-full mt-1 ${t.menuBg} border ${t.menuBorder} rounded-lg shadow-xl max-h-60 overflow-y-auto`}>
-                        {loading ? (
-                            <div className="p-3 text-center text-xs text-gray-400">Loading...</div>
-                        ) : filteredOptions.length === 0 ? (
-                            <div className="p-3 text-center text-xs text-gray-400">No results found</div>
-                        ) : (
-                            filteredOptions.map((option, index) => {
-                                const isFocused = index === focusedIndex;
-                                return (
-                                    <div
-                                        key={option.value}
-                                        onMouseDown={() => handleSelect(option.value)}
-                                        onMouseEnter={() => setFocusedIndex(index)} // Mouse hover updates focus too
-                                        className={`
-                    px-4 py-2 cursor-pointer transition-colors text-sm
-                    ${value === option.value ? t.active : isFocused ? (t.focused || 'bg-gray-700 text-white') : `${t.hover} ${t.text}`}
-                  `}
-                                    >
-                                        <div className="font-medium">{option.label}</div>
-                                        {option.subtitle && <div className="text-xs opacity-60">{option.subtitle}</div>}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
 const Card = ({ title, children, className = '', theme }) => {
     // Default to dark theme styles if theme prop isn't provided (backward compatibility)
     const cardClass = theme ? theme.card : 'bg-gray-900 border-gray-800';
@@ -2574,6 +2569,10 @@ export default function GDCCPage() {
     };
 
     const fetchAndApplyTrafficData = async (subdomain, zoneId, p_startDate, p_endDate) => {
+        if (!zoneId) {
+            console.error('❌ Missing zoneId in fetchAndApplyTrafficData');
+            return null;
+        }
         setLoadingStats(true); // Start manual generation spinner
         const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
         console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (${p_startDate} to ${p_endDate})`);
@@ -3082,10 +3081,38 @@ export default function GDCCPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = []) => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null) => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
+        const zoneDataCache = new Map();
+        const getZoneData = async (zId) => {
+            if (!zId) return { dns: [], settings: {} };
+            if (zoneDataCache.has(zId)) return zoneDataCache.get(zId);
+            try {
+                const [dnsRes, settingsRes] = await Promise.all([
+                    callAPI('get-dns-records', { zoneId: zId }),
+                    callAPI('get-zone-settings', { zoneId: zId })
+                ]);
+                const data = {
+                    dns: dnsRes?.data || [],
+                    settings: settingsRes?.data || {}
+                };
+                zoneDataCache.set(zId, data);
+                return data;
+            } catch (err) {
+                console.error(`Error fetching data for zone ${zId}:`, err);
+                return { dns: [], settings: {} };
+            }
+        };
+
+        let defaultZoneId = zoneId || selectedZone;
+        if (!defaultZoneId && Array.isArray(selectedHosts) && selectedHosts.length > 0) {
+            const firstHost = selectedHosts[0];
+            if (typeof firstHost === 'object' && firstHost.zoneId) {
+                defaultZoneId = firstHost.zoneId;
+            }
+        }
         let processedCount = 0;
         let failedHosts = [];
         let currentStep = 'Initializing...';
@@ -3219,135 +3246,129 @@ export default function GDCCPage() {
                 throw new Error(`Template Load Failed: ${errorMsg}`);
             }
 
-            // Prepare basic data for Domain Report using current state/props + zoneSettings if available
-            updateOverlay('Preparing Document...', 0, selectedHosts.length, 5, 'Fetching zone configurations...');
+            // Generate Cover Page if we have a defaultZoneId
+            if (defaultZoneId) {
+                // Prepare basic data for Domain Report using current state/props + zoneSettings if available
+                updateOverlay('Preparing Document...', 0, selectedHosts.length, 5, 'Fetching zone configurations...');
 
-            // --- PRE-STEP: ENSURE DATA IS LOADED ---
-            // Ensure Zone Data is loaded (DNS & Settings) for both Domain Report (Cover) and Batch Reports
-            let localDnsRecords = dnsRecords;
-            let localZoneSettings = zoneSettings;
+                // --- PRE-STEP: ENSURE DATA IS LOADED ---
+                // Ensure Zone Data is loaded (DNS & Settings) for both Domain Report (Cover) and Batch Reports
+                const defaultZoneData = await getZoneData(defaultZoneId);
+                const localDnsRecords = defaultZoneData.dns;
+                const localZoneSettings = defaultZoneData.settings;
 
-            try {
-                if (!localDnsRecords || localDnsRecords.length === 0) {
-                    console.log('⚠️ DNS Records missing in state, fetching for report...');
-                    const dnsRes = await callAPI('get-dns-records', { zoneId: selectedZone });
-                    if (dnsRes && dnsRes.data) {
-                        localDnsRecords = dnsRes.data;
-                    }
+                // Use verified LOCAL data
+                // Fetch Zone-Wide Stats FIRST (Fix: stats is not defined)
+                updateOverlay('Preparing Document...', 0, selectedHosts.length, 8, 'Fetching Zone-wide Statistics...');
+                const zoneStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', defaultZoneId, batchStartDate, batchEndDate) || {
+                    zoneWideRequests: 0,
+                    zoneWideCacheRequests: 0,
+                    zoneWideDataTransfer: 0,
+                    zoneWideCacheDataTransfer: 0,
+                    zoneWideTopCountriesReq: [],
+                    zoneWideTopCountriesBytes: [],
+                    fwEvents: { total: 0, managed: 0, custom: 0, bic: 0, access: 0 }
+                };
+
+                const domainReportData = {
+                    domain: zones.find(z => z.id === defaultZoneId)?.name,
+                    totalRequests: totalRequests,
+                    blockedEvents: blockedEvents,
+                    logEvents: logEvents,
+                    avgTime: avgResponseTime,
+                    topUrls: topUrls,
+                    topIps: topIps,
+                    topCountries: topCountries,
+                    topUserAgents: topUserAgents,
+                    peakTime: peakTraffic.time,
+                    peakCount: peakTraffic.count,
+                    peakAttack: peakAttack,
+                    peakHttpStatus: peakHttpStatus,
+                    topRules: topRules,
+                    topAttackers: topAttackers,
+                    topHosts: topHosts,
+                    topCustomRules: customRulesList,
+                    topManagedRules: managedRulesList,
+                    topFirewallSources: topFirewallSources,
+                    zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
+                    accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
+                    startDate: batchStartDate,
+                    endDate: batchEndDate,
+                    dnsRecords: localDnsRecords,
+                    // Add zone settings (using localZoneSettings)
+                    botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
+                    blockAiBots: localZoneSettings?.botManagement?.blockAiBots || 'unknown',
+                    definitelyAutomated: localZoneSettings?.botManagement?.definitelyAutomated || 'unknown',
+                    likelyAutomated: localZoneSettings?.botManagement?.likelyAutomated || 'unknown',
+                    verifiedBots: localZoneSettings?.botManagement?.verifiedBots || 'unknown',
+                    // SSL/TLS Settings
+                    sslMode: localZoneSettings?.sslMode || 'unknown',
+                    minTlsVersion: localZoneSettings?.minTlsVersion || 'unknown',
+                    tls13: (localZoneSettings?.tls13 === 'on' || localZoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
+                    // DNS
+                    dnsRecordsStatus: localZoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
+                    // Additional Security
+                    leakedCredentials: localZoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
+                    browserIntegrityCheck: localZoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
+                    hotlinkProtection: localZoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
+                    zoneLockdownRules: localZoneSettings?.zoneLockdownRules || '0',
+                    // DDoS Protection
+                    ddosProtection: localZoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
+                    httpDdosProtection: 'Always On',
+                    sslTlsDdosProtection: 'Always On',
+                    networkDdosProtection: 'Always On',
+                    // WAF Managed Rules
+                    cloudflareManaged: localZoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
+                    owaspCore: localZoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
+                    exposedCredsRuleset: localZoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
+                    ddosL7Ruleset: localZoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
+                    managedRulesCount: localZoneSettings?.wafManagedRules?.managedRulesCount || '0',
+                    rulesetActions: localZoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
+                    // IP Access Rules
+                    ipAccessRules: localZoneSettings?.ipAccessRules || '0',
+                    // Custom Rules & Rate Limiting (New)
+                    customRules: localZoneSettings?.customRules,
+                    rateLimits: localZoneSettings?.rateLimits,
+
+                    // --- New Traffic & Cache Stats (Always Zone-Wide) ---
+                    zoneTotalRequests: zoneStats.zoneWideRequests.toLocaleString(),
+                    zoneCacheHitRequests: zoneStats.zoneWideCacheRequests.toLocaleString(),
+                    zoneCacheHitRequestsRatio: zoneStats.zoneWideRequests > 0 ? ((zoneStats.zoneWideCacheRequests / zoneStats.zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
+                    zoneTotalDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                    zoneCacheHitDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                    zoneCacheHitDataTransferRatio: zoneStats.zoneWideDataTransfer > 0 ? ((zoneStats.zoneWideCacheDataTransfer / zoneStats.zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
+                    zoneTopCountriesReq: zoneStats.zoneWideTopCountriesReq,
+                    zoneTopCountriesBytes: zoneStats.zoneWideTopCountriesBytes,
+                    fwEvents: zoneStats.fwEvents
+                };
+
+                const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
+
+
+                // Add to combined HTML only if they don't have promoted subdomains, or if there's no selection (NO_SUBDOMAIN checked)
+                let shouldGenerateCover = true;
+                if (selectedHosts.length > 0 && promotedHosts.length > 0) {
+                    shouldGenerateCover = false;
                 }
 
-                if (!localZoneSettings || !localZoneSettings.ipAccessRules || !localZoneSettings.customRules) {
-                    console.log('⚠️ Zone Settings missing/incomplete in state, fetching for report...');
-                    const settingsRes = await callAPI('get-zone-settings', { zoneId: selectedZone });
-                    if (settingsRes && settingsRes.data) {
-                        localZoneSettings = settingsRes.data;
-                    }
+                if (shouldGenerateCover) {
+                    combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
                 }
-            } catch (fetchErr) {
-                console.error('Error fetching report prerequisites:', fetchErr);
-            }
-
-            // Use verified LOCAL data
-            // Fetch Zone-Wide Stats FIRST (Fix: stats is not defined)
-            updateOverlay('Preparing Document...', 0, selectedHosts.length, 8, 'Fetching Zone-wide Statistics...');
-            const zoneStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', selectedZone, batchStartDate, batchEndDate) || {
-                zoneWideRequests: 0,
-                zoneWideCacheRequests: 0,
-                zoneWideDataTransfer: 0,
-                zoneWideCacheDataTransfer: 0,
-                zoneWideTopCountriesReq: [],
-                zoneWideTopCountriesBytes: [],
-                fwEvents: { total: 0, managed: 0, custom: 0, bic: 0, access: 0 }
-            };
-
-            const domainReportData = {
-                domain: zones.find(z => z.id === selectedZone)?.name,
-                totalRequests: totalRequests,
-                blockedEvents: blockedEvents,
-                logEvents: logEvents,
-                avgTime: avgResponseTime,
-                topUrls: topUrls,
-                topIps: topIps,
-                topCountries: topCountries,
-                topUserAgents: topUserAgents,
-                peakTime: peakTraffic.time,
-                peakCount: peakTraffic.count,
-                peakAttack: peakAttack,
-                peakHttpStatus: peakHttpStatus,
-                topRules: topRules,
-                topAttackers: topAttackers,
-                topHosts: topHosts,
-                topCustomRules: customRulesList,
-                topManagedRules: managedRulesList,
-                topFirewallSources: topFirewallSources,
-                zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
-                accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
-                startDate: batchStartDate,
-                endDate: batchEndDate,
-                dnsRecords: localDnsRecords,
-                // Add zone settings (using localZoneSettings)
-                botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
-                blockAiBots: localZoneSettings?.botManagement?.blockAiBots || 'unknown',
-                definitelyAutomated: localZoneSettings?.botManagement?.definitelyAutomated || 'unknown',
-                likelyAutomated: localZoneSettings?.botManagement?.likelyAutomated || 'unknown',
-                verifiedBots: localZoneSettings?.botManagement?.verifiedBots || 'unknown',
-                // SSL/TLS Settings
-                sslMode: localZoneSettings?.sslMode || 'unknown',
-                minTlsVersion: localZoneSettings?.minTlsVersion || 'unknown',
-                tls13: (localZoneSettings?.tls13 === 'on' || localZoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
-                // DNS
-                dnsRecordsStatus: localZoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
-                // Additional Security
-                leakedCredentials: localZoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
-                browserIntegrityCheck: localZoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
-                hotlinkProtection: localZoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
-                zoneLockdownRules: localZoneSettings?.zoneLockdownRules || '0',
-                // DDoS Protection
-                ddosProtection: localZoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
-                httpDdosProtection: 'Always On',
-                sslTlsDdosProtection: 'Always On',
-                networkDdosProtection: 'Always On',
-                // WAF Managed Rules
-                cloudflareManaged: localZoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
-                owaspCore: localZoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
-                exposedCredsRuleset: localZoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
-                ddosL7Ruleset: localZoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
-                managedRulesCount: localZoneSettings?.wafManagedRules?.managedRulesCount || '0',
-                rulesetActions: localZoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
-                // IP Access Rules
-                ipAccessRules: localZoneSettings?.ipAccessRules || '0',
-                // Custom Rules & Rate Limiting (New)
-                customRules: localZoneSettings?.customRules,
-                rateLimits: localZoneSettings?.rateLimits,
-
-                // --- New Traffic & Cache Stats (Always Zone-Wide) ---
-                zoneTotalRequests: zoneStats.zoneWideRequests.toLocaleString(),
-                zoneCacheHitRequests: zoneStats.zoneWideCacheRequests.toLocaleString(),
-                zoneCacheHitRequestsRatio: zoneStats.zoneWideRequests > 0 ? ((zoneStats.zoneWideCacheRequests / zoneStats.zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
-                zoneTotalDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
-                zoneCacheHitDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
-                zoneCacheHitDataTransferRatio: zoneStats.zoneWideDataTransfer > 0 ? ((zoneStats.zoneWideCacheDataTransfer / zoneStats.zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
-                zoneTopCountriesReq: zoneStats.zoneWideTopCountriesReq,
-                zoneTopCountriesBytes: zoneStats.zoneWideTopCountriesBytes,
-                fwEvents: zoneStats.fwEvents
-            };
-
-            const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
-
-
-            // Add to combined HTML only if they don't have promoted subdomains, or if there's no selection (NO_SUBDOMAIN checked)
-            let shouldGenerateCover = true;
-            if (selectedHosts.length > 0 && promotedHosts.length > 0) {
-                shouldGenerateCover = false;
-            }
-
-            if (shouldGenerateCover) {
-                combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
             }
 
 
             for (let i = 0; i < selectedHosts.length; i++) {
-                const host = selectedHosts[i];
+                const hostItem = selectedHosts[i];
+                const host = typeof hostItem === 'string' ? hostItem : hostItem.name;
+                const currentZoneId = (typeof hostItem === 'object' && hostItem.zoneId) ? hostItem.zoneId : defaultZoneId;
+
+                if (!currentZoneId) {
+                    console.error(`❌ Skip host: ${host} - Missing zoneId`);
+                    failedHosts.push(host);
+                    continue;
+                }
+
+                const currentZoneData = await getZoneData(currentZoneId);
                 const baseProgress = ((i) / selectedHosts.length) * 100;
 
                 updateOverlay(host, i + 1, selectedHosts.length, baseProgress, 'Starting generation...');
@@ -3361,7 +3382,7 @@ export default function GDCCPage() {
                     const apiStart = performance.now();
                     setSelectedSubDomain(host);
                     // USE batchTimeRange HERE
-                    const stats = await fetchAndApplyTrafficData(host, selectedZone, batchStartDate, batchEndDate);
+                    const stats = await fetchAndApplyTrafficData(host, currentZoneId, batchStartDate, batchEndDate);
                     const apiEnd = performance.now();
 
                     // Use data even if empty (show zeros instead of skipping)
@@ -3439,13 +3460,13 @@ export default function GDCCPage() {
                         topHosts: safeStats.topHosts,
                         topCustomRules: safeStats.topCustomRules,
                         topManagedRules: safeStats.topManagedRules,
-                        zoneName: zones.find(z => z.id === selectedZone)?.name,
+                        zoneName: zones.find(z => z.id === currentZoneId)?.name,
 
                         // Added missing fields for Batch Report Template placeholders (using Verified Local Data)
-                        dnsRecords: localDnsRecords,
-                        ipAccessRules: localZoneSettings?.ipAccessRules,
-                        customRules: localZoneSettings?.customRules,
-                        rateLimits: localZoneSettings?.rateLimits
+                        dnsRecords: currentZoneData.dns,
+                        ipAccessRules: currentZoneData.settings?.ipAccessRules,
+                        customRules: currentZoneData.settings?.customRules,
+                        rateLimits: currentZoneData.settings?.rateLimits
                     };
 
                     // 5. Generate HTML
@@ -4027,24 +4048,8 @@ export default function GDCCPage() {
 
                         {/* CREATE REPORT BUTTON */}
                         <button
-                            onClick={() => {
-                                if (!selectedZone) {
-                                    Swal.fire({
-                                        title: 'Selection Required',
-                                        text: 'Please select a Domain (Zone) from the sidebar first.',
-                                        icon: 'warning',
-                                        background: theme.modalBg,
-                                        color: theme.text,
-                                        confirmButtonColor: '#3b82f6'
-                                    });
-                                    return;
-                                }
-                                setIsBatchModalOpen(true);
-                            }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${!selectedAccount || !selectedZone
-                                ? (theme.buttonDisabled || 'bg-gray-700 text-gray-500 cursor-not-allowed')
-                                : (theme.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg')
-                                }`}
+                            onClick={() => setIsBatchModalOpen(true)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${theme.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg'}`}
                         >
                             <List className="w-3 h-3" /> Create Report
                         </button>
@@ -4108,18 +4113,6 @@ export default function GDCCPage() {
                                         </button>
                                         <button
                                             onClick={() => { 
-                                                if (!selectedZone) {
-                                                    setIsReportMenuOpen(false);
-                                                    Swal.fire({
-                                                        title: 'Selection Required',
-                                                        text: 'Please select a Domain (Zone) first to manage its departments.',
-                                                        icon: 'info',
-                                                        background: theme.modalBg,
-                                                        color: theme.text,
-                                                        confirmButtonColor: '#3b82f6'
-                                                    });
-                                                    return;
-                                                }
                                                 setIsReportMenuOpen(false); 
                                                 setIsTemplateSubmenuOpen(false); 
                                                 setIsDepartmentModalOpen(true); 
@@ -4239,6 +4232,9 @@ export default function GDCCPage() {
                 onConfirm={handleBatchReport}
                 theme={theme}
                 selectedZone={selectedZone}
+                selectedAccount={selectedAccount}
+                accounts={accounts}
+                currentUser={currentUser}
             />
 
             <AutoReportModal
@@ -4255,7 +4251,10 @@ export default function GDCCPage() {
                 theme={theme}
                 selectedZoneId={selectedZone}
                 zoneName={zones.find(z => z.id === selectedZone)?.name}
+                selectedAccountId={selectedAccount}
                 subdomains={subDomains.map(s => s.value)}
+                accounts={accounts}
+                currentUser={currentUser}
             />
 
             <SyncHistoryModal
