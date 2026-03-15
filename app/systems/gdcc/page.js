@@ -3342,7 +3342,13 @@ export default function GDCCPage() {
                     fwEvents: zoneStats.fwEvents
                 };
 
-                const domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
+                let domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
+
+                // Add Middle Report to the Domain Report section (once)
+                if (middleReportTemplateContent) {
+                    const middleHtml = processTemplate(middleReportTemplateContent, domainReportData, new Date(), null);
+                    domainReportHtml = `${domainReportHtml}${middleHtml}`;
+                }
 
 
                 // Add to combined HTML only if they don't have promoted subdomains, or if there's no selection (NO_SUBDOMAIN checked)
@@ -3504,12 +3510,7 @@ export default function GDCCPage() {
                         };
                     }
 
-                    let reportHtml = processTemplate(templateContentToUse, dataToUse, new Date(), imgData);
-
-                    if (!isPromoted && middleReportTemplateContent) {
-                        const middleHtml = processTemplate(middleReportTemplateContent, dataToUse, new Date(), null);
-                        reportHtml = `${middleHtml}${reportHtml}`;
-                    }
+                    const reportHtml = processTemplate(templateContentToUse, dataToUse, new Date(), imgData);
 
                     const hostTotalTime = ((performance.now() - hostStartTime) / 1000).toFixed(2);
                     console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed in ${hostTotalTime}s`);
