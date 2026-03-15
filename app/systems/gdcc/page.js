@@ -7,6 +7,7 @@ import { getUserProfileAction } from '@/app/actions/authActions';
 import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates } from '@/app/utils/templateApi';
 import ManageTemplateModal from './ManageTemplateModal';
 import AutoReportModal from './AutoReportModal';
+import DepartmentModal from './DepartmentModal';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -15,7 +16,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -1055,7 +1056,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 // Moved to '@/app/utils/themes'
 
 // Batch Report Modal Component
-const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
+const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme, selectedZone }) => {
     const [selected, setSelected] = useState(new Set());
     const [promotedHosts, setPromotedHosts] = useState(new Set());
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1063,17 +1064,68 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
+    const [mode, setMode] = useState('standard'); // 'standard' or 'department'
+    const [departments, setDepartments] = useState([]);
+    const [selectedDeptIds, setSelectedDeptIds] = useState(new Set());
 
     useEffect(() => {
         if (isOpen) {
+            // Reset selection states for fresh open or zone change
+            setSelected(new Set());
+            setPromotedHosts(new Set());
+            setSelectedDeptIds(new Set());
+            setSearchTerm('');
+            setMode('standard');
+
             listTemplates().then(list => {
                 setTemplates(list);
                 if (list.length > 0 && !list.find(t => t.id === selectedTemplateId)) {
                     setSelectedTemplateId('default'); // Fallback
                 }
             });
+            // Fetch departments for department mode, filtered by zone
+            const url = selectedZone ? `/api/departments?zone_id=${selectedZone}` : '/api/departments';
+            fetch(url).then(res => res.json()).then(data => {
+                if (data.departments) setDepartments(data.departments);
+            });
         }
-    }, [isOpen]);
+    }, [isOpen, selectedZone]);
+
+    // Handle department selection
+    useEffect(() => {
+        if (mode === 'department' && selectedDeptIds.size > 0) {
+            const allDeptHosts = new Set();
+            const fetchPromises = Array.from(selectedDeptIds).map(deptId => 
+                fetch(`/api/department-domains?department_id=${deptId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.domains) {
+                            data.domains.forEach(d => allDeptHosts.add(d.domain));
+                        }
+                    })
+            );
+
+            Promise.all(fetchPromises).then(() => {
+                const newSelected = new Set();
+                hosts.forEach(h => {
+                    if (allDeptHosts.has(h)) newSelected.add(h);
+                });
+                setSelected(newSelected);
+            });
+        } else if (mode === 'department' && selectedDeptIds.size === 0) {
+            setSelected(new Set());
+        }
+    }, [selectedDeptIds, mode, hosts]);
+
+    const toggleDept = (deptId) => {
+        const newSet = new Set(selectedDeptIds);
+        if (newSet.has(deptId)) {
+            newSet.delete(deptId);
+        } else {
+            newSet.add(deptId);
+        }
+        setSelectedDeptIds(newSet);
+    };
 
     // ESC key to close modal
     useEffect(() => {
@@ -1192,6 +1244,56 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
 
                 {/* Body */}
                 <div className="p-4 overflow-y-auto flex-1">
+                    {/* Selection Mode Selector */}
+                    <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                        <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Selection Mode</label>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setMode('standard')}
+                                className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'standard' ? t.buttonPrimary : t.button}`}
+                            >
+                                Standard
+                            </button>
+                            <button
+                                onClick={() => setMode('department')}
+                                className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'department' ? t.buttonPrimary : t.button}`}
+                            >
+                                Department
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Department Selector */}
+                    {mode === 'department' && (
+                        <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} animate-fade-in-up`}>
+                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide flex items-center gap-2`}>
+                                <Users className="w-3.5 h-3.5" /> Select Departments
+                            </label>
+                            <div className={`max-h-40 overflow-y-auto space-y-1 p-2 bg-black/20 rounded border ${t.modalBorder}`}>
+                                {departments.length === 0 ? (
+                                    <p className="text-xs text-gray-500 italic text-center py-2">No departments found for this zone.</p>
+                                ) : (
+                                    departments.map(d => (
+                                        <label key={d.id} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer transition-colors group">
+                                            <input 
+                                                type="checkbox"
+                                                checked={selectedDeptIds.has(d.id)}
+                                                onChange={() => toggleDept(d.id)}
+                                                className="hidden"
+                                            />
+                                            <div 
+                                                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selectedDeptIds.has(d.id) ? t.dropdown.active : 'border-gray-600'}`}
+                                            >
+                                                {selectedDeptIds.has(d.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                            </div>
+                                            <span className={`text-xs ${selectedDeptIds.has(d.id) ? 'text-white' : 'text-gray-400'}`}>{d.name}</span>
+                                        </label>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Template Selector */}
                     <div className={`mb-6 p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
                         <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Report Template</label>
@@ -1247,7 +1349,10 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
 
                     <div className="flex items-center justify-between mb-4">
                         <span className={`${t.subText} text-sm`}>Select Sub-domains to include:</span>
-                        <button onClick={toggleAll} className={`text-xs ${t.iconAccent || 'text-blue-400'} hover:opacity-80 font-bold transition-colors uppercase tracking-wider`}>
+                        <button
+                            onClick={() => mode === 'standard' && toggleAll()}
+                            className={`text-xs ${t.iconAccent || 'text-blue-400'} ${mode === 'department' ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 font-bold transition-colors uppercase tracking-wider'}`}
+                        >
                             {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect All' : 'Select All'}
                         </button>
                     </div>
@@ -1280,14 +1385,15 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
 
                                 return (
                                     <div key={host} className={`flex items-center justify-between p-3 rounded-lg transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
-                                        <label className={`flex flex-1 items-center gap-3 cursor-pointer`}>
+                                        <label className={`flex flex-1 items-center gap-3 ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                                             <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
                                                 {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                             </div>
                                             <input
                                                 type="checkbox"
                                                 checked={selected.has(host)}
-                                                onChange={() => toggleOne(host)}
+                                                disabled={mode === 'department'}
+                                                onChange={() => mode === 'standard' && toggleOne(host)}
                                                 className="hidden"
                                             />
                                             <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
@@ -1295,13 +1401,14 @@ const BatchReportModal = ({ isOpen, onClose, hosts, onConfirm, theme }) => {
 
                                         {/* Toggle for Promoting to Domain */}
                                         {!isNoSubdomain && selected.has(host) && (
-                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                <label className="flex items-center cursor-pointer relative" title="Use staticReportTemplate.json for this subdomain instead of the sub-report template">
+                                            <div className={`flex items-center gap-2 ${mode === 'department' ? 'opacity-50' : ''}`} onClick={(e) => e.stopPropagation()}>
+                                                <label className={`flex items-center ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'} relative`} title="Use staticReportTemplate.json for this subdomain instead of the sub-report template">
                                                     <input
                                                         type="checkbox"
                                                         className="sr-only peer"
                                                         checked={promotedHosts.has(host)}
-                                                        onChange={(e) => togglePromoteOne(e, host)}
+                                                        disabled={mode === 'department'}
+                                                        onChange={(e) => mode === 'standard' && togglePromoteOne(e, host)}
                                                     />
                                                     <div className={`w-9 h-5 rounded-full peer ${promotedHosts.has(host) ? 'bg-indigo-600' : 'bg-gray-600'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 transition-colors`}></div>
                                                     <div className={`absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${promotedHosts.has(host) ? 'translate-x-full' : ''}`}></div>
@@ -2342,6 +2449,7 @@ export default function GDCCPage() {
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false); // NEW: Batch Modal State
     const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
+    const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -3919,8 +4027,20 @@ export default function GDCCPage() {
 
                         {/* CREATE REPORT BUTTON */}
                         <button
-                            onClick={() => setIsBatchModalOpen(true)}
-                            disabled={!selectedAccount || !selectedZone}
+                            onClick={() => {
+                                if (!selectedZone) {
+                                    Swal.fire({
+                                        title: 'Selection Required',
+                                        text: 'Please select a Domain (Zone) from the sidebar first.',
+                                        icon: 'warning',
+                                        background: theme.modalBg,
+                                        color: theme.text,
+                                        confirmButtonColor: '#3b82f6'
+                                    });
+                                    return;
+                                }
+                                setIsBatchModalOpen(true);
+                            }}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${!selectedAccount || !selectedZone
                                 ? (theme.buttonDisabled || 'bg-gray-700 text-gray-500 cursor-not-allowed')
                                 : (theme.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg')
@@ -3931,8 +4051,20 @@ export default function GDCCPage() {
 
                         {/* GENERATE DASHBOARD BUTTON */}
                         <button
-                            onClick={() => fetchAndApplyTrafficData(selectedSubDomain, selectedZone, startDate, endDate)}
-                            disabled={!selectedSubDomain || loadingStats}
+                            onClick={() => {
+                                if (!selectedSubDomain) {
+                                    Swal.fire({
+                                        title: 'Selection Required',
+                                        text: 'Please select a Sub-domain first.',
+                                        icon: 'warning',
+                                        background: theme.modalBg,
+                                        color: theme.text,
+                                        confirmButtonColor: '#3b82f6'
+                                    });
+                                    return;
+                                }
+                                fetchAndApplyTrafficData(selectedSubDomain, selectedZone, startDate, endDate);
+                            }}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors ${!selectedSubDomain || loadingStats
                                 ? (theme.buttonDisabled || 'bg-gray-700 text-gray-500 cursor-not-allowed')
                                 : (theme.buttonSuccess || 'bg-green-600 hover:bg-green-700 text-white shadow-lg')
@@ -3974,8 +4106,29 @@ export default function GDCCPage() {
                                         >
                                             <Calendar className="w-3 h-3" /> Auto Gen Report
                                         </button>
-                                    </div>
-
+                                        <button
+                                            onClick={() => { 
+                                                if (!selectedZone) {
+                                                    setIsReportMenuOpen(false);
+                                                    Swal.fire({
+                                                        title: 'Selection Required',
+                                                        text: 'Please select a Domain (Zone) first to manage its departments.',
+                                                        icon: 'info',
+                                                        background: theme.modalBg,
+                                                        color: theme.text,
+                                                        confirmButtonColor: '#3b82f6'
+                                                    });
+                                                    return;
+                                                }
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsDepartmentModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                        >
+                                            <Users className="w-3 h-3" /> Department
+                                        </button>
+                                        </div>
                                     {/* Theme Settings (Refactored to Submenu) */}
                                     <div className="relative">
                                         <button
@@ -4085,6 +4238,7 @@ export default function GDCCPage() {
                 hosts={getBatchHosts()}
                 onConfirm={handleBatchReport}
                 theme={theme}
+                selectedZone={selectedZone}
             />
 
             <AutoReportModal
@@ -4093,6 +4247,15 @@ export default function GDCCPage() {
                 accounts={accounts}
                 theme={theme}
                 currentUser={currentUser}
+            />
+
+            <DepartmentModal
+                isOpen={isDepartmentModalOpen}
+                onClose={() => setIsDepartmentModalOpen(false)}
+                theme={theme}
+                selectedZoneId={selectedZone}
+                zoneName={zones.find(z => z.id === selectedZone)?.name}
+                subdomains={subDomains.map(s => s.value)}
             />
 
             <SyncHistoryModal
