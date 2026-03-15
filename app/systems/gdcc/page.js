@@ -3415,7 +3415,7 @@ export default function GDCCPage() {
                             const captureWidth = dashboardRef.current.scrollWidth;
                             const captureHeight = dashboardRef.current.scrollHeight;
 
-                            // Race between screenshot and 15s timeout
+                            // Race between screenshot and 45s timeout
                             imgData = await Promise.race([
                                 htmlToImage.toJpeg(dashboardRef.current, {
                                     quality: 0.6,
@@ -3423,12 +3423,14 @@ export default function GDCCPage() {
                                     pixelRatio: 1.0,
                                     width: captureWidth,
                                     height: captureHeight,
+                                    cacheBust: true,
+                                    skipAutoScale: true,
                                     style: {
                                         width: `${captureWidth}px`,
                                         height: `${captureHeight}px`
                                     }
                                 }),
-                                new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (15s)')), 15000))
+                                new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (45s)')), 45000))
                             ]);
 
                             const screenEnd = performance.now();
@@ -3950,6 +3952,8 @@ export default function GDCCPage() {
                 pixelRatio: 1.5,
                 width: captureWidth,
                 height: captureHeight,
+                cacheBust: true,
+                skipAutoScale: true,
                 style: {
                     width: `${captureWidth}px`,
                     height: `${captureHeight}px`
