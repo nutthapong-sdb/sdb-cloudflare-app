@@ -277,6 +277,21 @@ export default function DepartmentModal({ isOpen, onClose, theme, selectedZoneId
         .filter(s => s !== 'ALL_SUBDOMAINS')
         .filter(s => !deptDomains.some(dd => dd.domain === s && dd.zone_id === internalZoneId));
 
+    const handleClose = async () => {
+        // Find empty departments in the current account and delete them
+        const emptyDepts = departments.filter(d => (d.domain_count || 0) === 0);
+        if (emptyDepts.length > 0) {
+            try {
+                await Promise.all(emptyDepts.map(dept => 
+                    fetch(`/api/departments?id=${dept.id}`, { method: 'DELETE' })
+                ));
+            } catch (error) {
+                console.error('Error cleaning up empty departments:', error);
+            }
+        }
+        onClose();
+    };
+
     if (!isOpen) return null;
 
     const currentAccountName = accounts.find(a => a.id === selectedAccountId)?.name || 'New Selection';
@@ -284,7 +299,7 @@ export default function DepartmentModal({ isOpen, onClose, theme, selectedZoneId
     return (
         <div
             className={`fixed inset-0 z-[110] flex items-center justify-center p-4 animate-fade-in ${t.modalOverlay}`}
-            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+            onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
             <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col shadow-2xl`}>
                 {/* Header */}
@@ -298,7 +313,7 @@ export default function DepartmentModal({ isOpen, onClose, theme, selectedZoneId
                             <p className={`text-xs ${t.subText}`}>Manage departments and subdomain mappings</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}>
+                    <button onClick={handleClose} className={`${t.modalCloseIcon} transition-colors`}>
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -491,7 +506,7 @@ export default function DepartmentModal({ isOpen, onClose, theme, selectedZoneId
                 {/* Footer */}
                 <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end`}>
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${t.buttonPrimary} shadow-lg shadow-blue-500/20`}
                     >
                         Close
