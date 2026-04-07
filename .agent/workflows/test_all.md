@@ -6,6 +6,11 @@ description: เรียก workflow นี้ทุกครั้งที่
 
 ## ขั้นตอนการทดสอบ
 
+### Run All (Recommended)
+```bash
+node scripts/test-all/run-all.js
+```
+
 ### Phase 1: Authentication
 1. รัน Login Test
 ```bash
@@ -31,6 +36,11 @@ node scripts/test-all/gdcc/test-ui-enhancements.js
 5. ทดสอบ Report Generation แบบ E2E (Download ไฟล์จริง)
 ```bash
 node scripts/test-all/gdcc/test-report-generation.js
+```
+
+5.1 ทดสอบ Export as separated files (.zip ที่มีไฟล์ .doc แยกตาม subdomain)
+```bash
+node scripts/test-all/gdcc/test-report-generation-separated.js
 ```
 
 6. ทดสอบ Template Variables

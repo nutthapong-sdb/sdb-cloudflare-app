@@ -1574,6 +1574,41 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                     </div>
                     <div className="flex gap-3">
                         <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
+
+                        <button
+                            title="จะแยกรายการ sub domain ที่เลือกมาออกเป็นไฟล์แยกกัน โดยแต่ละไฟล์จะมี หน้าปก + รายละเอียด zone + subdomain"
+                            onClick={() => {
+                                if (selected.size === 0) {
+                                    Swal.fire('Error', 'Please select at least one sub-domain.', 'error');
+                                    return;
+                                }
+
+                                // Separated files only makes sense for sub-domain selections
+                                if (mode !== 'department' && selected.has(NO_SUBDOMAIN)) {
+                                    Swal.fire('Error', 'Separated export is not available for Domain-only report.', 'error');
+                                    return;
+                                }
+
+                                let hostsToGenerate;
+                                if (mode === 'department') {
+                                    hostsToGenerate = Array.from(selected).map(hostName => {
+                                        const mapping = deptMemberHosts.find(dm => dm.domain === hostName);
+                                        return { name: hostName, zoneId: mapping ? mapping.zone_id : internalZoneId };
+                                    });
+                                } else {
+                                    hostsToGenerate = Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
+                                }
+
+                                const promotedArray = Array.from(promotedHosts);
+                                // extra final arg: exportSeparated
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true);
+                            }}
+                            disabled={selected.size === 0}
+                            className={`px-4 py-2 rounded ${t.button} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
+                        >
+                            Export as separated files
+                        </button>
+
                         <button
                             onClick={() => {
                                 if (selected.size === 0) {
@@ -1594,7 +1629,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 }
 
                                 const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -3081,7 +3116,7 @@ export default function GDCCPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null) => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false) => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
@@ -3115,8 +3150,26 @@ export default function GDCCPage() {
         }
         let processedCount = 0;
         let failedHosts = [];
+        let screenshotWarnings = [];
         let currentStep = 'Initializing...';
         let currentProgress = 0;
+
+        const getInactiveCaptureReason = () => {
+            if (typeof document === 'undefined') return null;
+            if (document.visibilityState !== 'visible') {
+                return 'Cannot capture dashboard snapshot because this tab is not visible. Please keep this page open and do not switch tabs or minimize/fold the screen during export.';
+            }
+            if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+                return 'Cannot capture dashboard snapshot because this page is not active. Please keep this page focused and do not switch tabs during export.';
+            }
+            return null;
+        };
+
+        const recordScreenshotWarning = (hostName, error) => {
+            const message = error?.message || 'Dashboard snapshot could not be captured.';
+            console.warn(`⚠️ Screenshot warning for ${hostName}: ${message}`);
+            screenshotWarnings.push({ host: hostName, message });
+        };
 
         // Overlay element handling via Swal
         const updateOverlay = (hostName, index, total, progress, statusMsg) => {
@@ -3138,14 +3191,23 @@ export default function GDCCPage() {
                             <div style="font-size: 18px; color: white; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${hostName}">
                                 ${hostName || 'Preparing...'}
                             </div>
-                            <div style="font-size: 12px; color: #9CA3AF; margin-top: 8px; font-style: italic;">
-                                ${statusMsg}
-                            </div>
-                        </div>
+                             <div style="font-size: 12px; color: #9CA3AF; margin-top: 8px; font-style: italic;">
+                                 ${statusMsg}
+                             </div>
+                         </div>
 
-                        <div style="width: 100%; max-width: 400px; margin: 0 auto;">
-                            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #9CA3AF; margin-bottom: 8px; font-family: monospace;">
-                                <span>PROGRESS</span>
+                         <div style="max-width: 400px; margin: 0 auto 20px auto; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 12px; padding: 12px 14px; text-align: left;">
+                             <div style="font-size: 12px; font-weight: 700; color: #FBBF24; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                                 Important During Export
+                             </div>
+                             <div style="font-size: 13px; color: #FDE68A; line-height: 1.45;">
+                                 Do not switch tabs, minimize the browser, or fold/turn off the screen while exporting. Otherwise the dashboard screenshot may fail.
+                             </div>
+                         </div>
+
+                         <div style="width: 100%; max-width: 400px; margin: 0 auto;">
+                             <div style="display: flex; justify-content: space-between; font-size: 12px; color: #9CA3AF; margin-bottom: 8px; font-family: monospace;">
+                                 <span>PROGRESS</span>
                                 <span>${percentage}%</span>
                             </div>
                             <div style="width: 100%; background: #1F2937; border-radius: 9999px; height: 10px; overflow: hidden; border: 1px solid #374151; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);">
@@ -3211,6 +3273,14 @@ export default function GDCCPage() {
 
 
         let combinedHtml = "";
+
+        const sanitizeFilePart = (value) => {
+            return String(value || '')
+                .trim()
+                .replace(/\s+/g, '_')
+                .replace(/[^a-zA-Z0-9._-]/g, '_')
+                .slice(0, 140);
+        };
 
         try {
             // 0. Generate Domain Report (First Page)
@@ -3360,8 +3430,285 @@ export default function GDCCPage() {
                 if (shouldGenerateCover) {
                     combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
                 }
+
+                // If exporting separated files, we always need the zone section per file.
+                if (exportSeparated) {
+                    // NOTE: the domain template usually includes cover + zone details.
+                    // We keep it as the "zone section" for each subdomain file.
+                    // The subdomain section will be appended afterward.
+                    combinedHtml = domainReportHtml;
+                }
             }
 
+
+            // Separated export: build one .doc (HTML Word) per host and zip them.
+            if (exportSeparated) {
+                if (!selectedHosts || selectedHosts.length === 0) {
+                    throw new Error('Separated export requires at least one sub-domain.');
+                }
+
+                if (!defaultZoneId) {
+                    throw new Error('Separated export requires a selected Zone (Domain).');
+                }
+
+                // Lazy-load JSZip only when needed.
+                const { default: JSZip } = await import('jszip');
+                const zip = new JSZip();
+
+                const zoneSectionCache = new Map();
+                const getZoneSectionHtml = async (zId) => {
+                    if (zoneSectionCache.has(zId)) return zoneSectionCache.get(zId);
+
+                    const zData = await getZoneData(zId);
+                    const localDnsRecords = zData.dns;
+                    const localZoneSettings = zData.settings;
+
+                    // Zone-wide stats (cached per zone) for placeholders on cover/zone sections
+                    const zoneStatsCacheKey = `zoneStats:${zId}:${batchStartDate}:${batchEndDate}`;
+                    if (!zoneDataCache.has(zoneStatsCacheKey)) {
+                        const zStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', zId, batchStartDate, batchEndDate) || {
+                            zoneWideRequests: 0,
+                            zoneWideCacheRequests: 0,
+                            zoneWideDataTransfer: 0,
+                            zoneWideCacheDataTransfer: 0,
+                            zoneWideTopCountriesReq: [],
+                            zoneWideTopCountriesBytes: [],
+                            fwEvents: { total: 0, managed: 0, custom: 0, bic: 0, access: 0 }
+                        };
+                        zoneDataCache.set(zoneStatsCacheKey, zStats);
+                    }
+                    const zoneStats = zoneDataCache.get(zoneStatsCacheKey);
+
+                    const domainReportData = {
+                        domain: zones.find(z => z.id === zId)?.name,
+                        totalRequests: totalRequests,
+                        blockedEvents: blockedEvents,
+                        logEvents: logEvents,
+                        avgTime: avgResponseTime,
+                        topUrls: topUrls,
+                        topIps: topIps,
+                        topCountries: topCountries,
+                        topUserAgents: topUserAgents,
+                        peakTime: peakTraffic.time,
+                        peakCount: peakTraffic.count,
+                        peakAttack: peakAttack,
+                        peakHttpStatus: peakHttpStatus,
+                        topRules: topRules,
+                        topAttackers: topAttackers,
+                        topHosts: topHosts,
+                        topCustomRules: customRulesList,
+                        topManagedRules: managedRulesList,
+                        topFirewallSources: topFirewallSources,
+                        zoneName: zones.find(z => z.id === zId)?.name || '-',
+                        accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
+                        startDate: batchStartDate,
+                        endDate: batchEndDate,
+                        dnsRecords: localDnsRecords,
+                        botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
+                        blockAiBots: localZoneSettings?.botManagement?.blockAiBots || 'unknown',
+                        definitelyAutomated: localZoneSettings?.botManagement?.definitelyAutomated || 'unknown',
+                        likelyAutomated: localZoneSettings?.botManagement?.likelyAutomated || 'unknown',
+                        verifiedBots: localZoneSettings?.botManagement?.verifiedBots || 'unknown',
+                        sslMode: localZoneSettings?.sslMode || 'unknown',
+                        minTlsVersion: localZoneSettings?.minTlsVersion || 'unknown',
+                        tls13: (localZoneSettings?.tls13 === 'on' || localZoneSettings?.tls13 === 'zrt') ? 'Enabled' : 'Disabled',
+                        dnsRecordsStatus: localZoneSettings?.dnsRecordsCount > 0 ? 'Enabled' : 'Disabled',
+                        leakedCredentials: localZoneSettings?.leakedCredentials === 'on' ? 'Enabled' : 'Disabled',
+                        browserIntegrityCheck: localZoneSettings?.browserIntegrityCheck === 'on' ? 'Enabled' : 'Disabled',
+                        hotlinkProtection: localZoneSettings?.hotlinkProtection === 'on' ? 'Enabled' : 'Disabled',
+                        zoneLockdownRules: localZoneSettings?.zoneLockdownRules || '0',
+                        ddosProtection: localZoneSettings?.ddosProtection?.enabled === 'on' ? 'Enabled' : 'Disabled',
+                        httpDdosProtection: 'Always On',
+                        sslTlsDdosProtection: 'Always On',
+                        networkDdosProtection: 'Always On',
+                        cloudflareManaged: localZoneSettings?.wafManagedRules?.cloudflareManaged === 'enabled' ? 'Enabled' : 'Disabled',
+                        owaspCore: localZoneSettings?.wafManagedRules?.owaspCore === 'enabled' ? 'Enabled' : 'Disabled',
+                        exposedCredsRuleset: localZoneSettings?.wafManagedRules?.exposedCredentials === 'enabled' ? 'Enabled' : 'Disabled',
+                        ddosL7Ruleset: localZoneSettings?.wafManagedRules?.ddosL7Ruleset === 'enabled' ? 'Enabled' : 'Disabled',
+                        managedRulesCount: localZoneSettings?.wafManagedRules?.managedRulesCount || '0',
+                        rulesetActions: localZoneSettings?.wafManagedRules?.rulesetActions || 'unknown',
+                        ipAccessRules: localZoneSettings?.ipAccessRules || '0',
+                        customRules: localZoneSettings?.customRules,
+                        rateLimits: localZoneSettings?.rateLimits,
+                        zoneTotalRequests: zoneStats.zoneWideRequests.toLocaleString(),
+                        zoneCacheHitRequests: zoneStats.zoneWideCacheRequests.toLocaleString(),
+                        zoneCacheHitRequestsRatio: zoneStats.zoneWideRequests > 0 ? ((zoneStats.zoneWideCacheRequests / zoneStats.zoneWideRequests) * 100).toFixed(2) + '%' : '0.00%',
+                        zoneTotalDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                        zoneCacheHitDataTransfer: (zoneStats.zoneWideRequests > 0 ? (zoneStats.zoneWideCacheDataTransfer / (1024 * 1024 * 1024)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00') + ' GB',
+                        zoneCacheHitDataTransferRatio: zoneStats.zoneWideDataTransfer > 0 ? ((zoneStats.zoneWideCacheDataTransfer / zoneStats.zoneWideDataTransfer) * 100).toFixed(2) + '%' : '0.00%',
+                        zoneTopCountriesReq: zoneStats.zoneWideTopCountriesReq,
+                        zoneTopCountriesBytes: zoneStats.zoneWideTopCountriesBytes,
+                        fwEvents: zoneStats.fwEvents
+                    };
+
+                    let zoneHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
+                    if (middleReportTemplateContent) {
+                        const middleHtml = processTemplate(middleReportTemplateContent, domainReportData, new Date(), null);
+                        zoneHtml = `${zoneHtml}${middleHtml}`;
+                    }
+
+                    zoneSectionCache.set(zId, zoneHtml);
+                    return zoneHtml;
+                };
+
+                for (let i = 0; i < selectedHosts.length; i++) {
+                    const hostItem = selectedHosts[i];
+                    const host = typeof hostItem === 'string' ? hostItem : hostItem.name;
+                    const currentZoneId = (typeof hostItem === 'object' && hostItem.zoneId) ? hostItem.zoneId : defaultZoneId;
+
+                    if (!currentZoneId) {
+                        console.error(`❌ Skip host: ${host} - Missing zoneId`);
+                        failedHosts.push(host);
+                        continue;
+                    }
+
+                    const currentZoneData = await getZoneData(currentZoneId);
+                    const baseProgress = ((i) / selectedHosts.length) * 100;
+                    updateOverlay(host, i + 1, selectedHosts.length, baseProgress, 'Preparing separated file...');
+
+                    try {
+                        // 1) Fetch subdomain stats
+                        updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 15, 'Fetching Traffic Data from Cloudflare...');
+                        setSelectedSubDomain(host);
+                        const stats = await fetchAndApplyTrafficData(host, currentZoneId, batchStartDate, batchEndDate);
+                        const safeStats = stats || {
+                            totalRequests: 0,
+                            blockedEvents: 0,
+                            logEvents: 0,
+                            avgResponseTime: 0,
+                            topUrls: [],
+                            topIps: [],
+                            topCountries: [],
+                            topUserAgents: [],
+                            peakTraffic: { time: '-', count: 0 },
+                            peakAttack: { time: '-', count: 0 },
+                            peakHttpStatus: { time: '-', count: 0 },
+                            topRules: [],
+                            topAttackers: [],
+                            topFirewallSources: []
+                        };
+
+                        // 2) Render settle + capture
+                        updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 45, 'Capturing Dashboard Snapshot...');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+
+                        let imgData = null;
+                        if (dashboardRef.current) {
+                            try {
+                                const inactiveReason = getInactiveCaptureReason();
+                                if (inactiveReason) {
+                                    throw new Error(inactiveReason);
+                                }
+                                const captureWidth = dashboardRef.current.scrollWidth;
+                                const captureHeight = dashboardRef.current.scrollHeight;
+                                imgData = await Promise.race([
+                                    htmlToImage.toJpeg(dashboardRef.current, {
+                                        quality: 0.6,
+                                        backgroundColor: '#000000',
+                                        pixelRatio: 1.0,
+                                        width: captureWidth,
+                                        height: captureHeight,
+                                        cacheBust: true,
+                                        skipAutoScale: true,
+                                        style: {
+                                            width: `${captureWidth}px`,
+                                            height: `${captureHeight}px`
+                                        }
+                                    }),
+                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (45s)')), 45000))
+                                ]);
+                            } catch (imgError) {
+                                const inactiveReason = getInactiveCaptureReason();
+                                if (inactiveReason) {
+                                    recordScreenshotWarning(host, new Error(inactiveReason));
+                                } else if ((imgError?.message || '').includes('Screenshot timeout (45s)')) {
+                                    recordScreenshotWarning(host, new Error('Dashboard snapshot timed out after 45s. Please keep this page open, focused, and do not switch tabs or fold/minimize the screen during export.'));
+                                } else {
+                                    recordScreenshotWarning(host, imgError);
+                                }
+                            }
+                        }
+
+                        // 3) Prepare data for sub template
+                        const currentReportData = {
+                            domain: host,
+                            startDate: batchStartDate,
+                            endDate: batchEndDate,
+                            totalRequests: safeStats.totalRequests,
+                            blockedEvents: safeStats.blockedEvents,
+                            logEvents: safeStats.logEvents,
+                            avgTime: safeStats.avgResponseTime,
+                            topUrls: safeStats.topUrls,
+                            topIps: safeStats.topIps,
+                            topCountries: safeStats.topCountries,
+                            topUserAgents: safeStats.topUserAgents,
+                            peakTime: safeStats.peakTraffic.time,
+                            peakCount: safeStats.peakTraffic.count,
+                            peakAttack: safeStats.peakAttack,
+                            peakHttpStatus: safeStats.peakHttpStatus,
+                            topRules: safeStats.topRules,
+                            topAttackers: safeStats.topAttackers,
+                            topHosts: safeStats.topHosts,
+                            topCustomRules: safeStats.topCustomRules,
+                            topManagedRules: safeStats.topManagedRules,
+                            zoneName: zones.find(z => z.id === currentZoneId)?.name,
+                            dnsRecords: currentZoneData.dns,
+                            ipAccessRules: currentZoneData.settings?.ipAccessRules,
+                            customRules: currentZoneData.settings?.customRules,
+                            rateLimits: currentZoneData.settings?.rateLimits
+                        };
+
+                        // Separated export always uses the sub-report template for the subdomain section.
+                        // This keeps: "Cover + Zone details" (domain template) + "Subdomain" (sub template).
+                        const reportHtml = processTemplate(subReportTemplateContent, currentReportData, new Date(), imgData);
+
+                        // 4) Add .doc (HTML Word) to zip
+                        updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 85, 'Packing .doc and adding to .zip...');
+
+                        const zoneSectionHtml = await getZoneSectionHtml(currentZoneId);
+                        const docHtml = cleanHeader + `${zoneSectionHtml}<div class="page-break"></div>${reportHtml}` + footer;
+                        const safeHost = sanitizeFilePart(host);
+                        const safeZone = sanitizeFilePart(zones.find(z => z.id === currentZoneId)?.name || 'zone');
+                        const fileName = `report_${safeZone}_${safeHost}_${batchStartDate}_${batchEndDate}.doc`;
+
+                        zip.file(fileName, docHtml);
+                        processedCount++;
+                    } catch (hostError) {
+                        console.error(`❌ Error processing ${host}:`, hostError);
+                        failedHosts.push(host);
+                        continue;
+                    }
+                }
+
+                updateOverlay('Finalizing...', selectedHosts.length, selectedHosts.length, 100, 'Generating .zip file...');
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const zipName = `batch_reports_separated_${new Date().getTime()}.zip`;
+
+                const url = window.URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = zipName;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                Swal.fire({
+                    title: 'Export Completed!',
+                    icon: failedHosts.length === 0 && screenshotWarnings.length === 0 ? 'success' : 'warning',
+                    background: '#111827',
+                    color: '#fff',
+                    html: `<div style="text-align:center;">
+                        <p style="font-size: 16px; margin-bottom: 12px;">Generated <b>${processedCount}</b> out of ${selectedHosts.length} files.</p>
+                        ${failedHosts.length > 0 ? `<p style="color:#FCA5A5; font-size: 13px;">Failed: ${failedHosts.join(', ')}</p>` : ''}
+                        ${screenshotWarnings.length > 0 ? `<div style="margin-top:12px; text-align:left; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 10px;"><p style="color:#FBBF24; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Screenshot warnings (${screenshotWarnings.length})</p><ul style="color:#FDE68A; font-size: 12px; padding-left: 18px; max-height: 120px; overflow-y: auto;">${screenshotWarnings.map(item => `<li><b>${item.host}</b>: ${item.message}</li>`).join('')}</ul></div>` : ''}
+                    </div>`,
+                    confirmButtonText: 'Great!',
+                    confirmButtonColor: '#3B82F6'
+                });
+
+                return;
+            }
 
             for (let i = 0; i < selectedHosts.length; i++) {
                 const hostItem = selectedHosts[i];
@@ -3418,6 +3765,10 @@ export default function GDCCPage() {
                     let imgData = null;
                     if (dashboardRef.current) {
                         try {
+                            const inactiveReason = getInactiveCaptureReason();
+                            if (inactiveReason) {
+                                throw new Error(inactiveReason);
+                            }
                             const captureWidth = dashboardRef.current.scrollWidth;
                             const captureHeight = dashboardRef.current.scrollHeight;
 
@@ -3441,7 +3792,14 @@ export default function GDCCPage() {
 
                             const screenEnd = performance.now();
                         } catch (imgError) {
-                            console.error(`⚠️ Screenshot failed for ${host}:`, imgError);
+                            const inactiveReason = getInactiveCaptureReason();
+                            if (inactiveReason) {
+                                recordScreenshotWarning(host, new Error(inactiveReason));
+                            } else if ((imgError?.message || '').includes('Screenshot timeout (45s)')) {
+                                recordScreenshotWarning(host, new Error('Dashboard snapshot timed out after 45s. Please keep this page open, focused, and do not switch tabs or fold/minimize the screen during export.'));
+                            } else {
+                                recordScreenshotWarning(host, imgError);
+                            }
                         }
                     }
 
@@ -3556,7 +3914,7 @@ export default function GDCCPage() {
             // Final Summary Modal
             Swal.fire({
                 title: 'Batch Report Completed!',
-                icon: failedHosts.length === 0 ? 'success' : 'warning',
+                icon: failedHosts.length === 0 && screenshotWarnings.length === 0 ? 'success' : 'warning',
                 background: '#111827',
                 color: '#fff',
                 html: `
@@ -3567,6 +3925,14 @@ export default function GDCCPage() {
                                 <p style="color: #F87171; font-weight: bold; margin-bottom: 5px; font-size: 14px;">Failed Domains (${failedHosts.length}):</p>
                                 <ul style="color: #FCA5A5; font-size: 13px; padding-left: 20px; list-style-type: disc; max-height: 100px; overflow-y: auto;">
                                     ${failedHosts.map(h => `<li>${h}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${screenshotWarnings.length > 0 ? `
+                            <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); padding: 10px; border-radius: 8px; margin-top: 15px; text-align: left;">
+                                <p style="color: #FBBF24; font-weight: bold; margin-bottom: 5px; font-size: 14px;">Screenshot Warnings (${screenshotWarnings.length}):</p>
+                                <ul style="color: #FDE68A; font-size: 13px; padding-left: 20px; list-style-type: disc; max-height: 120px; overflow-y: auto;">
+                                    ${screenshotWarnings.map(item => `<li><b>${item.host}</b>: ${item.message}</li>`).join('')}
                                 </ul>
                             </div>
                         ` : ''}

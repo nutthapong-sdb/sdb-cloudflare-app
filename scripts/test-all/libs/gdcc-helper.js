@@ -30,90 +30,146 @@ const GDCC_TEST_CONFIG = {
  */
 async function selectCursorDropdown(page, dropdownIndex, searchText) {
     // Find all clickable "trigger" divs (div with cursor-pointer class)
+    // Note: option rows also use `cursor-pointer`, but they only exist after opening.
     const triggers = await page.$$('div.cursor-pointer');
     if (triggers.length <= dropdownIndex) {
         log(`❌ Cursor dropdown at index ${dropdownIndex} not found (${triggers.length} found).`, colors.red);
         return false;
     }
 
-    // Click trigger using evaluate to ensure React onClick fires
-    let popupOpened = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
-        // Use evaluate to dispatch a proper click on the correct trigger at index
-        await page.evaluate((idx) => {
-            const divs = Array.from(document.querySelectorAll('div.cursor-pointer'));
-            if (divs[idx]) divs[idx].click();
-        }, dropdownIndex);
-        await new Promise(r => setTimeout(r, 800));
-        const inputs = await page.$$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
-        if (inputs.length > 0) { popupOpened = true; break; }
-    }
-    if (!popupOpened) {
-        log(`❌ Dropdown popup at index ${dropdownIndex} did not open.`, colors.red);
-        return false;
-    }
-
-    // Type in search
-    const inputs = await page.$$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
-    const activeInput = inputs[inputs.length - 1];
-    await page.evaluate(input => {
-        input.focus();
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, '');
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    }, activeInput);
-    await activeInput.type(searchText);
-    await new Promise(r => setTimeout(r, 800));
-
-    // Wait for dropdown list items
+    // Best-effort: wait for trigger text to not be in a loading state.
+    // This avoids opening an empty dropdown before async options have populated.
     try {
-        await page.waitForFunction(() => {
-            const items = document.querySelectorAll('div.absolute.z-\\[100\\] div, div[class*="absolute"][class*="z-[100]"] div');
-            if (items.length > 0) {
-                const txt = items[0].textContent || '';
-                if (txt.includes('Loading...') || txt.includes('กำลังโหลด...')) return false;
-                return true;
-            }
-            return false;
-        }, { timeout: 10000 });
-    } catch (e) {
-        log(`⚠️ Dropdown items timeout at index ${dropdownIndex}.`, colors.yellow);
+        await page.waitForFunction((idx) => {
+            const divs = Array.from(document.querySelectorAll('div.cursor-pointer'));
+            const el = divs[idx];
+            if (!el) return false;
+            const t = (el.textContent || '').trim();
+            if (!t) return false;
+            if (t.includes('Loading...') || t.includes('กำลังโหลด')) return false;
+            return true;
+        }, { timeout: 30000 }, dropdownIndex);
+    } catch (_) {
+        log(`⚠️ Cursor dropdown trigger at index ${dropdownIndex} still looks loading. Continuing...`, colors.yellow);
     }
 
-    // Find matching item and click
-    log(`   🔎 Searching for item matching: "${searchText}"`, colors.gray);
-    const clickResult = await page.evaluate((text) => {
-        const searchTextLower = text.trim().toLowerCase();
-        // Broader search for items - any element inside the dropdown container
-        const container = document.querySelector('div.absolute.z-\\[100\\], div[class*="absolute"][class*="z-[100]"]');
-        if (!container) return { success: false, reason: 'No dropdown container found' };
-
-        const items = Array.from(container.querySelectorAll('*'));
-        console.log(`Dropdown container has ${items.length} sub-elements`);
-
-        for (const item of items) {
-            const t = (item.textContent || '').trim().toLowerCase();
-            // Log the first few items to console if we are failing
-            if (items.length < 5) console.log(`Item text: "${t}"`);
-
-            if (t.includes(searchTextLower)) {
-                // Determine the best element to click: the one with onMouseDown or a specific class
-                const target = item.closest('[onmousedown]') || item.closest('div.cursor-pointer') || item;
-                console.log(`Matched! Clicking target with text: "${target.textContent.substring(0, 20)}..."`);
-                target.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
-                return { success: true, matchedText: t };
-            }
+    // Full selection can race the async options load (especially on API Discovery).
+    // Retry end-to-end if the dropdown shows a "no results" placeholder.
+    for (let overallAttempt = 0; overallAttempt < 4; overallAttempt++) {
+        // Click trigger using evaluate to ensure React onClick fires
+        let popupOpened = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            // Use evaluate to dispatch a proper click on the correct trigger at index
+            await page.evaluate((idx) => {
+                const divs = Array.from(document.querySelectorAll('div.cursor-pointer'));
+                if (divs[idx]) divs[idx].click();
+            }, dropdownIndex);
+            await new Promise(r => setTimeout(r, 800));
+            const inputs = await page.$$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
+            if (inputs.length > 0) { popupOpened = true; break; }
         }
-        return { success: false, itemsFound: items.length, firstItemText: items[0]?.textContent };
-    }, searchText);
+        if (!popupOpened) {
+            log(`❌ Dropdown popup at index ${dropdownIndex} did not open.`, colors.red);
+            return false;
+        }
 
-    if (!clickResult.success) {
-        log(`❌ Match failed: ${clickResult.reason || 'Not found'}. Found ${clickResult.itemsFound || 0} items. First: "${clickResult.firstItemText}"`, colors.red);
-        return false;
+        // Type in search
+        const inputs = await page.$$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
+        const activeInput = inputs[inputs.length - 1];
+        await page.evaluate(input => {
+            input.focus();
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, '');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }, activeInput);
+        await activeInput.type(searchText);
+        await new Promise(r => setTimeout(r, 800));
+
+        // Wait for dropdown list to contain actionable options (not Loading / not "no results")
+        try {
+            await page.waitForFunction(() => {
+                const inputs = Array.from(document.querySelectorAll('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]'));
+                const input = inputs[inputs.length - 1];
+                if (!input) return false;
+
+                // Search input lives in the trigger; menu is a sibling under the same root.
+                const root = input.closest('div.space-y-1.relative') || input.closest('div.relative');
+                if (!root) return false;
+
+                const container = root.querySelector('div[class*="absolute"]');
+                if (!container) return false;
+
+                const txt = (container.textContent || '').trim();
+                if (!txt) return false;
+                if (txt.includes('Loading...') || txt.includes('กำลังโหลด...')) return false;
+                if (txt.includes('ไม่พบข้อมูล') || txt.toLowerCase().includes('no results')) return false;
+
+                // Options are rendered as clickable divs (Tailwind `cursor-pointer`) or elements with onMouseDown.
+                const optionEls = container.querySelectorAll('div.cursor-pointer, [onmousedown]');
+                return optionEls.length > 0;
+            }, { timeout: 15000 });
+        } catch (_) {
+            log(`⚠️ Dropdown options not ready yet (index ${dropdownIndex}). Retrying...`, colors.yellow);
+        }
+
+        // Find matching item and click
+        log(`   🔎 Searching for item matching: "${searchText}"`, colors.gray);
+        const clickResult = await page.evaluate((text) => {
+            const searchTextLower = (text || '').trim().toLowerCase();
+            const inputs = Array.from(document.querySelectorAll('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]'));
+            const input = inputs[inputs.length - 1];
+            if (!input) return { success: false, reason: 'No search input found' };
+
+            const root = input.closest('div.space-y-1.relative') || input.closest('div.relative');
+            if (!root) return { success: false, reason: 'No dropdown root found' };
+
+            const container = root.querySelector('div[class*="absolute"]');
+            if (!container) return { success: false, reason: 'No dropdown container found' };
+
+            const placeholderTxt = (container.textContent || '').trim();
+            const items = Array.from(container.querySelectorAll('div.cursor-pointer, [onmousedown]'));
+            for (const item of items) {
+                const t = (item.textContent || '').trim().toLowerCase();
+                if (!t) continue;
+                if (t.includes(searchTextLower)) {
+                    item.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+                    return { success: true, matchedText: t };
+                }
+            }
+            return {
+                success: false,
+                itemsFound: items.length,
+                firstItemText: items[0]?.textContent,
+                placeholderText: placeholderTxt
+            };
+        }, searchText);
+
+        if (clickResult.success) {
+            log(`   ✅ Matched: "${clickResult.matchedText.substring(0, 40)}..."`, colors.green);
+            await new Promise(r => setTimeout(r, 1000));
+            return true;
+        }
+
+        const placeholder = (clickResult.placeholderText || '').trim();
+        const looksLikeEmpty = placeholder.includes('ไม่พบข้อมูล') || placeholder.toLowerCase().includes('no results');
+        if (!looksLikeEmpty) {
+            log(`❌ Match failed: ${clickResult.reason || 'Not found'}. Found ${clickResult.itemsFound || 0} items. First: "${clickResult.firstItemText}"`, colors.red);
+            return false;
+        }
+
+        // If we only see an empty-state placeholder, options may still be loading asynchronously.
+        // Close and retry.
+        log(`⚠️ Dropdown shows empty results; retrying selection (attempt ${overallAttempt + 1}/4)...`, colors.yellow);
+        try {
+            await page.keyboard.press('Escape');
+        } catch (_) {
+            // ignore
+        }
+        await new Promise(r => setTimeout(r, 1500));
     }
-    log(`   ✅ Matched: "${clickResult.matchedText.substring(0, 40)}..."`, colors.green);
-    await new Promise(r => setTimeout(r, 1000));
-    return true;
+
+    log(`❌ Failed to select "${searchText}" after retries (dropdown index ${dropdownIndex}).`, colors.red);
+    return false;
 }
 
 /**
@@ -123,8 +179,15 @@ async function navigateToGDCC(page) {
     log('🔹 Navigating to GDCC System...', colors.blue);
     await page.goto(`${BASE_URL}/systems/gdcc`, { waitUntil: 'domcontentloaded' });
 
-    // Wait for account dropdown trigger to appear
-    await page.waitForSelector('div.relative > div[tabindex="0"]', { visible: true, timeout: 15000 });
+    // Wait for a stable page landmark first.
+    await page.waitForSelector('main', { visible: true, timeout: 60000 });
+
+    // Wait for account dropdown trigger to appear (best-effort; selection helpers will fail with good errors)
+    try {
+        await page.waitForSelector('div[tabindex="0"], div.space-y-1.relative', { visible: true, timeout: 60000 });
+    } catch (_) {
+        // Continue; selectGDCCFilters has its own robust error messages.
+    }
     await new Promise(r => setTimeout(r, 1500)); // extra settle time for API calls
     log('✅ GDCC page loaded.', colors.green);
 }
@@ -139,19 +202,40 @@ async function navigateToGDCC(page) {
  * @returns {boolean} - true if selected successfully
  */
 async function selectDropdown(page, dropdownIndex, searchText) {
-    const dropdownTriggers = await page.$$('div.relative > div[tabindex="0"]');
+    const dropdownTriggers = await page.$$('div[tabindex="0"]');
     if (dropdownTriggers.length <= dropdownIndex) {
         log(`❌ Dropdown at index ${dropdownIndex} not found (only ${dropdownTriggers.length} found).`, colors.red);
         return false;
     }
 
+    // Wait until the trigger is interactive (placeholder is not "Loading..." / gate messages)
+    try {
+        await page.waitForFunction((idx) => {
+            const triggers = Array.from(document.querySelectorAll('div[tabindex="0"]'));
+            const el = triggers[idx];
+            if (!el) return false;
+            const t = (el.textContent || '').trim();
+            if (!t) return false;
+            if (t.includes('Loading...')) return false;
+            if (t.includes('Select Account first')) return false;
+            if (t.includes('Select Zone first')) return false;
+            return true;
+        }, { timeout: 45000 }, dropdownIndex);
+    } catch (e) {
+        log(`⚠️ Dropdown trigger at index ${dropdownIndex} still looks gated/loading. Continuing...`, colors.yellow);
+    }
+
     // Click Trigger - retry until search input appears
     let popupOpened = false;
-    for (let attempt = 0; attempt < 10; attempt++) {
-        await page.evaluate(el => el.click(), dropdownTriggers[dropdownIndex]);
-        await new Promise(r => setTimeout(r, 1000));
+    for (let attempt = 0; attempt < 15; attempt++) {
+        // Some dropdowns open on mousedown rather than click
+        await page.evaluate((el) => {
+            el.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+            el.click();
+        }, dropdownTriggers[dropdownIndex]);
+        await new Promise(r => setTimeout(r, 800));
 
-        const searchInputs = await page.$$('input[placeholder="Search..."]');
+        const searchInputs = await page.$$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
         if (searchInputs.length > 0) {
             popupOpened = true;
             break;
@@ -164,7 +248,7 @@ async function selectDropdown(page, dropdownIndex, searchText) {
     }
 
     // Clear input and type search text
-    const activeSearchInputs = await page.$$('input[placeholder="Search..."]');
+    const activeSearchInputs = await page.$$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
     const activeInput = activeSearchInputs[activeSearchInputs.length - 1];
 
     await page.evaluate((input) => {
@@ -177,43 +261,55 @@ async function selectDropdown(page, dropdownIndex, searchText) {
     await activeInput.type(searchText);
     await new Promise(r => setTimeout(r, 1000));
 
-    // Wait for dropdown items to render
+    // Wait for dropdown items to render (anchor to the active search input)
     try {
-        await page.waitForFunction((textToFind) => {
-            const items = document.querySelectorAll('div[class*="absolute z-[100]"] > div');
-            if (items.length > 0) {
-                const text = items[0].textContent;
-                if (text && text.includes('Loading...')) return false;
-                return true;
-            }
-            return false;
-        }, { timeout: 10000 }, searchText);
+        await page.waitForFunction(() => {
+            const inputs = Array.from(document.querySelectorAll('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]'));
+            const input = inputs[inputs.length - 1];
+            if (!input) return false;
+
+            const root = input.closest('div.space-y-1.relative') || input.closest('div.relative');
+            if (!root) return false;
+
+            const container = root.querySelector('div[class*="absolute"]');
+            if (!container) return false;
+            const txt = (container.textContent || '').trim();
+            if (!txt) return false;
+            if (txt.includes('Loading...') || txt.includes('กำลังโหลด...')) return false;
+            return true;
+        }, { timeout: 10000 });
     } catch (e) {
         log('⚠️ Timeout waiting for Dropdown items to load.', colors.yellow);
     }
 
-    // Find and click the matching item
-    const clickTargetHandle = await page.evaluateHandle((textToFind) => {
-        const dropdownPopupList = document.querySelectorAll('div[class*="absolute z-[100]"] > div');
-        for (const item of Array.from(dropdownPopupList)) {
-            const labelDiv = item.querySelector('div.font-medium') || item;
-            const textCont = labelDiv.textContent || '';
-            if (textCont.trim().toLowerCase().includes(textToFind.trim().toLowerCase())) {
-                return item;
+    // Find and click the matching item (anchor to the active search input)
+    const clickResult = await page.evaluate((textToFind) => {
+        const inputs = Array.from(document.querySelectorAll('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]'));
+        const input = inputs[inputs.length - 1];
+        if (!input) return { success: false, reason: 'No search input found' };
+
+        const root = input.closest('div.space-y-1.relative') || input.closest('div.relative');
+        if (!root) return { success: false, reason: 'No dropdown root found' };
+
+        const container = root.querySelector('div[class*="absolute"]');
+        if (!container) return { success: false, reason: 'No dropdown container found' };
+
+        const searchLower = (textToFind || '').trim().toLowerCase();
+        const candidates = Array.from(container.querySelectorAll('*'));
+        for (const el of candidates) {
+            const t = (el.textContent || '').trim().toLowerCase();
+            if (!t) continue;
+            if (t.includes(searchLower)) {
+                const target = el.closest('div.cursor-pointer') || el.closest('[onmousedown]') || el;
+                target.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+                return { success: true, matchedText: t };
             }
         }
-        return null;
+        return { success: false, reason: 'Not found', candidates: candidates.length };
     }, searchText);
 
-    if (clickTargetHandle && await clickTargetHandle.evaluate(el => el !== null)) {
-        await page.evaluate((item) => {
-            const event = new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true });
-            item.dispatchEvent(event);
-        }, clickTargetHandle);
-        await clickTargetHandle.dispose();
-    } else {
-        const count = await page.evaluate(() => document.querySelectorAll('div[class*="absolute z-[100]"] > div').length);
-        log(`❌ Could not select dropdown item: "${searchText}" (found ${count} items)`, colors.red);
+    if (!clickResult.success) {
+        log(`❌ Could not select dropdown item: "${searchText}" (${clickResult.reason || 'failed'})`, colors.red);
         return false;
     }
 
@@ -265,30 +361,82 @@ async function selectGDCCFilters(page, config = GDCC_TEST_CONFIG) {
  * Click "Generate Dashboard" button and wait for data to load.
  */
 async function clickGenerateDashboard(page) {
-    await new Promise(r => setTimeout(r, 1000));
-    const btns = await page.$$('button');
-    let genBtn = null;
-    for (const btn of btns) {
-        const txt = await btn.evaluate(el => el.textContent?.trim() || '');
-        const disabled = await btn.evaluate(el => el.disabled);
-        if (txt === 'Generate Dashboard' && !disabled) {
-            genBtn = btn;
-        }
-    }
-    if (!genBtn) throw new Error('Generate Dashboard button not found or is disabled');
+    await new Promise((r) => setTimeout(r, 750));
 
-    await genBtn.click();
-    log('📊 Clicked Generate Dashboard. Waiting for data...', colors.blue);
-
-    // Wait for it to become enabled again (data loaded)
+    // Ensure the button exists and is enabled before we attempt the click.
     try {
         await page.waitForFunction(() => {
             const btns = Array.from(document.querySelectorAll('button'));
-            const gen = btns.find(b => b.textContent?.trim() === 'Generate Dashboard');
-            return gen && !gen.disabled;
+            const btn = btns.find((b) => (b.textContent || '').trim() === 'Generate Dashboard');
+            return !!(btn && !btn.disabled);
+        }, { timeout: 30000 });
+    } catch (_) {
+        // Fall through; we'll throw a clearer error below if we still can't click.
+    }
+
+    const isTransientContextError = (err) => {
+        const msg = String(err?.message || err || '');
+        return (
+            msg.includes('detached Frame') ||
+            msg.includes('Execution context was destroyed') ||
+            msg.includes('Cannot find context') ||
+            msg.includes('Target closed')
+        );
+    };
+
+    let clicked = false;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            clicked = await page.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('button'));
+                const btn = btns.find((b) => (b.textContent || '').trim() === 'Generate Dashboard');
+                if (!btn || btn.disabled) return false;
+                btn.scrollIntoView({ block: 'center', inline: 'center' });
+                btn.click();
+                return true;
+            });
+            if (clicked) break;
+        } catch (e) {
+            lastErr = e;
+            if (isTransientContextError(e)) {
+                // Next.js dev/HMR can reload the page; wait for it to settle and retry.
+                await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { });
+                await new Promise((r) => setTimeout(r, 500));
+                continue;
+            }
+            throw e;
+        }
+
+        await new Promise((r) => setTimeout(r, 500));
+    }
+
+    if (!clicked) {
+        const tail = lastErr ? ` (last error: ${lastErr.message})` : '';
+        throw new Error(`Generate Dashboard button not found or is disabled${tail}`);
+    }
+
+    log('📊 Clicked Generate Dashboard. Waiting for data...', colors.blue);
+
+    // Best-effort: ensure we observed a "loading" state, then wait for enabled again.
+    try {
+        await page.waitForFunction(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const btn = btns.find((b) => (b.textContent || '').trim() === 'Generate Dashboard');
+            return !!(btn && btn.disabled);
+        }, { timeout: 10000 });
+    } catch (_) {
+        // Some builds keep the button enabled; continue with the "enabled again" check.
+    }
+
+    try {
+        await page.waitForFunction(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const gen = btns.find((b) => (b.textContent || '').trim() === 'Generate Dashboard');
+            return !!(gen && !gen.disabled);
         }, { timeout: 90000 });
         log('✅ Traffic data loaded.', colors.green);
-    } catch (e) {
+    } catch (_) {
         log('⚠️ Timed out waiting for data load. Continuing anyway...', colors.yellow);
     }
 }
@@ -333,46 +481,68 @@ async function generateBatchReport(page, reportDateStr, subdomain = 'ALL_SUBDOMA
     // Select host(s)
     await new Promise(r => setTimeout(r, 500));
     if (subdomain === 'ALL_SUBDOMAINS') {
-        // Zone has no real subdomains → click "No Subdomain" to generate Domain Report
+        // Zone has no real subdomains → click "No Subdomain (Full Domain Report)" to generate Domain Report
         const labels = await page.$$('label');
         let noSubLabel = null;
         for (const lbl of labels) {
             const txt = await lbl.evaluate(el => el.textContent?.trim() || '');
-            if (txt === 'No Subdomain') { noSubLabel = lbl; break; }
+            if (txt.includes('No Subdomain')) { noSubLabel = lbl; break; }
         }
         if (noSubLabel) {
-            await noSubLabel.click();
+            // Click via evaluate to avoid overlay/visibility issues in headless.
+            await page.evaluate((el) => {
+                el.scrollIntoView({ block: 'center', inline: 'center' });
+                el.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+                el.click();
+            }, noSubLabel);
             log('☑️ Selected "No Subdomain" (Domain Report mode).', colors.gray);
         } else {
             log('⚠️ "No Subdomain" label not found. Trying Select All fallback.', colors.yellow);
-            const modalBtns = await page.$$('button');
-            for (const btn of modalBtns) {
-                const txt = await btn.evaluate(el => el.textContent?.trim() || '');
-                if (txt.includes('Select All')) { await btn.click(); break; }
-            }
+            const clickedSelectAll = await page.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('button'));
+                const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
+                if (!btn) return false;
+                btn.scrollIntoView({ block: 'center', inline: 'center' });
+                btn.click();
+                return true;
+            });
+            if (!clickedSelectAll) log('⚠️ Select All button not found in modal.', colors.yellow);
         }
     } else {
-        const modalBtns = await page.$$('button');
-        for (const btn of modalBtns) {
-            const txt = await btn.evaluate(el => el.textContent?.trim() || '');
-            if (txt.includes('Select All')) { await btn.click(); break; }
-        }
+        const clickedSelectAll = await page.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
+            if (!btn) return false;
+            btn.scrollIntoView({ block: 'center', inline: 'center' });
+            btn.click();
+            return true;
+        });
+        if (!clickedSelectAll) throw new Error('Select All button not found in modal');
         log('☑️ Selected all hosts.', colors.gray);
     }
 
-    // Click Generate
+    // Click Generate (avoid accidentally clicking "Generate Dashboard")
     await new Promise(r => setTimeout(r, 500));
-    const generateBtns = await page.$$('button');
-    let finalGenBtn = null;
-    for (const btn of generateBtns) {
-        const txt = await btn.evaluate(el => el.textContent?.trim() || '');
-        const disabled = await btn.evaluate(el => el.disabled);
-        if ((txt.includes('Generate') || txt.includes('Domain Report')) && !disabled) {
-            finalGenBtn = btn;
-        }
-    }
-    if (!finalGenBtn) throw new Error('Generate/Domain Report button not found in modal');
-    await finalGenBtn.click();
+    const clickedGenerate = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        const candidates = btns.filter(b => {
+            const txt = (b.textContent || '').trim();
+            if (!txt) return false;
+            if (txt === 'Generate Dashboard') return false;
+            if (!txt.startsWith('Generate')) return false;
+            if (b.disabled) return false;
+            return true;
+        });
+
+        // Prefer the last matching button (modal footer tends to be later in DOM)
+        const btn = candidates[candidates.length - 1];
+        if (!btn) return false;
+        btn.scrollIntoView({ block: 'center', inline: 'center' });
+        btn.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+        btn.click();
+        return true;
+    });
+    if (!clickedGenerate) throw new Error('Generate button not found/clickable (modal)');
     log('⏳ Report generation started...', colors.blue);
 }
 

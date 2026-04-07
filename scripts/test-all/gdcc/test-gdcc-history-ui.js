@@ -39,19 +39,38 @@ async function testGDCCHistoryUI() {
         log('Check for Date Picker inputs...', colors.blue);
         await verifyElement(page, 'input[type="date"]', '✅ Date picker input found.', '❌ Date picker missing!');
 
-        log('Check for Sync History button...', colors.blue);
-        // We look for a button that contains the text "Sync History"
-        const btnExists = await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('button'));
-            return btns.some(btn => btn.innerText.includes('Sync History'));
+        log('Check for Sync History menu item (via Settings dropdown)...', colors.blue);
+
+        // Sync History is inside the Settings dropdown menu.
+        const settingsClicked = await page.evaluate(() => {
+            const svg =
+                document.querySelector('svg[data-lucide="settings"]') ||
+                document.querySelector('svg.lucide-settings') ||
+                document.querySelector('svg[class*="lucide-settings"]');
+            const btn = svg ? svg.closest('button') : null;
+            if (!btn) return false;
+            btn.click();
+            return true;
         });
 
-        if (btnExists) {
-            log('✅ Sync History button found.', colors.green);
-        } else {
-            log('❌ Sync History button missing!', colors.red);
-            throw new Error('Sync button missing');
+        if (!settingsClicked) {
+            throw new Error('Could not open Settings dropdown (settings button not found)');
         }
+
+        // Wait for menu item to appear
+        await page.waitForFunction(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            return btns.some((b) => {
+                const t = (b.innerText || '').trim();
+                if (!t) return false;
+                if (!t.includes('Sync')) return false;
+                // menu item is visible when dropdown is open
+                const visible = !!(b.offsetParent);
+                return visible && (t.includes('Sync History') || t.includes('Sync Historical'));
+            });
+        }, { timeout: 10000 });
+
+        log('✅ Sync History menu item found.', colors.green);
 
         log('\n🎉 All GDCC History UI Tests Passed!', colors.green);
         process.exit(0);

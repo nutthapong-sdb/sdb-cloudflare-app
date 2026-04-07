@@ -23,8 +23,11 @@ function log(msg, color = colors.reset) {
 
 async function setupBrowser() {
     log('🚀 Setting up Browser...', colors.cyan);
+
+    // Default: headed mode (matches original behavior). Set HEADLESS=1 to run headless.
+    const isHeadless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
     const browser = await puppeteer.launch({
-        headless: false,
+        headless: isHeadless ? 'new' : false,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -57,14 +60,14 @@ async function login(page) {
 
     // Check if already logged in (redirected)
     if (page.url().includes('/login')) {
-        await page.waitForSelector('input[type="text"]', { visible: true }); // Ensure input visible
+        await page.waitForSelector('input[type="text"]', { visible: true });
         await page.type('input[type="text"]', 'root');
         await page.type('input[type="password"]', 'password');
 
-        await Promise.all([
-            page.click('button[type="submit"]'),
-            page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(e => log(`    ⚠️ Login nav timeout, checking URL...`, colors.yellow)),
-        ]);
+        // Avoid click+navigation races in Next.js dev; submit via keyboard.
+        await page.keyboard.press('Enter');
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 })
+            .catch(() => log(`    ⚠️ Login nav timeout, checking URL...`, colors.yellow));
     }
 
     // Check if redirected to dashboard or systems

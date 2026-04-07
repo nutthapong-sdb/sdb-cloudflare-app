@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start -p 8002",
     "lint": "eslint",
+    "test:e2e": "node scripts/test-all/run-all.js",
     "postinstall": "mkdir -p public/tinymce && cp -R node_modules/tinymce/* public/tinymce/"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
+    "jszip": "^3.10.1",
     "libreoffice-convert": "^1.8.1",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",

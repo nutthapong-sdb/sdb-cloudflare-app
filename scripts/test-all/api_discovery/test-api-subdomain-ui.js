@@ -1,69 +1,40 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config({ path: ['.env.local', '.env'] });
 
-const BASE_url = 'http://localhost:8002';
+const { setupBrowser, setupPage, login, log: sharedLog, colors, BASE_URL } = require('../libs/ui-helper');
+const { selectCursorDropdown } = require('../libs/gdcc-helper');
 
-function log(msg) {
-    console.log(`[Feature-Test] ${msg}`);
+function log(msg, color = colors.reset) {
+    // Keep the original prefix to make this test easy to spot.
+    sharedLog(`[Feature-Test] ${msg}`, color);
 }
 
 (async () => {
     log('🚀 Starting Deep Feature Test: API Discovery Subdomain Expansion...');
 
-    const browser = await puppeteer.launch({
-        headless: "new",
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        defaultViewport: { width: 1280, height: 800 }
-    });
-
-    const page = await browser.newPage();
+    const browser = await setupBrowser();
+    const page = await setupPage(browser);
 
     try {
         // 1. Login
-        log('🔹 Login...');
-        await page.goto(`${BASE_url}/login`, { waitUntil: 'networkidle0' });
-        await page.type('input[type="text"]', 'admin');
-        await page.type('input[type="password"]', 'password');
-        await page.click('button[type="submit"]');
-        await page.waitForNavigation();
+        log('🔹 Login...', colors.blue);
+        await login(page);
 
         // 2. Navigate
-        await page.goto(`${BASE_url}/systems/api_discovery`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/systems/api_discovery`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('div.cursor-pointer', { visible: true, timeout: 20000 });
+        await new Promise(r => setTimeout(r, 1500));
 
         // 3. Select Account & Zone (To trigger data load)
-        log('🔹 Selecting Zone to trigger data load...');
-        await page.waitForSelector('label', { timeout: 10000 });
-
-        // Click Account Dropdown
-        const dropdowns = await page.$$('label');
-        if (dropdowns.length > 0) {
-            // Click the input inside the first dropdown (Account)
-            const accInput = await dropdowns[0].evaluateHandle(el => el.nextElementSibling.querySelector('input, div'));
-            await accInput.click();
-            // Wait for options and select first one
-            await page.waitForSelector('.absolute.z-\\[100\\]', { timeout: 5000 });
-            const firstOption = await page.$('.absolute.z-\\[100\\] div[class*="cursor-pointer"]');
-            if (firstOption) await firstOption.click();
-            await new Promise(r => setTimeout(r, 1000)); // Wait for state update
-
-            // Click Zone Dropdown (Second label)
-            const zoneLabel = dropdowns[1]; // Should appear after account selection
-            if (zoneLabel) {
-                const zoneInput = await zoneLabel.evaluateHandle(el => el.nextElementSibling.querySelector('input, div'));
-                await zoneInput.click();
-                await page.waitForSelector('.absolute.z-\\[100\\]', { timeout: 5000 });
-                const firstZone = await page.$('.absolute.z-\\[100\\] div[class*="cursor-pointer"]');
-                if (firstZone) {
-                    await firstZone.click();
-                    log('✅ Zone selected');
-                }
-            }
-        }
+        log('🔹 Selecting Zone to trigger data load...', colors.blue);
+        const acctOk = await selectCursorDropdown(page, 0, 'Government Data Center');
+        if (!acctOk) throw new Error('Failed to select Account for API Discovery subdomain UI test');
+        await new Promise(r => setTimeout(r, 1500));
+        const zoneOk = await selectCursorDropdown(page, 1, 'dwf.go.th');
+        if (!zoneOk) throw new Error('Failed to select Zone for API Discovery subdomain UI test');
+        log('✅ Zone selected', colors.green);
 
         // 4. Test Expand Logic
-        log('🔹 Testing Expand Button Logic...');
+        log('🔹 Testing Expand Button Logic...', colors.blue);
         // Wait for table rows
         try {
             await page.waitForSelector('table tbody tr', { timeout: 10000 });
@@ -82,7 +53,7 @@ function log(msg) {
                 const subHeader = await page.$eval('h5', el => el.textContent);
 
                 if (subHeader.includes('Subdomains for')) {
-                    log(`✅ SUCCESS: Expanded view found header "${subHeader}"`);
+                    log(`✅ SUCCESS: Expanded view found header "${subHeader}"`, colors.green);
                 } else {
                     throw new Error('Expanded content did not match expectation');
                 }
@@ -95,7 +66,7 @@ function log(msg) {
         }
 
     } catch (error) {
-        log(`❌ Test Failed: ${error.message}`);
+        log(`❌ Test Failed: ${error.message}`, colors.red);
         process.exit(1);
     } finally {
         await browser.close();
