@@ -52,6 +52,43 @@ const fetchHostRequestTotal = async (token, zoneId, host, since, until) => {
     return response.data?.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups?.[0]?.count || 0;
 };
 
+const enumerateDateStrings = (startDateStr, endDateStr) => {
+    const dates = [];
+    let cursor = new Date(`${startDateStr}T00:00:00.000Z`);
+    const end = new Date(`${endDateStr}T00:00:00.000Z`);
+    while (cursor <= end) {
+        dates.push(cursor.toISOString().split('T')[0]);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return dates;
+};
+
+const buildMissingDateRanges = (requestedDates, availableDates, forceFreshDates = new Set()) => {
+    const missingDates = requestedDates.filter((date) => !availableDates.has(date) || forceFreshDates.has(date));
+    if (missingDates.length === 0) return [];
+
+    const ranges = [];
+    let rangeStart = missingDates[0];
+    let previous = new Date(`${missingDates[0]}T00:00:00.000Z`);
+
+    for (let i = 1; i < missingDates.length; i++) {
+        const currentStr = missingDates[i];
+        const current = new Date(`${currentStr}T00:00:00.000Z`);
+        const expected = new Date(previous);
+        expected.setUTCDate(expected.getUTCDate() + 1);
+
+        if (current.getTime() !== expected.getTime()) {
+            ranges.push({ start: rangeStart, end: previous.toISOString().split('T')[0] });
+            rangeStart = currentStr;
+        }
+
+        previous = current;
+    }
+
+    ranges.push({ start: rangeStart, end: previous.toISOString().split('T')[0] });
+    return ranges;
+};
+
 const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, until, hostTotalRange = null) => {
     const query = `
        query GetZoneAnalytics($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
@@ -166,7 +203,7 @@ const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, u
 
 // Lightweight analytics for per-subdomain syncing (avoids 502 by splitting the query)
 // Only fetches httpRequestsAdaptiveGroups with host filter (no heavy firewall tables combined)
-const fetchSubdomainAnalytics = async (token, zoneId, host, since, until) => {
+const fetchSubdomainAnalytics = async (token, zoneId, host, since, until, hostTotalRange = null) => {
     const trafficQuery = `
         query GetSubdomainTraffic($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String, $host: String) {
           viewer {
@@ -229,7 +266,13 @@ const fetchSubdomainAnalytics = async (token, zoneId, host, since, until) => {
     const [trafficResp, firewallResp, hostRequestTotal] = await Promise.all([
         axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: trafficQuery, variables } }),
         axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: firewallQuery, variables } }),
-        fetchHostRequestTotal(token, zoneId, host, since, until)
+        fetchHostRequestTotal(
+            token,
+            zoneId,
+            host,
+            hostTotalRange?.since || since,
+            hostTotalRange?.until || until
+        )
     ]);
 
     if (trafficResp.data?.errors) console.warn(`⚠️ Subdomain traffic GraphQL errors for ${host}:`, JSON.stringify(trafficResp.data.errors));
@@ -694,11 +737,21 @@ export async function POST(request) {
                     hostRequestTotal: 0
                 };
 
+                const statsStartStr = (targetSubdomain && body.startDate) ? body.startDate : since.toISOString().split('T')[0];
+                const statsEndStr = (() => {
+                    if (!(targetSubdomain && body.endDate)) return until.toISOString().split('T')[0];
+                    const endExclusive = new Date(`${body.endDate}T00:00:00.000Z`);
+                    endExclusive.setUTCDate(endExclusive.getUTCDate() - 1);
+                    return endExclusive.toISOString().split('T')[0];
+                })();
+
                 let sqliteData = [];
                 if (!liveOnly) {
                     // Check if history in DB
                     try {
-                        sqliteData = await getStatsInRange(zoneId, targetSubdomain || 'ALL_SUBDOMAINS', since.toISOString().split('T')[0], until.toISOString().split('T')[0]);
+                        sqliteData = statsEndStr >= statsStartStr
+                            ? await getStatsInRange(zoneId, targetSubdomain || 'ALL_SUBDOMAINS', statsStartStr, statsEndStr)
+                            : [];
                     } catch (e) {
                         console.warn('Could not fetch from SQLite:', e.message);
                     }
@@ -747,35 +800,50 @@ export async function POST(request) {
                 const endStr = until.toISOString().split('T')[0];
                 const startStr = since.toISOString().split('T')[0];
 
-                if (liveOnly || (todayStr >= startStr && todayStr <= endStr) || sqliteData.length === 0) {
-                    console.log('🔹 Fetching live data from Cloudflare for actual range...');
-                    let liveSince = since;
-                    if (!liveOnly && sqliteData.length > 0) {
-                        const todayMidnight = new Date(todayStr + 'T00:00:00.000Z');
-                        liveSince = since > todayMidnight ? since : todayMidnight;
-                    }
-                    if (liveSince < until) {
-                        const liveData = await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, until, hostTotalRange);
-
-                        // Combine 
-                        finalData.httpRequestsAdaptiveGroups.push(...liveData.httpRequestsAdaptiveGroups);
-                        finalData.zoneSummary.push(...liveData.zoneSummary);
-                        finalData.firewallActivity.push(...liveData.firewallActivity);
-                        finalData.firewallRules.push(...liveData.firewallRules);
-                        finalData.firewallIPs.push(...liveData.firewallIPs);
-                        finalData.firewallSources.push(...liveData.firewallSources);
-                        finalData.hostRequestTotal += liveData.hostRequestTotal || 0;
-                    }
+                const availableDates = new Set(sqliteData.map((row) => row.report_date));
+                const requestedDates = statsEndStr >= statsStartStr
+                    ? enumerateDateStrings(statsStartStr, statsEndStr)
+                    : [];
+                const forceFreshDates = new Set();
+                if (todayStr >= statsStartStr && todayStr <= statsEndStr) {
+                    forceFreshDates.add(todayStr);
                 }
 
-                if (targetSubdomain && hostTotalRange) {
-                    finalData.hostRequestTotal = await fetchHostRequestTotal(
-                        token,
-                        zoneId,
-                        targetSubdomain,
-                        hostTotalRange.since,
-                        hostTotalRange.until
-                    );
+                const missingRanges = liveOnly
+                    ? [{ start: startStr, end: endStr }]
+                    : buildMissingDateRanges(requestedDates, availableDates, forceFreshDates);
+
+                if (missingRanges.length > 0) {
+                    console.log('🔹 Fetching live data from Cloudflare for missing ranges...', missingRanges);
+                }
+
+                for (const range of missingRanges) {
+                    const liveSince = new Date(`${range.start}T00:00:00.000Z`);
+                    const liveUntil = new Date(`${range.end}T23:59:59.999Z`);
+                    if (liveSince >= liveUntil) continue;
+
+                    const liveHostRange = targetSubdomain && hostTotalRange
+                        ? {
+                            since: new Date(`${range.start}T00:00:00+07:00`),
+                            until: new Date(`${range.end}T00:00:00+07:00`)
+                        }
+                        : null;
+
+                    if (liveHostRange?.until) {
+                        liveHostRange.until.setUTCDate(liveHostRange.until.getUTCDate() + 1);
+                    }
+
+                    const liveData = targetSubdomain
+                        ? await fetchSubdomainAnalytics(token, zoneId, targetSubdomain, liveSince, liveUntil, liveHostRange)
+                        : await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, liveUntil, liveHostRange);
+
+                    finalData.httpRequestsAdaptiveGroups.push(...liveData.httpRequestsAdaptiveGroups);
+                    finalData.zoneSummary.push(...liveData.zoneSummary);
+                    finalData.firewallActivity.push(...liveData.firewallActivity);
+                    finalData.firewallRules.push(...liveData.firewallRules);
+                    finalData.firewallIPs.push(...liveData.firewallIPs);
+                    finalData.firewallSources.push(...liveData.firewallSources);
+                    finalData.hostRequestTotal += liveData.hostRequestTotal || 0;
                 }
 
                 console.log('🔹 API: Sending Traffic Response...');
@@ -1724,8 +1792,16 @@ export async function POST(request) {
 
                 for (let di = 0; di < allDates.length; di++) {
                     const dStr = allDates[di];
-                    const dStart = new Date(dStr + 'T00:00:00.000Z');
-                    const dEnd = new Date(dStr + 'T23:59:59.999Z');
+                    const isSubdomainTarget = !!targetFilter;
+                    const dStart = isSubdomainTarget
+                        ? new Date(`${dStr}T00:00:00+07:00`)
+                        : new Date(dStr + 'T00:00:00.000Z');
+                    const dEnd = isSubdomainTarget
+                        ? new Date(`${dStr}T00:00:00+07:00`)
+                        : new Date(dStr + 'T23:59:59.999Z');
+                    if (isSubdomainTarget) {
+                        dEnd.setUTCDate(dEnd.getUTCDate() + 1);
+                    }
 
                     controller.enqueue(encoder.encode(JSON.stringify({
                         type: 'progress',

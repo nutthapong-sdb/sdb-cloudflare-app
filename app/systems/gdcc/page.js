@@ -1646,11 +1646,11 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
 const ZoneRow = ({ zoneId, zoneData, fetchSyncStatus, apiToken, isManageMode }) => {
     const [expanded, setExpanded] = useState(false);
-    const handleDelete = async (domain, e) => {
+    const handleDelete = async (domain, e, displayName = domain) => {
         e.stopPropagation();
         const confirmation = await Swal.fire({
             title: 'Delete Data?',
-            text: `Remove backup data for ${domain}?`,
+            text: `Remove backup data for ${displayName}?`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#ef4444',
@@ -1724,7 +1724,7 @@ const ZoneRow = ({ zoneId, zoneData, fetchSyncStatus, apiToken, isManageMode }) 
                             }
                         </span>
                         {isManageMode && (
-                            <button onClick={(e) => handleDelete('ALL_DOMAINS', e)} className="text-red-500 hover:text-red-400 p-1 flex items-center justify-center rounded hover:bg-red-900/30 transition-colors" title="Delete All Zone Data">
+                            <button onClick={(e) => handleDelete('ALL_DOMAINS', e, `${zoneData.name} (all synced data)`)} className="text-red-500 hover:text-red-400 p-1 flex items-center justify-center rounded hover:bg-red-900/30 transition-colors" title="Delete All Zone Data">
                                 <Trash2 className="w-3.5 h-3.5" />
                             </button>
                         )}
@@ -1761,7 +1761,7 @@ const ZoneRow = ({ zoneId, zoneData, fetchSyncStatus, apiToken, isManageMode }) 
                                             <span className="text-right w-48 font-mono text-[10px] text-gray-400 group-hover:text-gray-200">{dateRange}</span>
                                             <div className="w-8 flex justify-end">
                                                 {isManageMode && (
-                                                    <button onClick={(e) => handleDelete(d.domain, e)} className="text-red-500 hover:text-red-400 p-1 flex items-center justify-center rounded hover:bg-red-900/30 transition-colors" title="Delete Data">
+                                                    <button onClick={(e) => handleDelete(d.domain, e, displayName)} className="text-red-500 hover:text-red-400 p-1 flex items-center justify-center rounded hover:bg-red-900/30 transition-colors" title="Delete Data">
                                                         <X className="w-3 h-3" />
                                                     </button>
                                                 )}
@@ -1792,6 +1792,7 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
     const [currentSyncPhase, setCurrentSyncPhase] = useState('');
     const [subdomainProgress, setSubdomainProgress] = useState({ current: 0, total: 0 });
     const [isManageMode, setIsManageMode] = useState(false);
+    const [syncListScope, setSyncListScope] = useState('all');
 
     const [searchQuery, setSearchQuery] = useState('');
     const [accountSearchQuery, setAccountSearchQuery] = useState('');
@@ -1800,7 +1801,7 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, [searchQuery, syncListScope, selectedAccounts]);
 
     const paginatedSyncDataList = useMemo(() => {
         if (!syncStatusData) return { data: [], totalPages: 0 };
@@ -1820,9 +1821,17 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
         ).map(([zoneId, zoneData]) => ({ zoneId, ...zoneData }));
 
         let filtered = grouped;
+        if (syncListScope === 'selected') {
+            filtered = filtered.filter(item =>
+                Array.from(selectedAccounts).some(accId =>
+                    zones.some(zone => zone.id === item.zoneId && zone.account?.id === accId)
+                )
+            );
+        }
+
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            filtered = grouped.filter(item =>
+            filtered = filtered.filter(item =>
                 item.zoneId.toLowerCase().includes(q) ||
                 item.name.toLowerCase().includes(q) ||
                 item.domains.some(d => d.domain.toLowerCase().includes(q))
@@ -1833,7 +1842,7 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
         const data = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
         return { data, totalPages };
-    }, [syncStatusData, searchQuery, currentPage]);
+    }, [syncStatusData, searchQuery, currentPage, syncListScope, selectedAccounts, zones]);
 
     const t = theme?.modal || {
         overlay: 'bg-black/80',
@@ -1854,6 +1863,7 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
             setCurrentSyncIndex(0);
             setCurrentSyncZoneName('');
             setSearchQuery('');
+            setSyncListScope('all');
             setCurrentPage(1);
         }
     }, [isOpen]);
@@ -2287,6 +2297,20 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                             </h3>
                             {/* Search & Manage Toggle */}
                             <div className="flex items-center gap-2">
+                                <div className="flex items-center rounded-full border border-gray-700 bg-gray-800 p-0.5">
+                                    <button
+                                        onClick={() => setSyncListScope('all')}
+                                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${syncListScope === 'all' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    >
+                                        All Synced
+                                    </button>
+                                    <button
+                                        onClick={() => setSyncListScope('selected')}
+                                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${syncListScope === 'selected' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    >
+                                        Selected Only
+                                    </button>
+                                </div>
                                 <button
                                     onClick={() => setIsManageMode(!isManageMode)}
                                     className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1 border ${isManageMode ? 'bg-red-900/40 text-red-400 border-red-800/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white hover:bg-gray-700'}`}
@@ -2326,7 +2350,9 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                                     )) : (
                                         <tr>
                                             <td colSpan={4} className="p-8 text-center text-gray-500 text-sm">
-                                                {searchQuery
+                                                {syncListScope === 'selected' && selectedAccounts.size === 0
+                                                    ? 'No selected accounts. Choose one or more accounts above to filter this list.'
+                                                    : searchQuery
                                                     ? `No zones found matching "${searchQuery}"`
                                                     : 'No synced data yet. Select accounts and zones above, then click Sync to begin.'}
                                             </td>
