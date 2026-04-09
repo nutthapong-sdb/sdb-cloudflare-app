@@ -5,7 +5,54 @@ import { getLatestSyncDate, saveDailyStats, getStatsInRange, getAllSyncStatus, d
 
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
 
-const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, until) => {
+const fetchHostRequestTotal = async (token, zoneId, host, since, until) => {
+    if (!host) return 0;
+
+    const query = `
+        query GetHostRequestTotal($zoneTag: String, $since: String, $until: String, $host: String) {
+          viewer {
+            zones(filter: { zoneTag: $zoneTag }) {
+              httpRequestsAdaptiveGroups(
+                filter: {
+                  datetime_geq: $since,
+                  datetime_leq: $until,
+                  clientRequestHTTPHost: $host
+                }
+                limit: 5
+              ) {
+                count
+              }
+            }
+          }
+        }
+    `;
+
+    const response = await axios({
+        method: 'POST',
+        url: `${CLOUDFLARE_API_BASE}/graphql`,
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        data: {
+            query,
+            variables: {
+                zoneTag: zoneId,
+                since: since.toISOString(),
+                until: until.toISOString(),
+                host
+            }
+        }
+    });
+
+    if (response.data?.errors) {
+        console.warn(`⚠️ Host total GraphQL errors for ${host}:`, JSON.stringify(response.data.errors));
+    }
+
+    return response.data?.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups?.[0]?.count || 0;
+};
+
+const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, until, hostTotalRange = null) => {
     const query = `
        query GetZoneAnalytics($zoneTag: String, $since: String, $until: String, $since_date: String, $until_date: String${targetSubdomain ? ', $host: String' : ''}) {
          viewer {
@@ -57,12 +104,23 @@ const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, u
     };
     if (targetSubdomain) { variables.host = targetSubdomain; }
 
-    const response = await axios({
-        method: 'POST',
-        url: `${CLOUDFLARE_API_BASE}/graphql`,
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        data: { query, variables }
-    });
+    const [response, hostRequestTotal] = await Promise.all([
+        axios({
+            method: 'POST',
+            url: `${CLOUDFLARE_API_BASE}/graphql`,
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            data: { query, variables }
+        }),
+        targetSubdomain
+            ? fetchHostRequestTotal(
+                token,
+                zoneId,
+                targetSubdomain,
+                hostTotalRange?.since || since,
+                hostTotalRange?.until || until
+            )
+            : Promise.resolve(0)
+    ]);
 
     if (response.data.errors) {
         console.error('❌ Cloudflare GraphQL Errors:', JSON.stringify(response.data.errors, null, 2));
@@ -75,7 +133,8 @@ const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, u
         firewallActivity: zoneData?.firewallActivity || [],
         firewallRules: zoneData?.firewallRules || [],
         firewallIPs: zoneData?.firewallIPs || [],
-        firewallSources: zoneData?.firewallSources || []
+        firewallSources: zoneData?.firewallSources || [],
+        hostRequestTotal: hostRequestTotal || 0
     };
 
     // Limit detection — warn if result count is at or near the query limit
@@ -167,9 +226,10 @@ const fetchSubdomainAnalytics = async (token, zoneId, host, since, until) => {
     };
 
     // Run traffic and firewall queries in parallel (separate requests = lighter per call)
-    const [trafficResp, firewallResp] = await Promise.all([
+    const [trafficResp, firewallResp, hostRequestTotal] = await Promise.all([
         axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: trafficQuery, variables } }),
-        axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: firewallQuery, variables } })
+        axios({ method: 'POST', url: `${CLOUDFLARE_API_BASE}/graphql`, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, data: { query: firewallQuery, variables } }),
+        fetchHostRequestTotal(token, zoneId, host, since, until)
     ]);
 
     if (trafficResp.data?.errors) console.warn(`⚠️ Subdomain traffic GraphQL errors for ${host}:`, JSON.stringify(trafficResp.data.errors));
@@ -184,7 +244,8 @@ const fetchSubdomainAnalytics = async (token, zoneId, host, since, until) => {
         firewallActivity: fZone?.firewallActivity || [],
         firewallRules: fZone?.firewallRules || [],
         firewallIPs: fZone?.firewallIPs || [],
-        firewallSources: fZone?.firewallSources || []
+        firewallSources: fZone?.firewallSources || [],
+        hostRequestTotal: hostRequestTotal || 0
     };
 };
 
@@ -198,11 +259,13 @@ const mergeChunks = (...chunks) => {
         accountName: base.accountName,
         httpRequestsAdaptiveGroups: [],
         firewallActivity: [],
+        hostRequestTotal: 0,
         _fwRules: {}, _fwIPs: {}, _fwSources: {},
     };
     for (const chunk of chunks) {
         merged.httpRequestsAdaptiveGroups.push(...(chunk.httpRequestsAdaptiveGroups || []));
         merged.firewallActivity.push(...(chunk.firewallActivity || []));
+        merged.hostRequestTotal += chunk.hostRequestTotal || 0;
         for (const r of (chunk.firewallRules || [])) {
             const k = `${r.dimensions?.ruleId}|${r.dimensions?.description}`;
             if (!merged._fwRules[k]) merged._fwRules[k] = { ...r };
@@ -254,8 +317,13 @@ const summarizeDailyResult = (raw) => {
         }
     };
 
-    // Use 1d summary for truth metrics (requests, bytes, countries)
-    if (raw.zoneSummary && raw.zoneSummary.length > 0) {
+    // Use host aggregate total when available; otherwise fall back to zone 1d summary.
+    if (raw.hostRequestTotal > 0) {
+        summary.totals.requests = raw.hostRequestTotal;
+    }
+
+    // Use 1d summary for zone truth metrics (requests, bytes, countries)
+    if (summary.totals.requests === 0 && raw.zoneSummary && raw.zoneSummary.length > 0) {
         const s = raw.zoneSummary[0].sum;
         summary.totals.requests = s.requests || 0;
         summary.totals.bytes = s.bytes || 0;
@@ -264,6 +332,16 @@ const summarizeDailyResult = (raw) => {
         summary.totals.countries = (s.countryMap || [])
             .sort((a, b) => b.requests - a.requests)
             .slice(0, 10);
+    } else if (raw.zoneSummary && raw.zoneSummary.length > 0) {
+        const zoneSum = raw.zoneSummary.reduce((acc, day) => {
+            acc.bytes += day?.sum?.bytes || 0;
+            acc.cachedRequests += day?.sum?.cachedRequests || 0;
+            acc.cachedBytes += day?.sum?.cachedBytes || 0;
+            return acc;
+        }, { bytes: 0, cachedRequests: 0, cachedBytes: 0 });
+        summary.totals.bytes = zoneSum.bytes;
+        summary.totals.cachedRequests = zoneSum.cachedRequests;
+        summary.totals.cachedBytes = zoneSum.cachedBytes;
     }
 
     // Process Adaptive Logs for Breakdown (Top 10)
@@ -580,12 +658,20 @@ export async function POST(request) {
 
             // Dynamic Time Range
             let since, until;
+            let hostTotalRange = null;
 
             if (body.startDate && body.endDate) {
                 since = new Date(body.startDate + 'T00:00:00.000Z');
                 until = new Date(body.endDate + 'T23:59:59.999Z');
                 if (until > new Date()) {
                     until = new Date(); // Cap to current time
+                }
+
+                if (body.subdomain && body.subdomain !== 'ALL_SUBDOMAINS') {
+                    hostTotalRange = {
+                        since: new Date(`${body.startDate}T00:00:00+07:00`),
+                        until: new Date(`${body.endDate}T00:00:00+07:00`)
+                    };
                 }
             } else {
                 const minutes = body.timeRange || 1440;
@@ -597,21 +683,25 @@ export async function POST(request) {
             if (targetSubdomain === 'ALL_SUBDOMAINS') targetSubdomain = null;
 
             try {
+                const liveOnly = body.liveOnly === true;
                 let finalData = {
                     httpRequestsAdaptiveGroups: [],
                     zoneSummary: [],
                     firewallActivity: [],
                     firewallRules: [],
                     firewallIPs: [],
-                    firewallSources: []
+                    firewallSources: [],
+                    hostRequestTotal: 0
                 };
 
                 let sqliteData = [];
-                // Check if history in DB
-                try {
-                    sqliteData = await getStatsInRange(zoneId, targetSubdomain || 'ALL_SUBDOMAINS', since.toISOString().split('T')[0], until.toISOString().split('T')[0]);
-                } catch (e) {
-                    console.warn('Could not fetch from SQLite:', e.message);
+                if (!liveOnly) {
+                    // Check if history in DB
+                    try {
+                        sqliteData = await getStatsInRange(zoneId, targetSubdomain || 'ALL_SUBDOMAINS', since.toISOString().split('T')[0], until.toISOString().split('T')[0]);
+                    } catch (e) {
+                        console.warn('Could not fetch from SQLite:', e.message);
+                    }
                 }
 
                 if (sqliteData.length > 0) {
@@ -628,6 +718,9 @@ export async function POST(request) {
                                 finalData.zoneSummary.push({
                                     sum: { ...d.totals, countryMap: d.totals.countries || [] }
                                 });
+                                if (targetSubdomain) {
+                                    finalData.hostRequestTotal += d.totals.requests || 0;
+                                }
                             }
 
                             // Firewall data
@@ -654,15 +747,15 @@ export async function POST(request) {
                 const endStr = until.toISOString().split('T')[0];
                 const startStr = since.toISOString().split('T')[0];
 
-                if ((todayStr >= startStr && todayStr <= endStr) || sqliteData.length === 0) {
+                if (liveOnly || (todayStr >= startStr && todayStr <= endStr) || sqliteData.length === 0) {
                     console.log('🔹 Fetching live data from Cloudflare for actual range...');
                     let liveSince = since;
-                    if (sqliteData.length > 0) {
+                    if (!liveOnly && sqliteData.length > 0) {
                         const todayMidnight = new Date(todayStr + 'T00:00:00.000Z');
                         liveSince = since > todayMidnight ? since : todayMidnight;
                     }
                     if (liveSince < until) {
-                        const liveData = await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, until);
+                        const liveData = await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, until, hostTotalRange);
 
                         // Combine 
                         finalData.httpRequestsAdaptiveGroups.push(...liveData.httpRequestsAdaptiveGroups);
@@ -671,7 +764,18 @@ export async function POST(request) {
                         finalData.firewallRules.push(...liveData.firewallRules);
                         finalData.firewallIPs.push(...liveData.firewallIPs);
                         finalData.firewallSources.push(...liveData.firewallSources);
+                        finalData.hostRequestTotal += liveData.hostRequestTotal || 0;
                     }
+                }
+
+                if (targetSubdomain && hostTotalRange) {
+                    finalData.hostRequestTotal = await fetchHostRequestTotal(
+                        token,
+                        zoneId,
+                        targetSubdomain,
+                        hostTotalRange.since,
+                        hostTotalRange.until
+                    );
                 }
 
                 console.log('🔹 API: Sending Traffic Response...');
@@ -689,6 +793,96 @@ export async function POST(request) {
                 }, { status: 500 });
             }
 
+        }
+
+        else if (action === 'get-traffic-raw-live') {
+            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
+
+            let since, until;
+            if (body.startDate && body.endDate) {
+                since = new Date(body.startDate + 'T00:00:00.000Z');
+                until = new Date(body.endDate + 'T23:59:59.999Z');
+                if (until > new Date()) {
+                    until = new Date();
+                }
+            } else {
+                const minutes = body.timeRange || 1440;
+                until = new Date();
+                since = new Date(until.getTime() - minutes * 60 * 1000);
+            }
+
+            let targetSubdomain = body.subdomain;
+            if (targetSubdomain === 'ALL_SUBDOMAINS') targetSubdomain = null;
+
+            try {
+                const query = `
+                    query GetRawTraffic($zoneTag: String, $since: String, $until: String${targetSubdomain ? ', $host: String' : ''}) {
+                      viewer {
+                        zones(filter: { zoneTag: $zoneTag }) {
+                          httpRequestsAdaptiveGroups(
+                            filter: {
+                              datetime_geq: $since,
+                              datetime_leq: $until
+                              ${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''}
+                            }
+                            limit: 8000,
+                            orderBy: [count_DESC]
+                          ) {
+                            count
+                            avg { edgeTimeToFirstByteMs }
+                            dimensions {
+                              clientRequestHTTPHost
+                              clientIP
+                              clientRequestPath
+                              clientCountryName
+                              userAgent
+                              clientDeviceType
+                              userAgentOS
+                              edgeResponseStatus
+                              datetimeMinute
+                            }
+                          }
+                        }
+                      }
+                    }
+                `;
+
+                const variables = {
+                    zoneTag: zoneId,
+                    since: since.toISOString(),
+                    until: until.toISOString()
+                };
+                if (targetSubdomain) variables.host = targetSubdomain;
+
+                const response = await axios({
+                    method: 'POST',
+                    url: `${CLOUDFLARE_API_BASE}/graphql`,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    data: { query, variables }
+                });
+
+                if (response.data?.errors) {
+                    console.warn('⚠️ Raw traffic GraphQL errors:', JSON.stringify(response.data.errors));
+                }
+
+                const rawGroups = response.data?.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
+                return NextResponse.json({
+                    success: true,
+                    data: {
+                        httpRequestsAdaptiveGroups: rawGroups
+                    }
+                });
+            } catch (gqlError) {
+                console.error('Raw traffic API Error:', gqlError.response?.data || gqlError.message);
+                return NextResponse.json({
+                    success: false,
+                    message: 'Raw analytics error',
+                    error: gqlError.response?.data || gqlError.message
+                }, { status: 500 });
+            }
         }
 
         // 7. Get API Discovery (API Discovery)
@@ -1555,7 +1749,9 @@ export async function POST(request) {
                             // Both zone overview and subdomains use the SAME function —
                             // same pattern as get-traffic-analytics / batch report.
                             // targetFilter=null for zone overview, hostname string for subdomain.
-                            data = await fetchWithAutoChunking(token, zoneId, targetFilter, dStart, dEnd, labelPrefix);
+                            data = targetFilter
+                                ? await fetchSubdomainAnalytics(token, zoneId, targetFilter, dStart, dEnd)
+                                : await fetchWithAutoChunking(token, zoneId, targetFilter, dStart, dEnd, labelPrefix);
                             break;
                         } catch (fetchErr) {
                             const status = fetchErr.response?.status;
@@ -1616,6 +1812,9 @@ export async function POST(request) {
             const stream = new ReadableStream({
                 async start(controller) {
                     try {
+                        const requestedSubdomain = body.subdomain && body.subdomain !== 'ALL_SUBDOMAINS'
+                            ? body.subdomain
+                            : null;
                         const yesterday = new Date();
                         yesterday.setUTCDate(yesterday.getUTCDate() - 1);
                         yesterday.setUTCHours(23, 59, 59, 999);
@@ -1637,6 +1836,21 @@ export async function POST(request) {
                             const msg = `Zone is "${zoneStatus}" — subdomain sync will be skipped. Syncing zone overview only.`;
                             console.warn(`⚠️  ${msg}`);
                             controller.enqueue(encoder.encode(JSON.stringify({ type: 'warning', message: msg }) + '\n'));
+                        }
+
+                        if (requestedSubdomain) {
+                            if (zoneStatus === 'pending' || zoneStatus === 'deactivated') {
+                                controller.enqueue(encoder.encode(JSON.stringify({ type: 'error', message: `Zone is "${zoneStatus}" — cannot sync ${requestedSubdomain}.` }) + '\n'));
+                                controller.close();
+                                return;
+                            }
+
+                            const subdomainStartDate = await getStartDate(requestedSubdomain);
+                            controller.enqueue(encoder.encode(JSON.stringify({ type: 'phase', phase: 'subdomain', label: requestedSubdomain, index: 1, total: 1 }) + '\n'));
+                            await syncTarget(controller, requestedSubdomain, requestedSubdomain, subdomainStartDate, yesterday, requestedSubdomain);
+                            controller.enqueue(encoder.encode(JSON.stringify({ type: 'done', subdomainCount: 1 }) + '\n'));
+                            controller.close();
+                            return;
                         }
 
                         // Step 1: Sync zone overview (ALL_SUBDOMAINS) — always run, even for pending zones

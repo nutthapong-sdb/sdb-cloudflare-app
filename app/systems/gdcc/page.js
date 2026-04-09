@@ -2588,16 +2588,70 @@ export default function GDCCPage() {
 
         setSyncing(true);
         try {
-            const res = await callAPI('sync-gdcc-history', { zoneId: selectedZone, subdomain: selectedSubDomain });
-            if (res && res.success) {
-                let msg = res.message || 'Historical data synced successfully.';
-                Swal.fire('Success', msg, 'success');
-                loadLastSyncDate(selectedZone, selectedSubDomain);
-            } else if (res && !res.success) {
-                Swal.fire('Info', res.message || 'Sync failed or no data returned.', 'info');
+            const response = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'sync-gdcc-history',
+                    zoneId: selectedZone,
+                    zoneName: zones.find(z => z.id === selectedZone)?.name || '',
+                    accountName: accounts.find(a => a.id === selectedAccount)?.name || '',
+                    subdomain: selectedSubDomain,
+                    apiToken: currentUser?.cloudflare_api_token
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Sync request failed with status ${response.status}`);
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error('Sync stream is unavailable');
+
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+            let warningMessages = [];
+            let success = false;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const data = JSON.parse(line);
+                        if (data.type === 'done') success = true;
+                        if (data.type === 'warning' && data.message) warningMessages.push(data.message);
+                        if (data.type === 'error' && data.message) throw new Error(data.message);
+                    } catch (parseErr) {
+                        if (parseErr instanceof SyntaxError) {
+                            console.warn('Failed to parse sync stream line:', line);
+                        } else {
+                            throw parseErr;
+                        }
+                    }
+                }
+            }
+
+            if (success) {
+                await loadLastSyncDate(selectedZone, selectedSubDomain);
+                Swal.fire({
+                    title: 'Success',
+                    html: `<div style="text-align:left;">
+                        <p>Historical data synced successfully for <b>${selectedSubDomain}</b>.</p>
+                        ${warningMessages.length > 0 ? `<p style="margin-top:8px; color:#fbbf24;">Warnings:</p><ul style="margin-top:4px; padding-left:18px;">${warningMessages.map(msg => `<li>${msg}</li>`).join('')}</ul>` : ''}
+                    </div>`,
+                    icon: warningMessages.length > 0 ? 'warning' : 'success'
+                });
+            } else {
+                Swal.fire('Info', 'Sync finished without new data.', 'info');
             }
         } catch (err) {
-            // Error handled by callAPI
+            Swal.fire('Error', err.message || 'Failed to sync historical data.', 'error');
         } finally {
             setSyncing(false);
         }
@@ -2626,6 +2680,7 @@ export default function GDCCPage() {
         let filteredData = [];
         let totalReq = 0;
         let weightedAvgTime = 0;
+        let hostRequestTotal = 0;
 
         let blockedCount = 0;
         let logCount = 0;
@@ -2639,6 +2694,7 @@ export default function GDCCPage() {
         if (result && result.success) {
             // console.log('✅ Traffic Data Received:', result.data); // Debug Header
             filteredData = result.data?.httpRequestsAdaptiveGroups || [];
+            hostRequestTotal = result.data?.hostRequestTotal || 0;
             // console.log('   - Adaptive Groups:', filteredData.length);
 
             const firewallActivity = result.data?.firewallActivity || [];
@@ -2799,7 +2855,7 @@ export default function GDCCPage() {
             }
 
             if (!isAllSubdomains) {
-                totalReq = totalReqLogs;
+                totalReq = hostRequestTotal > 0 ? hostRequestTotal : totalReqLogs;
                 setTotalDataTransfer(0);
                 setCacheHitRequests(0);
                 setCacheHitDataTransfer(0);
@@ -2813,7 +2869,22 @@ export default function GDCCPage() {
             setCustomRulesList([]); setManagedRulesList([]);
         }
 
-        setRawData(filteredData);
+        if (!isGeneratingReport) {
+            const liveRawResult = await callAPI('get-traffic-raw-live', {
+                zoneId: zoneId,
+                startDate: p_startDate,
+                endDate: p_endDate,
+                subdomain: isAllSubdomains ? null : subdomain,
+                apiToken: currentUser?.cloudflare_api_token
+            });
+            if (liveRawResult && liveRawResult.success) {
+                setRawData(liveRawResult.data?.httpRequestsAdaptiveGroups || []);
+            } else {
+                setRawData(filteredData.filter(item => !item?.isSummary));
+            }
+        } else {
+            setRawData(filteredData.filter(item => !item?.isSummary));
+        }
         setTotalRequests(totalReq);
         setAvgResponseTime(weightedAvgTime);
 
@@ -4405,6 +4476,48 @@ export default function GDCCPage() {
 
     const isActionDisabled = !selectedSubDomain || loadingStats;
 
+    const getRawInspectorRow = (item) => {
+        if (!item?.isSummary) {
+            return {
+                host: item.dimensions?.clientRequestHTTPHost || '-',
+                ip: item.dimensions?.clientIP || '-',
+                country: item.dimensions?.clientCountryName || '-',
+                status: item.dimensions?.edgeResponseStatus || '-',
+                device: item.dimensions?.clientDeviceType || '-',
+                count: item.count || 0,
+            };
+        }
+
+        const topHost = item.topHosts?.[0]?.key || item.zoneName || '-';
+        const topIp = item.topIps?.[0]?.key || '-';
+        const topCountry = item.totals?.countries?.[0]?.clientCountryName || '-';
+        const topStatus = Object.entries(item.statusDistribution || {})
+            .sort((a, b) => (b[1] || 0) - (a[1] || 0))[0]?.[0] || 'summary';
+
+        return {
+            host: topHost,
+            ip: topIp,
+            country: topCountry,
+            status: topStatus,
+            device: 'daily-summary',
+            count: item.totals?.requests || 0,
+        };
+    };
+
+    const rawInspectorRows = rawData.reduce((acc, item) => {
+        const row = getRawInspectorRow(item);
+        const key = [row.host, row.ip, row.country, row.status, row.device].join('|');
+        const existing = acc.find((entry) => entry.key === key);
+
+        if (existing) {
+            existing.count += Number(row.count || 0);
+        } else {
+            acc.push({ key, ...row, count: Number(row.count || 0) });
+        }
+
+        return acc;
+    }, []).sort((a, b) => b.count - a.count);
+
     return (
         <div className={`min-h-screen font-sans ${theme.bg} ${theme.text}`}>
             <nav className={`border-b ${theme.nav === 'bg-[#0f1115]' ? 'border-gray-800' : ''} ${theme.nav} sticky top-0 z-50`}>
@@ -4840,24 +4953,27 @@ export default function GDCCPage() {
                     <div className="grid grid-cols-1 gap-4">
                         <Card theme={theme} title={`Raw API Data for ${selectedSubDomain}`}>
                             <div className={`overflow-x-auto max-h-48 overflow-y-auto font-mono text-xs p-4 rounded border ${theme.rawData}`}>
-                                <div className="grid grid-cols-8 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[900px]">
-                                    <div className="col-span-1">Time</div>
+                                {rawData.some(item => item?.isSummary) && (
+                                    <div className={`mb-3 text-[11px] ${theme.subText || 'text-gray-400'}`}>
+                                        Showing synced daily summary rows from Sync History for this range.
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-7 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[900px]">
                                     <div className="col-span-2">Host</div><div className="col-span-1">IP</div><div className="col-span-1">Country</div>
                                     <div className="col-span-1">Status</div><div className="col-span-1">Device</div><div className="col-span-1 text-right">Count</div>
                                 </div>
-                                {rawData.slice(0, 10).map((item, i) => (
-                                    <div key={i} className={`grid grid-cols-8 gap-2 ${theme.tableRowHover} transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center`}>
-                                        <div className="col-span-1 text-gray-500">
-                                            {item.dimensions?.datetimeMinute ? new Date(item.dimensions.datetimeMinute).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                {rawInspectorRows.slice(0, 10).map((row, i) => {
+                                    return (
+                                        <div key={row.key || i} className={`grid grid-cols-7 gap-2 ${theme.tableRowHover} transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center`}>
+                                            <div className="col-span-2 text-green-400 truncate pr-2">{row.host}</div>
+                                            <div className="col-span-1 text-blue-400 truncate">{row.ip}</div>
+                                            <div className="col-span-1 text-gray-500 truncate">{row.country}</div>
+                                            <div className="col-span-1 text-yellow-400 truncate">{row.status}</div>
+                                            <div className="col-span-1 text-purple-400 truncate">{row.device}</div>
+                                            <div className="col-span-1 text-white font-bold text-right">{Number(row.count || 0).toLocaleString()}</div>
                                         </div>
-                                        <div className="col-span-2 text-green-400 truncate pr-2">{item.dimensions?.clientRequestHTTPHost}</div>
-                                        <div className="col-span-1 text-blue-400 truncate">{item.dimensions?.clientIP}</div>
-                                        <div className="col-span-1 text-gray-500 truncate">{item.dimensions?.clientCountryName}</div>
-                                        <div className="col-span-1 text-yellow-400 truncate">{item.dimensions?.edgeResponseStatus}</div>
-                                        <div className="col-span-1 text-purple-400 truncate">{item.dimensions?.clientDeviceType}</div>
-                                        <div className="col-span-1 text-white font-bold text-right">{item.count}</div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </Card>
                     </div>
