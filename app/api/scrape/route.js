@@ -1,9 +1,36 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { getLatestSyncDate, saveDailyStats, getStatsInRange, getAllSyncStatus, deleteSyncData, checkDateExists } from '../../../lib/gdcc-db';
+import {
+    getLatestSyncDate,
+    saveDailyStats,
+    getStatsInRange,
+    getAllSyncStatus,
+    deleteSyncData,
+    checkDateExists,
+    createSyncJob,
+    getSyncJobById,
+    getSyncJobs,
+    getActiveSyncJobForZone,
+    claimQueuedSyncJob,
+    updateSyncJob,
+    markSyncJobRateLimited,
+    deleteSyncJob,
+    recoverSyncJobs,
+    requestStopSyncJob,
+    requestRetrySyncJob,
+    purgeLatestZoneDays,
+    addCompletedSyncJobHistory,
+    getCompletedSyncJobHistory,
+    clearCompletedSyncJobHistory,
+} from '../../../lib/gdcc-db';
 
 
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
+const SYNC_JOB_CONCURRENCY = 2;
+let syncRunnerBootstrapped = false;
+let activeSyncWorkers = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fetchHostRequestTotal = async (token, zoneId, host, since, until) => {
     if (!host) return 0;
@@ -442,6 +469,328 @@ const summarizeDailyResult = (raw) => {
     summary.firewall.total = (raw.firewallActivity || []).reduce((acc, curr) => acc + (curr.count || 0), 0);
 
     return summary;
+};
+
+const getSyncStartDate = async (zoneId, targetKey) => {
+    const lastSyncStr = await getLatestSyncDate(zoneId, targetKey);
+    let startDate = new Date();
+    if (lastSyncStr) {
+        startDate = new Date(`${lastSyncStr}T00:00:00.000Z`);
+        startDate.setUTCDate(startDate.getUTCDate() + 1);
+    } else {
+        startDate.setUTCDate(startDate.getUTCDate() - 30);
+    }
+    startDate.setUTCHours(0, 0, 0, 0);
+    return startDate;
+};
+
+const shouldStopJob = async (jobId) => {
+    const job = await getSyncJobById(jobId);
+    return !job || job.stop_requested === 1;
+};
+
+const setJobPhase = async (jobId, updates = {}) => {
+    await updateSyncJob(jobId, updates);
+};
+
+const syncTargetForJob = async ({ jobId, zoneId, zoneName, accountName, token, targetKey, targetFilter, startDate, yesterday, zoneTotalSteps, zoneCompletedSteps, targetLabel }) => {
+    const allDates = [];
+    let d = new Date(startDate);
+    while (d.getTime() < yesterday.getTime()) {
+        allDates.push(d.toISOString().split('T')[0]);
+        d.setUTCDate(d.getUTCDate() + 1);
+    }
+
+    const totalDates = allDates.length;
+    await setJobPhase(jobId, {
+        current_phase: targetFilter ? 'subdomain' : 'zone',
+        current_domain: targetLabel,
+        current_date: totalDates > 0 ? allDates[0] : null,
+        current_date_started_at: totalDates > 0 ? new Date().toISOString() : null,
+        zone_total_steps: zoneTotalSteps,
+        zone_completed_steps: zoneCompletedSteps,
+        subdomain_total_days: totalDates,
+        subdomain_completed_days: 0,
+    });
+
+    if (totalDates === 0) {
+        await updateSyncJob(jobId, { zone_completed_steps: zoneCompletedSteps + 1, current_date: null, subdomain_total_days: 0, subdomain_completed_days: 0 });
+        return { syncedDates: 0, errorDates: 0 };
+    }
+
+    let syncedDates = 0;
+    let errorDates = 0;
+
+    for (let di = 0; di < allDates.length; di++) {
+        if (await shouldStopJob(jobId)) {
+            throw new Error('Stopped by user');
+        }
+
+        const dStr = allDates[di];
+        const isSubdomainTarget = !!targetFilter;
+        const dStart = isSubdomainTarget ? new Date(`${dStr}T00:00:00+07:00`) : new Date(`${dStr}T00:00:00.000Z`);
+        const dEnd = isSubdomainTarget ? new Date(`${dStr}T00:00:00+07:00`) : new Date(`${dStr}T23:59:59.999Z`);
+        if (isSubdomainTarget) dEnd.setUTCDate(dEnd.getUTCDate() + 1);
+
+        await updateSyncJob(jobId, {
+            current_date: dStr,
+            current_date_started_at: new Date().toISOString(),
+            subdomain_completed_days: di,
+        });
+
+        const alreadySynced = await checkDateExists(zoneId, targetKey, dStr);
+        if (alreadySynced) {
+            syncedDates++;
+            await updateSyncJob(jobId, { subdomain_completed_days: di + 1 });
+            continue;
+        }
+
+        let data = null;
+        for (let attempt = 1; attempt <= 4; attempt++) {
+            try {
+                data = targetFilter
+                    ? await fetchSubdomainAnalytics(token, zoneId, targetFilter, dStart, dEnd)
+                    : await fetchWithAutoChunking(token, zoneId, targetFilter, dStart, dEnd, targetLabel);
+                break;
+            } catch (fetchErr) {
+                const status = fetchErr.response?.status;
+                if (status === 429 && attempt < 4) {
+                    const delayMs = Math.min(2000 * (2 ** (attempt - 1)), 15000);
+                    await markSyncJobRateLimited(jobId, dStr, targetLabel, 1);
+                    await updateSyncJob(jobId, {
+                        last_error: `Rate limited on ${zoneName} (${targetLabel}) ${dStr}, retry ${attempt} in ${Math.round(delayMs / 1000)}s`,
+                    });
+                    await sleep(delayMs);
+                    continue;
+                }
+                if (attempt < 4 && (status === 502 || status === 503 || status === 504)) {
+                    await sleep(3000);
+                    continue;
+                }
+                errorDates++;
+                data = null;
+                await updateSyncJob(jobId, {
+                    last_error: `${targetLabel} ${dStr}: ${status || fetchErr.message}`,
+                });
+                break;
+            }
+        }
+
+        if (data) {
+            if (zoneName) data.zoneName = zoneName;
+            if (accountName) data.accountName = accountName;
+            const summary = summarizeDailyResult(data);
+            await saveDailyStats(zoneId, targetKey, dStr, summary);
+        } else {
+            const marker = { isSummary: true, zoneName: zoneName || '', accountName: accountName || '', totals: { requests: 0, bytes: 0 }, topUrls: [], topIps: [], firewall: { total: 0 }, _fetchError: true };
+            await saveDailyStats(zoneId, targetKey, dStr, marker);
+        }
+
+        syncedDates++;
+        await updateSyncJob(jobId, { subdomain_completed_days: di + 1 });
+        if (di < allDates.length - 1) {
+            await sleep(500);
+        }
+    }
+
+    await updateSyncJob(jobId, {
+        zone_completed_steps: zoneCompletedSteps + 1,
+        subdomain_completed_days: totalDates,
+        current_date: null,
+        current_date_started_at: null,
+    });
+
+    return { syncedDates, errorDates };
+};
+
+const executeSyncJob = async (job) => {
+    const zoneId = job.zone_id;
+    const zoneName = job.zone_name;
+    const accountName = job.account_name;
+    const token = job.api_token;
+
+    if (!token) {
+        await updateSyncJob(job.id, { status: 'failed', last_error: 'Missing API token for sync job' });
+        return;
+    }
+
+    try {
+        await updateSyncJob(job.id, {
+            last_error: null,
+            current_phase: 'check',
+            current_domain: null,
+            current_date: null,
+            current_date_started_at: null,
+            zone_total_steps: 0,
+            zone_completed_steps: 0,
+            subdomain_total_days: 0,
+            subdomain_completed_days: 0,
+            rate_limit_count: 0,
+            last_rate_limited_date: null,
+            last_rate_limited_domain: null,
+            finished_at: null,
+        });
+
+        await purgeLatestZoneDays(zoneId, 2);
+
+        let zoneStatus = 'active';
+        try {
+            const zoneInfoResp = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            zoneStatus = zoneInfoResp.data?.result?.status || 'active';
+        } catch (e) {
+            await updateSyncJob(job.id, { last_error: `Could not check zone status: ${e.message}` });
+        }
+
+        const yesterday = new Date();
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+        yesterday.setUTCHours(23, 59, 59, 999);
+
+        const zoneStartDate = await getSyncStartDate(zoneId, 'ALL_SUBDOMAINS');
+        let subdomains = [];
+        if (zoneStatus !== 'pending' && zoneStatus !== 'deactivated') {
+            await updateSyncJob(job.id, { current_phase: 'discover', current_domain: null, current_date: null });
+            try {
+                const dnsResp = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?per_page=500`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const dnsRecords = dnsResp.data?.result || [];
+                const hostSet = new Set(
+                    dnsRecords
+                        .filter((r) => ['A', 'AAAA', 'CNAME'].includes(r.type))
+                        .map((r) => r.name)
+                        .filter(Boolean)
+                );
+                if (zoneName) hostSet.delete(zoneName);
+                subdomains = Array.from(hostSet).sort();
+            } catch (e) {
+                await updateSyncJob(job.id, { last_error: `DNS discovery failed: ${e.message}` });
+            }
+        } else {
+            await updateSyncJob(job.id, { last_error: `Zone is ${zoneStatus}; subdomain sync skipped.` });
+        }
+
+        const zoneTotalSteps = 1 + subdomains.length;
+        await updateSyncJob(job.id, { zone_total_steps: zoneTotalSteps, zone_completed_steps: 0 });
+
+        await syncTargetForJob({
+            jobId: job.id,
+            zoneId,
+            zoneName,
+            accountName,
+            token,
+            targetKey: 'ALL_SUBDOMAINS',
+            targetFilter: null,
+            startDate: zoneStartDate,
+            yesterday,
+            zoneTotalSteps,
+            zoneCompletedSteps: 0,
+            targetLabel: 'Zone Overview',
+        });
+
+        if (zoneStatus !== 'pending' && zoneStatus !== 'deactivated') {
+            for (let i = 0; i < subdomains.length; i++) {
+                if (await shouldStopJob(job.id)) {
+                    throw new Error('Stopped by user');
+                }
+                const sd = subdomains[i];
+                const sdStartDate = await getSyncStartDate(zoneId, sd);
+                await syncTargetForJob({
+                    jobId: job.id,
+                    zoneId,
+                    zoneName,
+                    accountName,
+                    token,
+                    targetKey: sd,
+                    targetFilter: sd,
+                    startDate: sdStartDate,
+                    yesterday,
+                    zoneTotalSteps,
+                    zoneCompletedSteps: i + 1,
+                    targetLabel: sd,
+                });
+            }
+        }
+
+        const finishedJob = await updateSyncJob(job.id, {
+            finished_at: new Date().toISOString(),
+            current_phase: 'completed',
+            current_domain: null,
+            current_date: null,
+            current_date_started_at: null,
+        });
+        await addCompletedSyncJobHistory(finishedJob);
+        await deleteSyncJob(job.id);
+    } catch (error) {
+        const stopRequested = await shouldStopJob(job.id);
+        if (stopRequested || error.message === 'Stopped by user') {
+            const latestJob = await getSyncJobById(job.id);
+            const shouldRetry = latestJob?.retry_requested === 1;
+            if (shouldRetry) {
+                await createSyncJob({
+                    zoneId: job.zone_id,
+                    zoneName: job.zone_name,
+                    accountName: job.account_name,
+                    requestedBy: job.requested_by,
+                    apiToken: token,
+                });
+            }
+            await updateSyncJob(job.id, {
+                status: 'cancelled',
+                last_error: shouldRetry ? 'Retry requested by user' : 'Stopped by user',
+                api_token: null,
+                finished_at: new Date().toISOString(),
+                current_date_started_at: null,
+                retry_requested: 0,
+            });
+            if (shouldRetry) {
+                await kickSyncRunner();
+            }
+            return;
+        }
+
+        await updateSyncJob(job.id, {
+            status: 'failed',
+            last_error: error.message,
+            api_token: null,
+            finished_at: new Date().toISOString(),
+            current_date_started_at: null,
+        });
+    }
+};
+
+const processNextSyncJob = async () => {
+    const job = await claimQueuedSyncJob();
+    if (!job) return false;
+    await executeSyncJob(job);
+    return true;
+};
+
+const kickSyncRunner = async () => {
+    while (activeSyncWorkers < SYNC_JOB_CONCURRENCY) {
+        activeSyncWorkers += 1;
+        (async () => {
+            let handledJob = false;
+            try {
+                handledJob = await processNextSyncJob();
+            } catch (error) {
+                console.error('Sync runner error:', error);
+            } finally {
+                activeSyncWorkers -= 1;
+                if (syncRunnerBootstrapped && handledJob) {
+                    setTimeout(() => { kickSyncRunner().catch(() => {}); }, 0);
+                }
+            }
+        })();
+    }
+};
+
+const ensureSyncRunnerInitialized = async () => {
+    if (syncRunnerBootstrapped) return;
+    syncRunnerBootstrapped = true;
+    await recoverSyncJobs();
+    await kickSyncRunner();
 };
 
 // ─── Adaptive chunking: 1x24h → 2x12h → 4x6h → 6x4h → 12x2h → 24x1h ────────
@@ -1769,6 +2118,86 @@ export async function POST(request) {
             }
         }
 
+        else if (action === 'start-sync-jobs') {
+            await ensureSyncRunnerInitialized();
+            const zonesToSync = Array.isArray(body.zones) ? body.zones : [];
+            if (zonesToSync.length === 0) {
+                return NextResponse.json({ success: false, message: 'No zones selected for sync' }, { status: 400 });
+            }
+
+            const requestedBy = body.requestedBy || 'unknown';
+            const results = [];
+            for (const zone of zonesToSync) {
+                if (!zone?.id || !zone?.name || !zone?.accountName) {
+                    results.push({ zoneId: zone?.id || null, status: 'rejected', reason: 'Invalid zone payload' });
+                    continue;
+                }
+                const existing = await getActiveSyncJobForZone(zone.id);
+                if (existing) {
+                    results.push({ zoneId: zone.id, zoneName: zone.name, status: 'rejected', reason: `Active job already exists (${existing.status})` });
+                    continue;
+                }
+                const jobId = await createSyncJob({
+                    zoneId: zone.id,
+                    zoneName: zone.name,
+                    accountName: zone.accountName,
+                    requestedBy,
+                    apiToken: token,
+                });
+                results.push({ zoneId: zone.id, zoneName: zone.name, status: 'queued', jobId });
+            }
+
+            await kickSyncRunner();
+            return NextResponse.json({ success: true, data: results });
+        }
+
+        else if (action === 'get-sync-jobs') {
+            await ensureSyncRunnerInitialized();
+            const jobs = await getSyncJobs();
+            const sanitized = jobs.map((job) => ({ ...job, api_token: undefined }));
+            return NextResponse.json({ success: true, data: sanitized });
+        }
+
+        else if (action === 'get-completed-sync-history') {
+            const history = await getCompletedSyncJobHistory();
+            return NextResponse.json({ success: true, data: history });
+        }
+
+        else if (action === 'clear-completed-sync-history') {
+            await clearCompletedSyncJobHistory();
+            return NextResponse.json({ success: true });
+        }
+
+        else if (action === 'force-stop-sync-job') {
+            await ensureSyncRunnerInitialized();
+            const jobId = body.jobId;
+            if (!jobId) return NextResponse.json({ success: false, message: 'Missing jobId' }, { status: 400 });
+            const job = await requestStopSyncJob(jobId);
+            if (!job) return NextResponse.json({ success: false, message: 'Job not found' }, { status: 404 });
+            return NextResponse.json({ success: true, data: { id: jobId, status: job.status, stop_requested: job.stop_requested } });
+        }
+
+        else if (action === 'retry-sync-job') {
+            await ensureSyncRunnerInitialized();
+            const jobId = body.jobId;
+            if (!jobId) return NextResponse.json({ success: false, message: 'Missing jobId' }, { status: 400 });
+            const job = await requestRetrySyncJob(jobId);
+            if (!job) return NextResponse.json({ success: false, message: 'Job not found' }, { status: 404 });
+            return NextResponse.json({ success: true, data: { id: jobId, status: job.status, retry_requested: job.retry_requested } });
+        }
+
+        else if (action === 'delete-sync-job') {
+            const jobId = body.jobId;
+            if (!jobId) return NextResponse.json({ success: false, message: 'Missing jobId' }, { status: 400 });
+            const job = await getSyncJobById(jobId);
+            if (!job) return NextResponse.json({ success: false, message: 'Job not found' }, { status: 404 });
+            if (job.status === 'queued' || job.status === 'running') {
+                return NextResponse.json({ success: false, message: 'Cannot delete an active job' }, { status: 400 });
+            }
+            await deleteSyncJob(jobId);
+            return NextResponse.json({ success: true });
+        }
+
         else if (action === 'sync-gdcc-history') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
 
@@ -1820,7 +2249,7 @@ export async function POST(request) {
                     }
 
                     let data = null;
-                    for (let attempt = 1; attempt <= 2; attempt++) {
+                    for (let attempt = 1; attempt <= 4; attempt++) {
                         try {
                             // Both zone overview and subdomains use the SAME function —
                             // same pattern as get-traffic-analytics / batch report.
@@ -1832,7 +2261,20 @@ export async function POST(request) {
                         } catch (fetchErr) {
                             const status = fetchErr.response?.status;
                             console.warn(`⚠️ [${labelPrefix}] ${dStr} attempt ${attempt} failed (${status || fetchErr.message})`);
-                            if (attempt < 2 && (status === 502 || status === 503 || status === 504)) {
+                            if (status === 429 && attempt < 4) {
+                                const delayMs = Math.min(2000 * (2 ** (attempt - 1)), 15000);
+                                controller.enqueue(encoder.encode(JSON.stringify({
+                                    type: 'rate_limit',
+                                    zoneId,
+                                    zoneName: body.zoneName || zoneId,
+                                    target: labelPrefix,
+                                    date: dStr,
+                                    attempt,
+                                    delayMs,
+                                    message: `Cloudflare rate limited ${body.zoneName || zoneId} on ${dStr} (${labelPrefix}); retrying in ${Math.round(delayMs / 1000)}s.`
+                                }) + '\n'));
+                                await new Promise(r => setTimeout(r, delayMs));
+                            } else if (attempt < 4 && (status === 502 || status === 503 || status === 504)) {
                                 await new Promise(r => setTimeout(r, 3000));
                             } else {
                                 errorDates++;

@@ -1783,21 +1783,25 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
     const [loadingZones, setLoadingZones] = useState(false);
     const [selectedZones, setSelectedZones] = useState(new Set());
     const [syncStatusData, setSyncStatusData] = useState([]);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [syncProgress, setSyncProgress] = useState(0);
-    const [currentSyncIndex, setCurrentSyncIndex] = useState(0);
-    const [currentSyncZoneName, setCurrentSyncZoneName] = useState('');
-    const [currentSyncDate, setCurrentSyncDate] = useState('');
-    const [currentSyncLabel, setCurrentSyncLabel] = useState('');
-    const [currentSyncPhase, setCurrentSyncPhase] = useState('');
-    const [subdomainProgress, setSubdomainProgress] = useState({ current: 0, total: 0 });
+    const [syncJobs, setSyncJobs] = useState([]);
+    const [completedSyncHistory, setCompletedSyncHistory] = useState([]);
     const [isManageMode, setIsManageMode] = useState(false);
     const [syncListScope, setSyncListScope] = useState('all');
+    const [syncJobFilter, setSyncJobFilter] = useState('all');
 
     const [searchQuery, setSearchQuery] = useState('');
     const [accountSearchQuery, setAccountSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [nowTick, setNowTick] = useState(Date.now());
     const ITEMS_PER_PAGE = 20;
+    const activeJobs = syncJobs.filter(job => ['queued', 'running', 'cancelling'].includes(job.status));
+    const isSyncing = activeJobs.length > 0;
+    const filteredSyncJobs = syncJobs.filter(job => {
+        if (syncJobFilter === 'running') return job.status === 'running';
+        if (syncJobFilter === 'queued') return job.status === 'queued';
+        if (syncJobFilter === 'attention') return ['failed', 'cancelled'].includes(job.status);
+        return true;
+    });
 
     useEffect(() => {
         setCurrentPage(1);
@@ -1856,12 +1860,11 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
     useEffect(() => {
         if (isOpen) {
             fetchSyncStatus();
+            fetchSyncJobs();
+            fetchCompletedSyncHistory();
             setSelectedAccounts(new Set());
             setZones([]);
             setSelectedZones(new Set());
-            setSyncProgress(0);
-            setCurrentSyncIndex(0);
-            setCurrentSyncZoneName('');
             setSearchQuery('');
             setSyncListScope('all');
             setCurrentPage(1);
@@ -1885,6 +1888,72 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
         } catch (e) {
             console.error('Failed to fetch sync status', e);
         }
+    };
+
+    const fetchSyncJobs = async () => {
+        try {
+            const response = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get-sync-jobs',
+                    apiToken: currentUser?.cloudflare_api_token
+                })
+            });
+            const res = await response.json();
+            if (res.success && res.data) {
+                setSyncJobs(res.data);
+            }
+        } catch (e) {
+            console.error('Failed to fetch sync jobs', e);
+        }
+    };
+
+    const fetchCompletedSyncHistory = async () => {
+        try {
+            const response = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get-completed-sync-history',
+                    apiToken: currentUser?.cloudflare_api_token
+                })
+            });
+            const res = await response.json();
+            if (res.success && res.data) {
+                setCompletedSyncHistory(res.data);
+            }
+        } catch (e) {
+            console.error('Failed to fetch completed sync history', e);
+        }
+    };
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const timer = setInterval(() => {
+            fetchSyncJobs();
+            fetchSyncStatus();
+            fetchCompletedSyncHistory();
+        }, 5000);
+        return () => clearInterval(timer);
+    }, [isOpen, currentUser]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const timer = setInterval(() => setNowTick(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [isOpen]);
+
+    const getElapsedSeconds = (startedAt) => {
+        if (!startedAt) return 0;
+        const elapsed = Math.floor((nowTick - new Date(startedAt).getTime()) / 1000);
+        return Math.max(elapsed, 0);
+    };
+
+    const getHeartbeatSeconds = (updatedAt) => {
+        if (!updatedAt) return null;
+        const elapsed = Math.floor((nowTick - new Date(updatedAt).getTime()) / 1000);
+        return Math.max(elapsed, 0);
     };
 
     const handleAccountChange = async (accId) => {
@@ -1961,110 +2030,144 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
 
     const handleSync = async () => {
         if (selectedZones.size === 0) return;
-        setIsSyncing(true);
-        setSyncProgress(0);
-        setCurrentSyncIndex(0);
-        setCurrentSyncZoneName('');
-
-        let successCount = 0;
         const zonesArray = Array.from(selectedZones);
-
-        for (let i = 0; i < zonesArray.length; i++) {
-            const zoneId = zonesArray[i];
+        const payload = zonesArray.map(zoneId => {
             const zone = zones.find(z => z.id === zoneId);
-            const zoneName = zone?.name || 'Unknown Zone';
+            return {
+                id: zoneId,
+                name: zone?.name || 'Unknown Zone',
+                accountName: zone?.account?.name || accounts.find(a => selectedAccounts.has(a.id))?.name || 'Unknown Account'
+            };
+        });
 
-            setCurrentSyncIndex(i + 1);
-            setCurrentSyncZoneName(zoneName);
-            setCurrentSyncDate('Connecting...');
+        try {
+            const response = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'start-sync-jobs',
+                    zones: payload,
+                    requestedBy: currentUser?.username || currentUser?.email || 'unknown',
+                    apiToken: currentUser?.cloudflare_api_token
+                })
+            });
+            const res = await response.json();
+            if (!res.success) throw new Error(res.message || 'Failed to start sync jobs');
 
-            const accountName = zone?.account?.name || accounts.find(a => selectedAccounts.has(a.id))?.name || 'Unknown Account';
+            const queued = res.data.filter(item => item.status === 'queued');
+            const rejected = res.data.filter(item => item.status === 'rejected');
 
-            try {
-                const response = await fetch('/api/scrape', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'sync-gdcc-history',
-                        zoneId: zoneId,
-                        zoneName: zoneName,
-                        accountName: accountName,
-                        subdomain: 'ALL_SUBDOMAINS',
-                        apiToken: currentUser?.cloudflare_api_token
-                    })
-                });
+            setSelectedZones(new Set());
+            await fetchSyncJobs();
 
-                if (!response.ok) throw new Error('Network error');
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let done = false;
-
-                while (!done) {
-                    const { value, done: streamDone } = await reader.read();
-                    if (streamDone) {
-                        done = true;
-                        break;
-                    }
-                    const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
-                        if (!line.trim()) continue;
-                        try {
-                            const data = JSON.parse(line);
-                            if (data.type === 'phase') {
-                                setCurrentSyncPhase(data.phase);
-                                setCurrentSyncLabel(data.label);
-                                setCurrentSyncDate('');
-                                if (data.phase === 'subdomain' && data.total) {
-                                    setSubdomainProgress({ current: data.index || 0, total: data.total });
-                                } else if (data.phase === 'zone') {
-                                    setSubdomainProgress({ current: 0, total: 0 });
-                                }
-                            } else if (data.type === 'progress') {
-                                setCurrentSyncDate(data.date);
-                                setCurrentSyncLabel(data.label || '');
-                                if (data.total > 0) {
-                                    const progressFraction = Math.min(data.current / data.total, 1);
-                                    const overallProgress = ((i + progressFraction) / zonesArray.length) * 100;
-                                    setSyncProgress(Math.min(overallProgress, ((i + 0.99) / zonesArray.length) * 100));
-                                }
-                            } else if (data.type === 'discovered') {
-                                console.log(`🔍 Discovered ${data.count} subdomains:`, data.subdomains);
-                            } else if (data.type === 'done') {
-                                successCount++;
-                            } else if (data.type === 'error') {
-                                // error from pending/deactivated zone — log and continue to next zone
-                                console.warn(`⚠️ Zone ${zoneId} sync error:`, data.message);
-                                // Don't stop — outer loop will move on
-                            } else if (data.type === 'warning') {
-                                console.warn('Sync Warning:', data.message);
-                            }
-                        } catch (e) { }
-                    }
-                }
-            } catch (e) {
-                console.error('Error syncing zone', zoneId, e);
-            }
-            setSyncProgress(((i + 1) / zonesArray.length) * 100);
+            Swal.fire({
+                title: 'Sync Jobs Started',
+                html: `<div style="text-align:left;">
+                    <p>Queued <b>${queued.length}</b> zone(s).</p>
+                    ${rejected.length > 0 ? `<div style="margin-top:10px;"><p style="color:#fca5a5;font-weight:700;">Rejected (${rejected.length})</p><ul style="padding-left:18px;max-height:120px;overflow:auto;">${rejected.map(item => `<li>${item.zoneName || item.zoneId}: ${item.reason}</li>`).join('')}</ul></div>` : ''}
+                </div>`,
+                icon: rejected.length > 0 ? 'warning' : 'success',
+                background: '#111827',
+                color: '#fff'
+            });
+        } catch (e) {
+            Swal.fire({ title: 'Error', text: e.message || 'Failed to start sync jobs.', icon: 'error', background: '#111827', color: '#fff' });
         }
+    };
 
-        // Add a small delay at 100% so users can see it finish
-        setSyncProgress(100);
-        await new Promise(r => setTimeout(r, 500));
-
-        setIsSyncing(false);
-        setSelectedAccounts(new Set());
-        setSelectedZones(new Set());
-        await fetchSyncStatus();
-
-        Swal.fire({
-            title: 'Sync Complete',
-            text: `Successfully synced ${successCount} out of ${zonesArray.length} zones.`,
-            icon: 'success',
-            background: '#111827',
+    const handleForceStopJob = async (jobId) => {
+        const confirmation = await Swal.fire({
+            title: 'Force Stop Sync?',
+            text: 'This will stop the running sync job as soon as it reaches a safe checkpoint.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#4b5563',
+            confirmButtonText: 'Force Stop',
+            background: '#1f2937',
             color: '#fff'
         });
+        if (!confirmation.isConfirmed) return;
+
+        const response = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'force-stop-sync-job', jobId, apiToken: currentUser?.cloudflare_api_token })
+        });
+        const res = await response.json();
+        if (!res.success) {
+            Swal.fire({ title: 'Error', text: res.message || 'Failed to stop sync job.', icon: 'error', background: '#111827', color: '#fff' });
+            return;
+        }
+        await fetchSyncJobs();
+    };
+
+    const handleDeleteJob = async (jobId) => {
+        const response = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete-sync-job', jobId, apiToken: currentUser?.cloudflare_api_token })
+        });
+        const res = await response.json();
+        if (!res.success) {
+            Swal.fire({ title: 'Error', text: res.message || 'Failed to delete sync job.', icon: 'error', background: '#111827', color: '#fff' });
+            return;
+        }
+        await fetchSyncJobs();
+    };
+
+    const handleRetryJob = async (jobId) => {
+        const confirmation = await Swal.fire({
+            title: 'Retry Job?',
+            text: 'This will stop the current job safely and queue a fresh retry for the same zone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#4b5563',
+            confirmButtonText: 'Retry Job',
+            background: '#1f2937',
+            color: '#fff'
+        });
+        if (!confirmation.isConfirmed) return;
+
+        const response = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'retry-sync-job', jobId, apiToken: currentUser?.cloudflare_api_token })
+        });
+        const res = await response.json();
+        if (!res.success) {
+            Swal.fire({ title: 'Error', text: res.message || 'Failed to retry sync job.', icon: 'error', background: '#111827', color: '#fff' });
+            return;
+        }
+        await fetchSyncJobs();
+    };
+
+    const handleClearCompletedHistory = async () => {
+        const confirmation = await Swal.fire({
+            title: 'Clear Completed History?',
+            text: 'This will remove the list of completed sync jobs. Synced daily data will remain intact.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#4b5563',
+            confirmButtonText: 'Clear Completed',
+            background: '#1f2937',
+            color: '#fff'
+        });
+        if (!confirmation.isConfirmed) return;
+
+        const response = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'clear-completed-sync-history', apiToken: currentUser?.cloudflare_api_token })
+        });
+        const res = await response.json();
+        if (!res.success) {
+            Swal.fire({ title: 'Error', text: res.message || 'Failed to clear completed history.', icon: 'error', background: '#111827', color: '#fff' });
+            return;
+        }
+        await fetchCompletedSyncHistory();
     };
 
     if (!isOpen) return null;
@@ -2080,70 +2183,16 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
     return (
         <div
             className={`fixed inset-0 z-[100] flex items-center justify-center ${t.overlay} p-4 backdrop-blur-sm`}
-            onMouseDown={(e) => { if (e.target === e.currentTarget && !isSyncing) onClose(); }}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl shadow-2xl overflow-hidden border ${t.content} relative`}>
-
-                {/* Syncing Overlay */}
-                {isSyncing && (
-                    <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-md z-[200] flex flex-col items-center justify-center text-center p-6">
-                        <Activity className="w-16 h-16 animate-spin text-blue-500 mb-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
-                        <h3 className="text-2xl font-bold text-white mb-2">Syncing Data...</h3>
-                        <p className="text-gray-400 mb-4 text-sm">
-                            Zone <span className="font-semibold text-gray-200">{currentSyncIndex}</span> of <span className="font-semibold text-gray-200">{selectedZones.size}</span>
-                        </p>
-
-                        {subdomainProgress.total > 0 && (
-                            <p className="text-blue-400 mb-4 text-xs font-medium">
-                                Subdomain <span className="font-bold">{subdomainProgress.current}</span> of <span className="font-bold">{subdomainProgress.total}</span>
-                            </p>
-                        )}
-
-                        <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-5 max-w-md w-full shadow-2xl mb-8">
-                            <div className="text-xs text-blue-400 uppercase font-bold tracking-wider mb-2 flex items-center justify-center gap-2">
-                                <Globe className="w-4 h-4" /> {currentSyncZoneName || 'Preparing...'}
-                            </div>
-                            {/* Phase indicator */}
-                            <div className={`text-xs px-2 py-1 rounded-full inline-block mb-3 font-semibold ${currentSyncPhase === 'check' ? 'bg-gray-700 text-gray-300' :
-                                currentSyncPhase === 'zone' ? 'bg-blue-900/50 text-blue-300' :
-                                    currentSyncPhase === 'discover' ? 'bg-yellow-900/50 text-yellow-300' :
-                                        currentSyncPhase === 'subdomain' ? 'bg-purple-900/50 text-purple-300' : 'bg-gray-700 text-gray-400'
-                                }`}>
-                                {currentSyncPhase === 'check' ? '🔎 Checking Zone Status' :
-                                    currentSyncPhase === 'zone' ? '📊 Zone Overview' :
-                                        currentSyncPhase === 'discover' ? '🔍 Discovering Subdomains' :
-                                            currentSyncPhase === 'subdomain' ? `🌐 Subdomain` : '⏳ Starting...'}
-                            </div>
-                            {currentSyncLabel && currentSyncPhase === 'subdomain' && (
-                                <div className="text-sm text-purple-300 font-mono truncate mb-2" title={currentSyncLabel}>{currentSyncLabel}</div>
-                            )}
-                            {currentSyncDate && (
-                                <div className="text-xs text-gray-400 bg-gray-900/50 rounded p-2 border border-gray-700 font-mono flex items-center justify-between">
-                                    <span>Date:</span>
-                                    <span className="text-green-400">{currentSyncDate}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Progress Bar inside Overlay */}
-                        <div className="w-full max-w-md">
-                            <div className="flex justify-between text-xs text-gray-400 mb-2 font-mono">
-                                <span>PROGRESS</span>
-                                <span>{Math.round(syncProgress)}%</span>
-                            </div>
-                            <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden border border-gray-700 shadow-inner">
-                                <div className="bg-blue-500 h-2.5 transition-all duration-300 shadow-[0_0_10px_rgba(59,130,246,0.6)]" style={{ width: `${syncProgress}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div className={`p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50`}>
                     <h2 className={`text-xl font-bold flex items-center gap-2 ${t.title}`}>
                         <Database className="w-5 h-5 text-green-400" />
                         Sync Historical Data
                     </h2>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-800 text-gray-400 hover:text-white rounded transition" disabled={isSyncing}>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-800 text-gray-400 hover:text-white rounded transition">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -2179,7 +2228,6 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                                                 type="checkbox"
                                                 checked={selectedAccounts.has(acc.id)}
                                                 onChange={() => handleAccountChange(acc.id)}
-                                                disabled={isSyncing}
                                                 className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 cursor-pointer"
                                             />
                                             <span className="text-gray-300 font-medium text-xs truncate" title={acc.name}>{acc.name}</span>
@@ -2200,13 +2248,13 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                                     <button
                                         onClick={() => setSelectedZones(new Set(zones.filter(z => z.status === 'active').map(z => z.id)))}
                                         className="text-xs text-blue-400 hover:text-blue-300"
-                                        disabled={isSyncing || zones.filter(z => z.status === 'active').length === 0}
+                                        disabled={zones.filter(z => z.status === 'active').length === 0}
                                     >Select All</button>
                                     <span className="text-gray-600">|</span>
                                     <button
                                         onClick={() => setSelectedZones(new Set())}
                                         className="text-xs text-gray-400 hover:text-gray-300"
-                                        disabled={isSyncing || selectedZones.size === 0}
+                                        disabled={selectedZones.size === 0}
                                     >Clear</button>
                                 </div>
                             </div>
@@ -2249,7 +2297,7 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                                                                 ? 'opacity-40 cursor-not-allowed bg-gray-900/30'
                                                                 : `hover:bg-gray-800/80 cursor-pointer ${isSelected ? 'bg-blue-900/10' : ''}`
                                                                 }`}
-                                                            onClick={() => !isSyncing && !isPending && toggleZone(z.id)}
+                                                            onClick={() => !isPending && toggleZone(z.id)}
                                                         >
                                                             <td className="p-3 text-center align-middle">
                                                                 <div className="flex items-center justify-center">
@@ -2288,6 +2336,199 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                             </div>
                         </div>
                     )}
+
+                    <div className="border border-gray-800 rounded-lg p-4 bg-gray-900/30 flex flex-col min-h-[140px]">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-300">
+                                <Activity className="w-4 h-4 text-yellow-400" />
+                                Sync Jobs ({syncJobs.length})
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                {isSyncing && (
+                                    <span className="text-[11px] text-blue-300">
+                                        Background sync running for {activeJobs.length} zone(s)
+                                    </span>
+                                )}
+                                <div className="flex items-center rounded-full border border-gray-700 bg-gray-800 p-0.5">
+                                    <button onClick={() => setSyncJobFilter('all')} className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${syncJobFilter === 'all' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>All</button>
+                                    <button onClick={() => setSyncJobFilter('running')} className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${syncJobFilter === 'running' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>Running</button>
+                                    <button onClick={() => setSyncJobFilter('queued')} className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${syncJobFilter === 'queued' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>Queued</button>
+                                    <button onClick={() => setSyncJobFilter('attention')} className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${syncJobFilter === 'attention' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>Attention</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {filteredSyncJobs.length === 0 ? (
+                            <div className="text-sm text-gray-500">No active or attention jobs.</div>
+                        ) : (
+                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                {filteredSyncJobs.map(job => (
+                                    <div key={job.id} className="border border-gray-800 rounded-lg p-3 bg-gray-950/40">
+                                        {(() => {
+                                            const heartbeat = getHeartbeatSeconds(job.updated_at);
+                                            const isPossiblyStuck = heartbeat !== null && heartbeat > 30 && ['running', 'cancelling'].includes(job.status);
+                                            return (
+                                                <>
+                                        <div className="flex items-center justify-between gap-3 mb-2">
+                                            <div>
+                                                <div className="text-sm text-gray-100 font-semibold">{job.zone_name}</div>
+                                                <div className="text-[11px] text-gray-500">{job.account_name}</div>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${job.status === 'running' ? 'bg-blue-900/50 text-blue-300' : job.status === 'queued' ? 'bg-yellow-900/50 text-yellow-300' : job.status === 'cancelling' ? 'bg-orange-900/50 text-orange-300' : job.status === 'failed' ? 'bg-red-900/50 text-red-300' : 'bg-gray-800 text-gray-300'}`}>
+                                                {job.status.toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2">
+                                            <span>
+                                                Current day running for <span className="text-gray-200">{getElapsedSeconds(job.current_date_started_at)}s</span>
+                                            </span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${isPossiblyStuck ? 'bg-red-900/40 text-red-300' : 'bg-emerald-900/40 text-emerald-300'}`}>
+                                                {isPossiblyStuck ? `Possibly stuck (${heartbeat}s)` : `Heartbeat ${heartbeat ?? '-'}s ago`}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-400">
+                                            <div>Phase: <span className="text-gray-200">{job.current_phase || '-'}</span></div>
+                                            <div>Domain: <span className="text-gray-200">{job.current_domain || '-'}</span></div>
+                                            <div>Date: <span className="text-gray-200">{job.current_date || '-'}</span></div>
+                                            <div>Zone progress: <span className="text-gray-200">{job.zone_completed_steps || 0}/{job.zone_total_steps || 0}</span></div>
+                                            <div>Day progress: <span className="text-gray-200">{job.subdomain_completed_days || 0}/{job.subdomain_total_days || 0}</span></div>
+                                        </div>
+                                        <div className="mt-3">
+                                            <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+                                                <span>Zone Progress</span>
+                                                <span>
+                                                    {job.zone_total_steps > 0
+                                                        ? `${Math.round(((job.zone_completed_steps || 0) / job.zone_total_steps) * 100)}%`
+                                                        : '0%'}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden border border-gray-700">
+                                                <div
+                                                    className="bg-green-500 h-1.5 transition-all duration-300"
+                                                    style={{ width: `${job.zone_total_steps > 0 ? Math.min(((job.zone_completed_steps || 0) / job.zone_total_steps) * 100, 100) : 0}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3">
+                                            <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+                                                <span>Day Progress</span>
+                                                <span>
+                                                    {job.subdomain_total_days > 0
+                                                        ? `${Math.round(((job.subdomain_completed_days || 0) / job.subdomain_total_days) * 100)}%`
+                                                        : '0%'}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden border border-gray-700">
+                                                <div
+                                                    className="bg-blue-500 h-1.5 transition-all duration-300"
+                                                    style={{ width: `${job.subdomain_total_days > 0 ? Math.min(((job.subdomain_completed_days || 0) / job.subdomain_total_days) * 100, 100) : 0}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                        <details className="mt-3 border border-amber-900/40 bg-amber-950/20 rounded-lg p-3">
+                                            <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-[11px] font-semibold text-amber-300">
+                                                <span>429 Details</span>
+                                                <span className="text-[10px] text-amber-200">{job.rate_limit_count || 0} event(s)</span>
+                                            </summary>
+                                            <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-400 mt-2">
+                                                <div>Count: <span className="text-gray-200">{job.rate_limit_count || 0}</span></div>
+                                                <div>Last date: <span className="text-gray-200">{job.last_rate_limited_date || '-'}</span></div>
+                                                <div className="col-span-2">Last domain: <span className="text-gray-200">{job.last_rate_limited_domain || '-'}</span></div>
+                                            </div>
+                                        </details>
+                                        {job.last_error && (
+                                            <div className="mt-2 text-[11px] text-red-300">Last error: {job.last_error}</div>
+                                        )}
+                                        <div className="mt-3 flex justify-end gap-2">
+                                            {isPossiblyStuck && (
+                                                <button onClick={() => handleRetryJob(job.id)} className="px-3 py-1 rounded text-[11px] font-semibold bg-blue-900/40 text-blue-300 border border-blue-800/50 hover:bg-blue-900/60">
+                                                    Retry Job
+                                                </button>
+                                            )}
+                                            {(job.status === 'queued' || job.status === 'running' || job.status === 'cancelling') && (
+                                                <button onClick={() => handleForceStopJob(job.id)} className="px-3 py-1 rounded text-[11px] font-semibold bg-red-900/40 text-red-300 border border-red-800/50 hover:bg-red-900/60">
+                                                    {job.status === 'cancelling' ? 'Stopping...' : 'Force Stop'}
+                                                </button>
+                                            )}
+                                            {(job.status === 'failed' || job.status === 'cancelled') && (
+                                                <button onClick={() => handleDeleteJob(job.id)} className="px-3 py-1 rounded text-[11px] font-semibold bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700">
+                                                    Delete Job
+                                                </button>
+                                            )}
+                                        </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="border border-gray-800 rounded-lg p-4 bg-gray-900/30 flex flex-col min-h-[140px]">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-300">
+                                <Check className="w-4 h-4 text-green-400" />
+                                Recently Completed ({completedSyncHistory.length})
+                            </h3>
+                            <button onClick={handleClearCompletedHistory} disabled={completedSyncHistory.length === 0} className="px-3 py-1 rounded text-[11px] font-semibold bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Clear Completed
+                            </button>
+                        </div>
+
+                        {completedSyncHistory.length === 0 ? (
+                            <div className="text-sm text-gray-500">No completed sync history yet.</div>
+                        ) : (
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                                {completedSyncHistory.map(item => (
+                                    <details key={item.id} className="border border-gray-800 rounded-lg p-3 bg-gray-950/40">
+                                        <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                                            <div>
+                                                <div className="text-sm text-gray-100 font-semibold">{item.zone_name}</div>
+                                                <div className="text-[11px] text-gray-500">{item.account_name}</div>
+                                            </div>
+                                            <div className="text-right text-[11px] text-gray-400">
+                                                <div>{item.completed_at ? new Date(item.completed_at).toLocaleString() : '-'}</div>
+                                                <div>{item.duration_seconds || 0}s</div>
+                                            </div>
+                                        </summary>
+                                        <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-400 mt-3">
+                                            <div>Requested by: <span className="text-gray-200">{item.requested_by || '-'}</span></div>
+                                            <div>Zone progress: <span className="text-gray-200">{item.zone_completed_steps || 0}/{item.zone_total_steps || 0}</span></div>
+                                            <div>Duration: <span className="text-gray-200">{item.duration_seconds || 0}s</span></div>
+                                        </div>
+                                        <div className="mt-3">
+                                            <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+                                                <span>Zone Progress</span>
+                                                <span>
+                                                    {item.zone_total_steps > 0
+                                                        ? `${Math.round(((item.zone_completed_steps || 0) / item.zone_total_steps) * 100)}%`
+                                                        : '0%'}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden border border-gray-700">
+                                                <div
+                                                    className="bg-green-500 h-1.5 transition-all duration-300"
+                                                    style={{ width: `${item.zone_total_steps > 0 ? Math.min(((item.zone_completed_steps || 0) / item.zone_total_steps) * 100, 100) : 0}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                        <details className="mt-3 border border-amber-900/40 bg-amber-950/20 rounded-lg p-3">
+                                            <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-[11px] font-semibold text-amber-300">
+                                                <span>429 Details</span>
+                                                <span className="text-[10px] text-amber-200">{item.rate_limit_count || 0} event(s)</span>
+                                            </summary>
+                                            <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-400 mt-2">
+                                                <div>Count: <span className="text-gray-200">{item.rate_limit_count || 0}</span></div>
+                                                <div>Last date: <span className="text-gray-200">{item.last_rate_limited_date || '-'}</span></div>
+                                                <div className="col-span-2">Last domain: <span className="text-gray-200">{item.last_rate_limited_domain || '-'}</span></div>
+                                            </div>
+                                        </details>
+                                    </details>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     <div className="border border-gray-800 rounded-lg p-4 bg-gray-900/30 flex flex-col min-h-[200px]">
                         <div className="flex justify-between items-center mb-3">
@@ -2390,30 +2631,18 @@ const SyncHistoryModal = ({ isOpen, onClose, accounts, theme, currentUser }) => 
                 </div>
 
                 <div className="p-4 border-t border-gray-800 bg-gray-900 shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
-                    {/* Progress Bar (Hidden when syncing since overlay is active) */}
-                    {!isSyncing && syncProgress > 0 && syncProgress < 100 && (
-                        <div className="mb-4">
-                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                <span>Sync Progress...</span>
-                                <span>{Math.round(syncProgress)}%</span>
-                            </div>
-                            <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden border border-gray-700">
-                                <div className="bg-blue-500 h-1.5 transition-all duration-300" style={{ width: `${syncProgress}%` }}></div>
-                            </div>
-                        </div>
-                    )}
                     <div className="flex justify-end gap-3">
-                        <button onClick={onClose} disabled={isSyncing} className={`px-4 py-2 rounded text-xs font-medium transition-colors ${t.button}`}>Cancel</button>
+                        <button onClick={onClose} className={`px-4 py-2 rounded text-xs font-medium transition-colors ${t.button}`}>Close</button>
                         <button
                             onClick={handleSync}
-                            disabled={selectedZones.size === 0 || isSyncing}
+                            disabled={selectedZones.size === 0}
                             className={`px-4 py-2 rounded text-xs font-bold transition-all flex items-center gap-2
                                 ${selectedZones.size === 0
                                     ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     : 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20'}`}
                         >
-                            {isSyncing ? <Activity className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-                            {isSyncing ? 'Syncing data...' : `Sync ${selectedZones.size} Zone${selectedZones.size > 1 ? 's' : ''}`}
+                            <Database className="w-4 h-4" />
+                            {`Sync ${selectedZones.size} Zone${selectedZones.size > 1 ? 's' : ''}`}
                         </button>
                     </div>
                 </div>
