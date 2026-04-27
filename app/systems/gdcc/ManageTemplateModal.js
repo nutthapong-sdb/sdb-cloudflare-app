@@ -1,13 +1,51 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Plus, Trash2, Edit2, Copy, FileText, LayoutTemplate, Check, MoreVertical } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { listTemplates, createTemplate, renameTemplate, deleteTemplate } from '@/app/utils/templateApi';
 
-export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole }) {
+export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole, currentUserId }) {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(false);
     const [renamingId, setRenamingId] = useState(null);
     const [newName, setNewName] = useState('');
+    const [showHidden, setShowHidden] = useState(false);
+    const [defaultTemplateId, setDefaultTemplateId] = useState('default');
+    const [hiddenTemplateIds, setHiddenTemplateIds] = useState([]);
+
+    const userKey = useMemo(() => (currentUserId ? String(currentUserId) : 'anonymous'), [currentUserId]);
+    const storageKeyDefault = useMemo(() => `gdcc:templates:${userKey}:defaultTemplateId`, [userKey]);
+    const storageKeyHidden = useMemo(() => `gdcc:templates:${userKey}:hiddenTemplateIds`, [userKey]);
+
+    const loadPrefs = () => {
+        if (typeof window === 'undefined') return;
+
+        const storedDefault = localStorage.getItem(storageKeyDefault) || 'default';
+        let storedHidden = [];
+        try {
+            storedHidden = JSON.parse(localStorage.getItem(storageKeyHidden) || '[]');
+        } catch (_) {
+            storedHidden = [];
+        }
+        if (!Array.isArray(storedHidden)) storedHidden = [];
+
+        setDefaultTemplateId(storedDefault);
+        setHiddenTemplateIds(storedHidden.map(String));
+    };
+
+    const persistDefault = (id) => {
+        setDefaultTemplateId(id);
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem(storageKeyDefault, id); } catch (_) { }
+        }
+    };
+
+    const persistHidden = (ids) => {
+        const next = Array.from(new Set((ids || []).map(String)));
+        setHiddenTemplateIds(next);
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem(storageKeyHidden, JSON.stringify(next)); } catch (_) { }
+        }
+    };
 
     const fetchTemplates = async () => {
         setLoading(true);
@@ -19,10 +57,39 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
     useEffect(() => {
         if (!isOpen) return;
         const timer = setTimeout(() => {
+            loadPrefs();
             fetchTemplates();
         }, 0);
         return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
+
+    // Keep default selection valid (and avoid empty visible lists)
+    useEffect(() => {
+        if (!isOpen) return;
+        if (templates.length === 0) return;
+
+        const existingIds = new Set(templates.map(t => String(t.id)));
+        const hidden = hiddenTemplateIds.filter(id => existingIds.has(String(id)));
+        if (hidden.length !== hiddenTemplateIds.length) {
+            persistHidden(hidden);
+        }
+
+        const visible = templates.filter(t => !hidden.includes(String(t.id)));
+        if (visible.length === 0) {
+            // Safety: if user hid everything, reset hidden list.
+            persistHidden([]);
+            if (!existingIds.has(String(defaultTemplateId))) {
+                persistDefault('default');
+            }
+            return;
+        }
+
+        if (!existingIds.has(String(defaultTemplateId)) || hidden.includes(String(defaultTemplateId))) {
+            persistDefault(String(visible[0].id));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [templates, hiddenTemplateIds, defaultTemplateId, isOpen]);
 
     // ESC key to close modal
     useEffect(() => {
@@ -74,26 +141,84 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
         }
     };
 
-    const handleDelete = async (id, name) => {
+    const isHidden = (id) => hiddenTemplateIds.includes(String(id));
+
+    const handleSoftDelete = async (id, name) => {
+        const tid = String(id);
+
+        // Prevent hiding the last visible template, otherwise selectors become unusable.
+        const visible = templates.filter(t => !isHidden(t.id));
+        if (!isHidden(tid) && visible.length <= 1) {
+            return Swal.fire('Cannot Delete', 'You cannot delete (hide) the last remaining template.', 'warning');
+        }
+
+        if (!isHidden(tid)) {
+            // Hide
+            const nextHidden = [...hiddenTemplateIds, tid];
+            persistHidden(nextHidden);
+
+            // If we hid the current default, pick the next visible as new default.
+            if (defaultTemplateId === tid) {
+                const nextVisible = templates.filter(t => !nextHidden.includes(String(t.id)));
+                if (nextVisible.length > 0) {
+                    persistDefault(String(nextVisible[0].id));
+                } else {
+                    persistDefault('default');
+                }
+            }
+            return;
+        }
+
+        // Restore
+        const restored = hiddenTemplateIds.filter(x => x !== tid);
+        persistHidden(restored);
+    };
+
+    const handleHardDelete = async (id, name) => {
         if (userRole !== 'root') {
-            return Swal.fire('Permission Denied', 'Only root users can delete templates', 'error');
+            return Swal.fire('Permission Denied', 'Only root users can hard delete templates', 'error');
+        }
+        if (String(id) === 'default') {
+            return Swal.fire('Not Allowed', 'The system default template cannot be hard deleted.', 'error');
         }
 
         const res = await Swal.fire({
-            title: 'Delete Template?',
-            text: `Are you sure you want to delete "${name}"?`,
+            title: 'Hard Delete Template?',
+            html: `<div style="text-align:left">
+                <div><b>${name}</b></div>
+                <div style="margin-top:8px">This will permanently delete the template from the system (registry + files).</div>
+            </div>`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
-            confirmButtonText: 'Yes, delete it!'
+            confirmButtonText: 'Yes, hard delete'
         });
 
-        if (res.isConfirmed) {
-            setLoading(true);
-            const apiRes = await deleteTemplate(id);
-            if (!apiRes.success) Swal.fire('Error', apiRes.error || 'Failed to delete', 'error');
-            await fetchTemplates();
+        if (!res.isConfirmed) return;
+
+        setLoading(true);
+        const apiRes = await deleteTemplate(id);
+        if (!apiRes.success) {
+            setLoading(false);
+            return Swal.fire('Error', apiRes.error || 'Failed to delete', 'error');
         }
+
+        // Clean up local prefs
+        const tid = String(id);
+        persistHidden(hiddenTemplateIds.filter(x => x !== tid));
+        if (defaultTemplateId === tid) {
+            persistDefault('default');
+        }
+        await fetchTemplates();
+    };
+
+    const handleSetAsDefault = (id) => {
+        const tid = String(id);
+        // If it's hidden, unhide it automatically.
+        if (isHidden(tid)) {
+            persistHidden(hiddenTemplateIds.filter(x => x !== tid));
+        }
+        persistDefault(tid);
     };
 
     const startRename = (t) => {
@@ -124,8 +249,11 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
         subText: 'text-gray-400',
         card: 'bg-gray-800/40 border-gray-700/50',
         sectionHeader: 'bg-gray-950 border-blue-500',
-        text: 'text-gray-200'
+        text: 'text-gray-200',
+        buttonDanger: 'bg-red-600 hover:bg-red-500 text-white'
     };
+
+    const buttonBase = 'px-3 py-2 rounded-lg text-xs font-semibold transition-colors';
 
     return (
         <div
@@ -156,7 +284,16 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
                     {/* Toolbar */}
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-between gap-3">
+                        <label className={`flex items-center gap-2 text-xs ${t.subText} select-none`}>
+                            <input
+                                type="checkbox"
+                                checked={showHidden}
+                                onChange={(e) => setShowHidden(e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                            />
+                            Show hidden templates
+                        </label>
                         <button
                             onClick={handleCreateWrapper}
                             className={`flex items-center gap-2 px-4 py-2 ${t.buttonPrimary || 'bg-blue-600 text-white'} rounded-lg font-medium transition-colors shadow-lg shadow-blue-500/10`}
@@ -176,7 +313,9 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-3">
-                            {templates.map(tmp => (
+                            {templates
+                                .filter(tmp => showHidden || !isHidden(tmp.id))
+                                .map(tmp => (
                                 <div key={tmp.id} className={`group ${t.card || 'bg-gray-800/40 border-gray-700/50'} border rounded-xl p-4 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-blue-500/30 hover:shadow-md`}>
 
                                     {/* Info */}
@@ -194,19 +333,32 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                 <button onClick={() => setRenamingId(null)} className="p-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><X className="w-4 h-4" /></button>
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-2 group/name">
-                                                <h3 className={`font-semibold ${t.text || 'text-gray-200'}`}>{tmp.name}</h3>
-                                                {tmp.id === 'default' && <span className="px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 text-[10px] font-mono uppercase tracking-wider border border-blue-800">Default</span>}
-                                                <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
-                                                    <Edit2 className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        )}
-                                        <p className={`text-xs ${t.subText} mt-1 font-mono`}>ID: {tmp.id}</p>
-                                    </div>
+                                             <div className="flex items-center gap-2 group/name">
+                                                 <h3 className={`font-semibold ${t.text || 'text-gray-200'}`}>{tmp.name}</h3>
+                                                {String(tmp.id) === String(defaultTemplateId) && <span className="px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 text-[10px] font-mono uppercase tracking-wider border border-blue-800">Default</span>}
+                                                {isHidden(tmp.id) && <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 text-[10px] font-mono uppercase tracking-wider border border-gray-700">Hidden</span>}
+                                                 <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
+                                                     <Edit2 className="w-3 h-3" />
+                                                 </button>
+                                             </div>
+                                         )}
+                                         <p className={`text-xs ${t.subText} mt-1 font-mono`}>ID: {tmp.id}</p>
+                                     </div>
 
-                                    {/* Actions */}
-                                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                     {/* Actions */}
+                                     <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+
+                                        {/* Set as default */}
+                                        <button
+                                            onClick={() => handleSetAsDefault(tmp.id)}
+                                            className={`${buttonBase} border ${String(tmp.id) === String(defaultTemplateId)
+                                                ? `${t.buttonPrimary || 'bg-blue-600 hover:bg-blue-500 text-white'} border-blue-500/70`
+                                                : `${t.button || 'bg-gray-800 hover:bg-gray-700 text-gray-200'} ${t.modalBorder || 'border-gray-700'}`
+                                            }`}
+                                            title="Set as default (per-user)"
+                                        >
+                                            Set as default
+                                        </button>
 
                                         {/* Edit Content Buttons */}
                                         <div className={`flex ${t.sectionHeader || 'bg-gray-900 border-gray-700'} rounded-lg p-1 border`}>
@@ -238,18 +390,27 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                             </button>
                                         </div>
 
-                                        {/* Delete */}
-                                        {tmp.id !== 'default' && userRole === 'root' && (
+                                        {/* Delete (soft hide / restore) */}
+                                        <button
+                                            onClick={() => handleSoftDelete(tmp.id, tmp.name)}
+                                            className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
+                                            title={isHidden(tmp.id) ? 'Restore Template' : 'Delete Template (Hide)'}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+
+                                        {/* Hard delete */}
+                                        {userRole === 'root' && String(tmp.id) !== 'default' && (
                                             <button
-                                                onClick={() => handleDelete(tmp.id, tmp.name)}
-                                                className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
-                                                title="Delete Template"
+                                                onClick={() => handleHardDelete(tmp.id, tmp.name)}
+                                                className={`${buttonBase} border ${t.buttonDanger || 'bg-red-600 hover:bg-red-700 text-white'} border-red-500/70`}
+                                                title="Hard delete (permanent)"
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                Hard delete
                                             </button>
                                         )}
-                                    </div>
-                                </div>
+                                     </div>
+                                 </div>
                             ))}
                         </div>
                     )}

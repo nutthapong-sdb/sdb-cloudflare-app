@@ -16,6 +16,7 @@ export const THEMES = {
         buttonPrimary: 'bg-blue-600 hover:bg-blue-700 text-white',
         buttonSecondary: 'bg-purple-600 hover:bg-purple-700 text-white',
         buttonSuccess: 'bg-green-600 hover:bg-green-700 text-white',
+        buttonDanger: 'bg-red-600 hover:bg-red-700 text-white',
         buttonDisabled: 'bg-gray-700 text-gray-500',
         icon: 'text-gray-500 hover:text-white',
         iconAccent: 'text-blue-500',
@@ -71,6 +72,7 @@ export const THEMES = {
         buttonPrimary: 'bg-pink-400 hover:bg-pink-500 text-white shadow-sm border border-pink-400',
         buttonSecondary: 'bg-purple-400 hover:bg-purple-500 text-white shadow-sm border border-purple-400',
         buttonSuccess: 'bg-green-400 hover:bg-green-500 text-white shadow-sm border border-green-400',
+        buttonDanger: 'bg-red-400 hover:bg-red-500 text-white shadow-sm border border-red-400',
         buttonDisabled: 'bg-pink-100 text-pink-300 border border-pink-100',
         icon: 'text-pink-400 hover:text-pink-600',
         iconAccent: 'text-pink-500',
@@ -128,6 +130,7 @@ export const THEMES = {
         buttonPrimary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
         buttonSecondary: 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm',
         buttonSuccess: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm',
+        buttonDanger: 'bg-red-600 hover:bg-red-700 text-white shadow-sm',
         buttonDisabled: 'bg-slate-100 text-slate-400 border border-slate-200',
         icon: 'text-slate-400 hover:text-blue-600',
         iconAccent: 'text-blue-500',
@@ -161,12 +164,22 @@ export const THEMES = {
             headerText: 'text-white font-bold',
             headerSubText: 'text-slate-400',
             menuLabel: 'text-slate-500 uppercase tracking-wider font-semibold text-[10px]',
-            itemInactive: 'text-slate-400 hover:bg-slate-800 hover:text-white',
+            // On corporate theme, hovered items should remain readable even on light surfaces.
+            // Use a blue hover surface + blue border + white text.
+            itemInactive: 'text-slate-300 border border-transparent hover:bg-blue-600 hover:border-blue-400/70 hover:text-white',
             itemActive: 'bg-blue-600 text-white shadow-md border-r-4 border-blue-400 font-medium',
             itemIconActive: 'text-white',
             footer: 'border-slate-800 bg-slate-950/50',
             collapseButton: 'text-slate-500 hover:bg-slate-800 hover:text-white border-transparent hover:border-slate-700',
             logoutButton: 'text-red-400 hover:bg-red-900/20 hover:text-red-300 border-transparent hover:border-red-900/30'
-        }
+        },
+
+        // Legacy keys used by some modals/components
+        border: 'border-slate-200',
+        headerBg: 'bg-slate-50',
+        content: 'bg-slate-50',
+        hover: 'hover:bg-slate-50',
+        buttonHover: 'hover:bg-slate-100',
+        inputBorder: 'border-slate-300'
     }
 };

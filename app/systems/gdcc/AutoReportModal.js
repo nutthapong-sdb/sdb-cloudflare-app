@@ -226,7 +226,36 @@ export default function AutoReportModal({ isOpen, onClose, accounts, theme, curr
             const res = await fetch('/api/templates');
             const data = await res.json();
             if (Array.isArray(data)) {
-                setTemplates(data);
+                if (typeof window === 'undefined') {
+                    setTemplates(data);
+                    setLoadingTemplates(false);
+                    return;
+                }
+                const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
+                const keyDefault = `gdcc:templates:${userKey}:defaultTemplateId`;
+                const keyHidden = `gdcc:templates:${userKey}:hiddenTemplateIds`;
+
+                let hidden = [];
+                try { hidden = JSON.parse(localStorage.getItem(keyHidden) || '[]'); } catch (_) { hidden = []; }
+                if (!Array.isArray(hidden)) hidden = [];
+                hidden = hidden.map(String);
+
+                let filtered = data.filter(t => !hidden.includes(String(t.id)));
+                if (filtered.length === 0 && data.length > 0) {
+                    // Safety: never allow an empty selector.
+                    filtered = data;
+                    try { localStorage.setItem(keyHidden, '[]'); } catch (_) {}
+                }
+
+                setTemplates(filtered);
+
+                const storedDefault = localStorage.getItem(keyDefault) || 'default';
+                const availableIds = new Set(filtered.map(t => String(t.id)));
+                if (availableIds.has(String(storedDefault))) {
+                    setSelectedTemplateId(String(storedDefault));
+                } else if (!availableIds.has(String(selectedTemplateId))) {
+                    setSelectedTemplateId(filtered.length > 0 ? String(filtered[0].id) : 'default');
+                }
             }
         } catch (e) {
             console.error('Failed to fetch templates:', e);
@@ -239,6 +268,7 @@ export default function AutoReportModal({ isOpen, onClose, accounts, theme, curr
             fetchConfigs();
             fetchTemplates();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     // Handle Account Change

@@ -1111,9 +1111,33 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
             setInternalSubdomains(dashboardHosts || []);
 
             listTemplates().then(list => {
-                setTemplates(list);
-                if (list.length > 0 && !list.find(t => t.id === selectedTemplateId)) {
-                    setSelectedTemplateId('default'); // Fallback
+                if (typeof window === 'undefined') {
+                    setTemplates(list);
+                    return;
+                }
+                const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
+                const keyDefault = `gdcc:templates:${userKey}:defaultTemplateId`;
+                const keyHidden = `gdcc:templates:${userKey}:hiddenTemplateIds`;
+
+                let hidden = [];
+                try { hidden = JSON.parse(localStorage.getItem(keyHidden) || '[]'); } catch (_) { hidden = []; }
+                if (!Array.isArray(hidden)) hidden = [];
+                hidden = hidden.map(String);
+
+                let filtered = list.filter(t => !hidden.includes(String(t.id)));
+                if (filtered.length === 0 && list.length > 0) {
+                    filtered = list;
+                    try { localStorage.setItem(keyHidden, '[]'); } catch (_) {}
+                }
+
+                setTemplates(filtered);
+
+                const storedDefault = localStorage.getItem(keyDefault) || 'default';
+                const ids = new Set(filtered.map(t => String(t.id)));
+                if (ids.has(String(storedDefault))) {
+                    setSelectedTemplateId(String(storedDefault));
+                } else if (filtered.length > 0 && !ids.has(String(selectedTemplateId))) {
+                    setSelectedTemplateId(String(filtered[0].id));
                 }
             });
         }
@@ -2675,9 +2699,16 @@ const Card = ({ title, children, className = '', theme }) => {
 // Icon removed
 
 
-const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) => {
+const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600", theme }) => {
     const maxValue = Math.max(...data.map(d => d[valueKey] || 0), 1);
     const total = data.length;
+
+    const isCorporate = theme?.id === 'corporate';
+    const headerText = isCorporate ? 'text-slate-600' : 'text-gray-500';
+    const headerBorder = isCorporate ? 'border-slate-200' : 'border-gray-800';
+    const labelText = isCorporate ? 'text-slate-900' : 'text-gray-300';
+    const valueText = isCorporate ? 'text-slate-700' : 'text-gray-400';
+    const rowBg = isCorporate ? 'bg-slate-200/60' : 'bg-gray-800/50';
 
     if (total === 0) {
         return <div className="text-gray-500 text-xs italic py-2">No data available</div>;
@@ -2685,17 +2716,17 @@ const HorizontalBarList = ({ data, labelKey, valueKey, color = "bg-blue-600" }) 
 
     return (
         <div className="space-y-3 font-mono text-xs">
-            <div className="flex justify-between text-gray-500 border-b border-gray-800 pb-1 mb-2">
+            <div className={`flex justify-between ${headerText} border-b ${headerBorder} pb-1 mb-2`}>
                 <span>{labelKey}</span>
                 <span>Count</span>
             </div>
             {data.map((item, idx) => (
                 <div key={idx} className="relative group">
                     <div className="flex justify-between items-center relative z-10 py-1">
-                        <span className="text-gray-300 truncate w-2/3 pr-2">{item[labelKey] || item.name}</span>
-                        <span className="text-gray-400">{item[valueKey]?.toLocaleString() || 0}</span>
+                        <span className={`${labelText} truncate w-2/3 pr-2 pl-2`}>{item[labelKey] || item.name}</span>
+                        <span className={valueText}>{item[valueKey]?.toLocaleString() || 0}</span>
                     </div>
-                    <div className="absolute top-0 left-0 h-full bg-gray-800/50 w-full rounded-sm">
+                    <div className={`absolute top-0 left-0 h-full ${rowBg} w-full rounded-sm`}>
                         <div
                             className={`h-full ${color} opacity-40 rounded-sm transition-all duration-1000`}
                             style={{ width: `${((item[valueKey] || 0) / maxValue) * 100}%` }}
@@ -3283,46 +3314,38 @@ export default function GDCCPage() {
 
 
         // FIREWALL DATA
-        const firewallGroups = result?.firewallData || [];
+        // Use the same dataset we already fetch for firewall summaries.
+        // (Previously this read from result.firewallData, which is not part of the API response.)
+        const firewallGroups = result?.data?.firewallActivity || [];
         const realAttackEvents = [];
+        const targetActions = new Set([
+            'block',
+            'challenge',
+            'js_challenge',
+            'jschallenge',
+            'managed_challenge',
+            'managedchallenge'
+        ]);
 
         firewallGroups.forEach(g => {
-            if (g.isSummary) {
-                // If it's a summary, populate attack charts from its aggregated activity
-                const fw = g.firewall || {};
-                (fw.activity || []).forEach(act => {
-                    const itemTime = new Date(act.dimensions?.datetimeMinute).getTime();
-                    const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
-                    if (attackBuckets.has(bucketTime)) {
-                        attackBuckets.get(bucketTime).count += act.count;
-                    }
-                    realAttackEvents.push({
-                        time: new Date(act.dimensions?.datetimeMinute),
-                        action: act.dimensions?.action || 'unknown',
-                        count: act.count
-                    });
-                });
-                return;
+            const actionRaw = g.dimensions?.action || 'unknown';
+            const action = String(actionRaw).toLowerCase();
+            if (!targetActions.has(action)) return;
+
+            const dt = g.dimensions?.datetimeMinute;
+            if (!dt) return;
+
+            const itemTime = new Date(dt).getTime();
+            const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
+            if (attackBuckets.has(bucketTime)) {
+                attackBuckets.get(bucketTime).count += (g.count || 0);
             }
 
-            const action = g.dimensions?.action;
-            const targetActions = new Set(['block', 'challenge', 'js_challenge', 'jschallenge', 'managed_challenge']);
-
-            if (targetActions.has(action)) {
-                if (g.dimensions?.datetimeMinute) {
-                    const itemTime = new Date(g.dimensions.datetimeMinute).getTime();
-                    const bucketTime = Math.floor(itemTime / bucketSizeMs) * bucketSizeMs;
-                    if (attackBuckets.has(bucketTime)) {
-                        attackBuckets.get(bucketTime).count += g.count;
-                    }
-
-                    realAttackEvents.push({
-                        time: new Date(g.dimensions.datetimeMinute),
-                        action: action,
-                        count: g.count
-                    });
-                }
-            }
+            realAttackEvents.push({
+                time: new Date(dt),
+                action,
+                count: (g.count || 0)
+            });
         });
 
         realAttackEvents.sort((a, b) => b.time - a.time);
@@ -4834,19 +4857,19 @@ export default function GDCCPage() {
                                     <div className={`border-t ${theme.dropdown?.menuBorder || 'border-gray-700/50'} pt-1 mt-1`}>
                                         <button
                                             onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsManageTemplateModalOpen(true); }}
-                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
                                         >
                                             <FileText className="w-3 h-3" /> Manage Template
                                         </button>
                                         <button
                                             onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsSyncModalOpen(true); }}
-                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
                                         >
                                             <Database className="w-3 h-3" /> Sync History
                                         </button>
                                         <button
                                             onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsAutoReportModalOpen(true); }}
-                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
                                         >
                                             <Calendar className="w-3 h-3" /> Auto Gen Report
                                         </button>
@@ -4856,7 +4879,7 @@ export default function GDCCPage() {
                                                 setIsTemplateSubmenuOpen(false); 
                                                 setIsDepartmentModalOpen(true); 
                                             }}
-                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center gap-2`}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
                                         >
                                             <Users className="w-3 h-3" /> Department
                                         </button>
@@ -4865,7 +4888,7 @@ export default function GDCCPage() {
                                     <div className="relative">
                                         <button
                                             onClick={() => setIsThemeSubmenuOpen(!isThemeSubmenuOpen)}
-                                            className={`w-full text-left px-4 py-2 text-sm ${theme.text || 'text-gray-300'} ${theme.dropdown?.hover || 'hover:bg-gray-700'} hover:text-white flex items-center justify-between`}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
                                         >
                                             <span className="flex items-center gap-2">
                                                 <Activity className="w-3 h-3" /> Theme {/* Using Activity as placeholder icon */}
@@ -4880,7 +4903,7 @@ export default function GDCCPage() {
                                                     <button
                                                         key={t.id}
                                                         onClick={() => { changeTheme(t.id); setIsReportMenuOpen(false); setIsThemeSubmenuOpen(false); }}
-                                                        className={`w-full text-left px-8 py-2 text-xs flex items-center gap-2 hover:bg-gray-800 ${currentTheme === t.id ? 'text-blue-400 font-bold' : (theme.subText || 'text-gray-400') + ' hover:text-white'}`}
+                                                        className={`w-full text-left px-8 py-2 text-xs flex items-center gap-2 border border-transparent ${currentTheme === t.id ? 'text-blue-400 font-bold' : (theme.subText || 'text-gray-400')} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : 'hover:bg-gray-800 hover:text-white'}`}
                                                     >
                                                         {currentTheme === t.id && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                                                         {t.name}
@@ -4961,6 +4984,7 @@ export default function GDCCPage() {
                 onEditDomain={onEditDomain}
                 theme={theme}
                 userRole={currentUser?.role}
+                currentUserId={currentUser?.id}
             />
 
             <BatchReportModal
@@ -5074,7 +5098,7 @@ export default function GDCCPage() {
                                 </ResponsiveContainer>
                             </div>
                         </Card>
-                        <Card theme={theme} title="Top URLs"><HorizontalBarList data={topUrls} labelKey="path" valueKey="count" /></Card>
+                        <Card theme={theme} title="Top URLs"><HorizontalBarList data={topUrls} labelKey="path" valueKey="count" theme={theme} /></Card>
                         <Card theme={theme} title="Top Firewall Actions">
                             <div className="h-64 flex flex-col justify-between">
                                 {topFirewallActions.length === 0 ? (<div className="text-gray-500 text-xs italic flex-grow flex items-center justify-center">No firewall events</div>) : (
@@ -5100,9 +5124,9 @@ export default function GDCCPage() {
 
                     {/* CHARTS ROW 2 (Swapped IPs and User Agents) */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <Card theme={theme} title="Top Client IPs"><HorizontalBarList data={topIps} labelKey="ip" valueKey="count" color="bg-cyan-600" /></Card>
-                        <Card theme={theme} title="Top User Agents"><HorizontalBarList data={topUserAgents} labelKey="agent" valueKey="count" color="bg-indigo-600" /></Card>
-                        <Card theme={theme} title="Top Countries"><HorizontalBarList data={topCountries} labelKey="name" valueKey="count" color="bg-blue-800" /></Card>
+                        <Card theme={theme} title="Top Client IPs"><HorizontalBarList data={topIps} labelKey="ip" valueKey="count" color="bg-cyan-600" theme={theme} /></Card>
+                        <Card theme={theme} title="Top User Agents"><HorizontalBarList data={topUserAgents} labelKey="agent" valueKey="count" color="bg-indigo-600" theme={theme} /></Card>
+                        <Card theme={theme} title="Top Countries"><HorizontalBarList data={topCountries} labelKey="name" valueKey="count" color="bg-blue-800" theme={theme} /></Card>
                     </div>
 
                     {/* CHARTS ROW 3: NEW SECURITY & HTTP CHARTS */}
@@ -5171,13 +5195,13 @@ export default function GDCCPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <Card theme={theme} title="Top WAF Rules">
                             <div className="overflow-y-auto max-h-64">
-                                <HorizontalBarList data={topRules} labelKey="rule" valueKey="count" color="bg-orange-600" />
+                                <HorizontalBarList data={topRules} labelKey="rule" valueKey="count" color="bg-orange-600" theme={theme} />
                             </div>
                         </Card>
                         <Card theme={theme} title="Top 5 Attackers">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-left text-gray-400">
-                                    <thead className="text-gray-500 uppercase font-bold border-b border-gray-800">
+                                <table className={`w-full text-xs text-left ${theme.id === 'corporate' ? 'text-slate-700' : 'text-gray-400'}`}>
+                                    <thead className={`uppercase font-bold border-b ${theme.id === 'corporate' ? 'text-slate-600 border-slate-200' : 'text-gray-500 border-gray-800'}`}>
                                         <tr>
                                             <th className="py-2 pl-2">IP</th>
                                             <th className="py-2">Country</th>
@@ -5185,14 +5209,14 @@ export default function GDCCPage() {
                                             <th className="py-2 pr-2 text-right">Type</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-800/50">
+                                    <tbody className={theme.id === 'corporate' ? 'divide-y divide-slate-200' : 'divide-y divide-gray-800/50'}>
                                         {topAttackers.length === 0 ? (
                                             <tr><td colSpan="4" className="text-center py-4 italic">No attackers found</td></tr>
                                         ) : (
                                             topAttackers.slice(0, 5).map((attacker, i) => (
                                                 <tr key={i} className={`${theme.tableRowHover} transition-colors`}>
                                                     <td className="py-2 pl-2 font-mono text-blue-400">{attacker.ip}</td>
-                                                    <td className="py-2 text-gray-300">{attacker.country}</td>
+                                                    <td className={`py-2 ${theme.id === 'corporate' ? 'text-slate-800' : 'text-gray-300'}`}>{attacker.country}</td>
                                                     <td className="py-2 text-right text-red-500 font-bold">{attacker.count.toLocaleString()}</td>
                                                     <td className="py-2 pr-2 text-right text-xs opacity-70">{attacker.type}</td>
                                                 </tr>
@@ -5213,19 +5237,19 @@ export default function GDCCPage() {
                                         Showing synced daily summary rows from Sync History for this range.
                                     </div>
                                 )}
-                                <div className="grid grid-cols-7 gap-2 border-b border-gray-800 pb-2 mb-2 font-bold text-gray-300 min-w-[900px]">
+                                <div className={`grid grid-cols-7 gap-2 border-b ${theme.id === 'corporate' ? 'border-slate-300 text-slate-900' : 'border-gray-800 text-gray-300'} pb-2 mb-2 font-bold min-w-[900px]`}>
                                     <div className="col-span-2">Host</div><div className="col-span-1">IP</div><div className="col-span-1">Country</div>
                                     <div className="col-span-1">Status</div><div className="col-span-1">Device</div><div className="col-span-1 text-right">Count</div>
                                 </div>
                                 {rawInspectorRows.slice(0, 10).map((row, i) => {
                                     return (
-                                        <div key={row.key || i} className={`grid grid-cols-7 gap-2 ${theme.tableRowHover} transition-colors py-1 border-b border-gray-900/50 min-w-[900px] items-center`}>
-                                            <div className="col-span-2 text-green-400 truncate pr-2">{row.host}</div>
-                                            <div className="col-span-1 text-blue-400 truncate">{row.ip}</div>
-                                            <div className="col-span-1 text-gray-500 truncate">{row.country}</div>
-                                            <div className="col-span-1 text-yellow-400 truncate">{row.status}</div>
-                                            <div className="col-span-1 text-purple-400 truncate">{row.device}</div>
-                                            <div className="col-span-1 text-white font-bold text-right">{Number(row.count || 0).toLocaleString()}</div>
+                                        <div key={row.key || i} className={`grid grid-cols-7 gap-2 ${theme.tableRowHover} transition-colors py-1 border-b ${theme.id === 'corporate' ? 'border-slate-200/70' : 'border-gray-900/50'} min-w-[900px] items-center`}>
+                                            <div className={`col-span-2 truncate pr-2 ${theme.id === 'corporate' ? 'text-slate-900 font-semibold' : 'text-green-400'}`}>{row.host}</div>
+                                            <div className={`col-span-1 truncate ${theme.id === 'corporate' ? 'text-blue-700' : 'text-blue-400'}`}>{row.ip}</div>
+                                            <div className={`col-span-1 truncate ${theme.id === 'corporate' ? 'text-slate-700' : 'text-gray-500'}`}>{row.country}</div>
+                                            <div className={`col-span-1 truncate ${theme.id === 'corporate' ? 'text-amber-700' : 'text-yellow-400'}`}>{row.status}</div>
+                                            <div className={`col-span-1 truncate ${theme.id === 'corporate' ? 'text-indigo-700' : 'text-purple-400'}`}>{row.device}</div>
+                                            <div className={`col-span-1 font-bold text-right ${theme.id === 'corporate' ? 'text-slate-900' : 'text-white'}`}>{Number(row.count || 0).toLocaleString()}</div>
                                         </div>
                                     );
                                 })}
