@@ -696,6 +696,32 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         return processTemplate(localTemplate, safeData, new Date(), dashboardImage);
     };
 
+    const toThaiDigits = (input) => {
+        if (!input) return input;
+        const thai = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
+        return String(input).replace(/[0-9]/g, (d) => thai[Number(d)]);
+    };
+
+    // Convert Arabic digits to Thai digits in visible text only (text nodes), not attributes.
+    const convertDigitsToThaiTextNodes = (html) => {
+        if (!html) return html;
+        if (typeof DOMParser === 'undefined') return html;
+        try {
+            const doc = new DOMParser().parseFromString(String(html), 'text/html');
+            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walker.nextNode())) {
+                if (!node.nodeValue) continue;
+                if (!/[0-9]/.test(node.nodeValue)) continue;
+                node.nodeValue = toThaiDigits(node.nodeValue);
+            }
+            return doc.body.innerHTML;
+        } catch (e) {
+            console.warn('Thai digit conversion failed:', e);
+            return html;
+        }
+    };
+
     // --- COPY FUNCTION ---
     const handleCopy = () => {
         if (!reportContentRef.current) return;
@@ -761,7 +787,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         let cleanHTML = "";
 
         if (isEditing) {
-            cleanHTML = localTemplate;
+            // Stored templates stay Arabic; only convert for output.
+            cleanHTML = convertDigitsToThaiTextNodes(localTemplate);
         } else {
             const clone = reportContentRef.current.cloneNode(true);
             const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
@@ -773,6 +800,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             }
 
             cleanHTML = clone.innerHTML;
+            cleanHTML = convertDigitsToThaiTextNodes(cleanHTML);
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
 
@@ -1017,7 +1045,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 </div>
                             </div>
                         ) : (
-                            <div dangerouslySetInnerHTML={{ __html: getProcessedHtml() }} />
+                            <div dangerouslySetInnerHTML={{ __html: convertDigitsToThaiTextNodes(getProcessedHtml()) }} />
                         )}
 
                     </div>
