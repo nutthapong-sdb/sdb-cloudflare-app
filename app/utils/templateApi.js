@@ -2,7 +2,8 @@
 export const listTemplates = async () => {
     try {
         const res = await fetch('/api/templates');
-        return await res.json();
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
     } catch (e) { return []; }
 };
 

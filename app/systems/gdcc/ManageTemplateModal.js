@@ -50,7 +50,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
     const fetchTemplates = async () => {
         setLoading(true);
         const list = await listTemplates();
-        setTemplates(list);
+        setTemplates(Array.isArray(list) ? list : []);
         setLoading(false);
     };
 
