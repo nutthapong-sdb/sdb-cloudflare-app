@@ -79,3 +79,25 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 *   `scripts/helpers.js`: Shared utility module for debug scripts (API Token loading, Logger).
 *   `scripts/debug/test-template-variables.js`: regression script to verify all report template variables are populating correctly.
 *   `package.json`: Defines the project's dependencies and scripts.
+
+# Recent Changes (May 2026)
+
+*   **Per-user report template preferences (UI-only):** Users can set a default template and hide templates (soft delete) per-user using `localStorage`. Hidden templates are filtered out of template selectors (Auto Report + Batch Report + Manage Templates), with safety to prevent hiding the last visible template.
+    *   Main UI: `app/systems/gdcc/ManageTemplateModal.js`, `app/systems/gdcc/AutoReportModal.js`, `app/systems/gdcc/page.js`
+    *   Storage keys: `gdcc:templates:<userId>:defaultTemplateId`, `gdcc:templates:<userId>:hiddenTemplateIds`
+
+*   **Root-only hard delete:** In Manage Templates, `Hard delete` permanently deletes templates (non-`default`) for root users only; `default` cannot be hard deleted.
+
+*   **Corporate theme readability improvements:** Updated hover and table/list contrast for Corporate Blue theme.
+    *   Theme tokens: `app/utils/themes.js`
+    *   UI adjustments: `app/systems/gdcc/page.js`
+
+*   **Attack Prevention History fix:** The chart/table now derives from `result.data.firewallActivity` (the real API payload) instead of a non-existent `result.firewallData`.
+    *   File: `app/systems/gdcc/page.js`
+
+*   **Template modal white-screen fix:** Defensive handling for `/api/templates` non-array responses.
+    *   Files: `app/utils/templateApi.js`, `app/systems/gdcc/ManageTemplateModal.js`
+
+*   **Thai numeral rendering toggle (per-template, per-user):** Templates are stored with Arabic digits, but Preview + Word download can render digits as Thai numerals. A button in the Edit/Preview modal toggles Thai/Arabic output for the currently selected template (persisted per-user in `localStorage`).
+    *   File: `app/systems/gdcc/page.js`
+    *   Storage key: `gdcc:templates:<userId>:thaiDigits:<templateId>`
