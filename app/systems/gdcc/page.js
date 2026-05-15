@@ -617,7 +617,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
 };
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId }) => {
     // mode: 'report' | 'static-template' | 'middle-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
@@ -722,6 +722,33 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         }
     };
 
+    const userKey = useMemo(() => (currentUserId ? String(currentUserId) : 'anonymous'), [currentUserId]);
+    const thaiDigitsPrefKey = useMemo(
+        () => `gdcc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
+        [userKey, templateId]
+    );
+    const [useThaiDigits, setUseThaiDigits] = useState(true);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (typeof window === 'undefined') return;
+        try {
+            const stored = localStorage.getItem(thaiDigitsPrefKey);
+            if (stored === null) return; // default stays true
+            setUseThaiDigits(stored === '1');
+        } catch (_) {
+            // ignore
+        }
+    }, [isOpen, thaiDigitsPrefKey]);
+
+    const toggleThaiDigits = () => {
+        const next = !useThaiDigits;
+        setUseThaiDigits(next);
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem(thaiDigitsPrefKey, next ? '1' : '0'); } catch (_) { }
+        }
+    };
+
     // --- COPY FUNCTION ---
     const handleCopy = () => {
         if (!reportContentRef.current) return;
@@ -788,7 +815,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         if (isEditing) {
             // Stored templates stay Arabic; only convert for output.
-            cleanHTML = convertDigitsToThaiTextNodes(localTemplate);
+            cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(localTemplate) : localTemplate;
         } else {
             const clone = reportContentRef.current.cloneNode(true);
             const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
@@ -800,7 +827,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             }
 
             cleanHTML = clone.innerHTML;
-            cleanHTML = convertDigitsToThaiTextNodes(cleanHTML);
+            cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(cleanHTML) : cleanHTML;
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
 
@@ -1045,7 +1072,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 </div>
                             </div>
                         ) : (
-                            <div dangerouslySetInnerHTML={{ __html: convertDigitsToThaiTextNodes(getProcessedHtml()) }} />
+                            <div dangerouslySetInnerHTML={{ __html: useThaiDigits ? convertDigitsToThaiTextNodes(getProcessedHtml()) : getProcessedHtml() }} />
                         )}
 
                     </div>
@@ -1056,6 +1083,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     {/* In Edit Mode (Default for Static) */}
                     {isEditing ? (
                         <>
+                            <button
+                                onClick={toggleThaiDigits}
+                                className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}
+                                title="Applies to Preview + Download only"
+                            >
+                                {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
+                            </button>
                             <button onClick={() => setIsEditing(false)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded`}>
                                 Cancel
                             </button>
@@ -1065,6 +1099,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         </>
                     ) : (
                         <>
+                            <button
+                                onClick={toggleThaiDigits}
+                                className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}
+                                title="Applies to Preview + Download only"
+                            >
+                                {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
+                            </button>
                             <button onClick={() => setIsEditing(true)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
                                 <Edit3 className="w-3 h-3" /> Edit Template
                             </button>
@@ -5002,6 +5043,8 @@ export default function GDCCPage() {
                 mode={reportModalMode}
                 theme={theme}
                 templateName={templateToEditName}
+                templateId={templateToEditId}
+                currentUserId={currentUser?.id}
             />
 
             <ManageTemplateModal
