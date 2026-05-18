@@ -101,3 +101,4 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 *   **Thai numeral rendering toggle (per-template, per-user):** Templates are stored with Arabic digits, but Preview + Word download can render digits as Thai numerals. A button in the Edit/Preview modal toggles Thai/Arabic output for the currently selected template (persisted per-user in `localStorage`).
     *   File: `app/systems/gdcc/page.js`
     *   Storage key: `gdcc:templates:<userId>:thaiDigits:<templateId>`
+    *   Behavior: affects Preview + Word download only; saved template HTML remains unchanged (Arabic digits).
