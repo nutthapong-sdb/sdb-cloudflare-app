@@ -5,6 +5,7 @@ import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import libreoffice from 'libreoffice-convert';
+import HTMLtoDOCX from 'html-to-docx';
 
 const execAsync = promisify(exec);
 const convertAsync = promisify(libreoffice.convert);
@@ -14,8 +15,28 @@ export async function POST(request) {
     let tempOutputPath = null;
 
     try {
-        const body = await request.json();
-        let { html, filename = 'document.docx' } = body;
+        const contentType = request.headers.get('content-type') || '';
+
+        let html;
+        let filename = 'document.docx';
+        let title;
+
+        if (contentType.includes('application/json')) {
+            const body = await request.json();
+            html = body?.html;
+            filename = body?.filename || filename;
+            title = body?.title;
+        } else {
+            // Support form POST to allow browsers to download as a normal file
+            // (avoids programmatic download restrictions in some browsers)
+            const form = await request.formData();
+            html = form.get('html');
+            filename = form.get('filename') || filename;
+            title = form.get('title');
+        }
+
+        html = typeof html === 'string' ? html : (html ? String(html) : '');
+        filename = typeof filename === 'string' ? filename : String(filename);
 
         if (!html) {
             return NextResponse.json({ success: false, message: 'Missing HTML content' }, { status: 400 });
@@ -28,91 +49,67 @@ export async function POST(request) {
         let docxBuffer = null;
 
         // ---------------------------------------------------------
-        // Cross-Platform Conversion Logic
+        // Cross-Platform Conversion Logic (Headless)
         // ---------------------------------------------------------
-        if (os.platform() === 'darwin') {
-            // ---> macOS Strategy: Microsoft Word + AppleScript (Highest Fidelity) <---
-            console.log(`🔄 [macOS] Converting to DOCX using AppleScript (MS Word)...`);
+        // IMPORTANT: Do not use Microsoft Word/AppleScript here.
+        // That opens the Word app on the host and is not "normal download" behavior.
 
+        // 1) First try pure-JS HTML -> DOCX. No external apps/binaries.
+        try {
+            console.log('🔄 Converting to DOCX using html-to-docx...');
+            // html-to-docx returns a Buffer/Uint8Array
+            docxBuffer = await HTMLtoDOCX(String(html), null, {
+                // Keep defaults; avoid fancy options for stability
+            });
+        } catch (e) {
+            console.warn('html-to-docx failed, falling back to LibreOffice:', e?.message || e);
+            docxBuffer = null;
+        }
+
+        // 2) Try libreoffice-convert (in-memory, headless).
+        if (!docxBuffer) {
+            try {
+                console.log('🔄 Converting to DOCX using libreoffice-convert...');
+                const input = Buffer.from(String(html), 'utf-8');
+                docxBuffer = await convertAsync(input, '.docx');
+            } catch (e) {
+                console.warn('libreoffice-convert failed, falling back to soffice CLI:', e?.message || e);
+                docxBuffer = null;
+            }
+        }
+
+        // 3) Fallback to LibreOffice CLI if convertAsync isn't available.
+        if (!docxBuffer) {
             const tmpDir = path.join(os.tmpdir(), 'WordConversion');
             await fs.mkdir(tmpDir, { recursive: true });
 
             const timestamp = Date.now();
             const safeBaseName = `api_report_${timestamp}`;
-            tempInputPath = path.join(tmpDir, `${safeBaseName}.doc`);
-            tempOutputPath = path.join(tmpDir, `${safeBaseName}.docx`);
+            const inputPath = path.join(tmpDir, `${safeBaseName}.html`);
+            const outputPath = path.join(tmpDir, `${safeBaseName}.docx`);
+            tempInputPath = inputPath;
+            tempOutputPath = outputPath;
 
-            await fs.writeFile(tempInputPath, html, 'utf-8');
+            await fs.writeFile(inputPath, String(html), 'utf-8');
 
-            const appleScript = `
-            tell application "Microsoft Word"
-                activate
-                set display alerts to none
-                
-                set inputFile to POSIX file "${tempInputPath}"
-                set outputFile to "${tempOutputPath}"
-                
-                with timeout of 600 seconds
-                    open inputFile
-                    set activeDoc to active document
-                    save as activeDoc file name outputFile file format format document
-                    close activeDoc saving no
-                end timeout
-            end tell
-            `;
-
-            const command = `osascript -e '${appleScript}'`;
-            const { stdout, stderr } = await execAsync(command);
-
-            if (stderr) console.warn(`AppleScript Stderr: ${stderr}`);
+            const command = `soffice --headless --infilter="HTML Document" --convert-to "docx:MS Word 2007 XML" --outdir "${tmpDir}" "${inputPath}"`;
+            console.log(`LibreOffice Command: ${command}`);
 
             try {
-                await fs.access(tempOutputPath);
-            } catch {
-                throw new Error("Conversion failed: Output file not created by MS Word.");
-            }
-
-            docxBuffer = await fs.readFile(tempOutputPath);
-
-        } else {
-            // ---> Linux / Docker Strategy: LibreOffice CLI (Standard Server Support) <---
-            console.log(`🔄 [Linux/Docker] Converting to DOCX using LibreOffice CLI...`);
-            // Note: Requires 'libreoffice' to be installed in the Docker image.
-
-            const tmpDir = path.join(os.tmpdir(), 'WordConversionLinux');
-            await fs.mkdir(tmpDir, { recursive: true });
-
-            const timestamp = Date.now();
-            const safeBaseName = `api_report_${timestamp}`;
-            const linuxInputPath = path.join(tmpDir, `${safeBaseName}.html`);
-            const linuxOutputPathInit = path.join(tmpDir, `${safeBaseName}.docx`);
-
-            // MUST save as .html so LibreOffice knows which import filter to use!
-            await fs.writeFile(linuxInputPath, html, 'utf-8');
-
-            // Explicitly set the filter so Alpine's LibreOffice doesn't get confused
-            const command = `soffice --headless --infilter="HTML Document" --convert-to "docx:MS Word 2007 XML" --outdir "${tmpDir}" "${linuxInputPath}"`;
-            console.log(`Linux Command: ${command}`);
-
-            try {
-                const { stdout, stderr } = await execAsync(command, { env: { ...process.env, HOME: '/tmp' } });
+                const { stderr } = await execAsync(command, { env: { ...process.env, HOME: '/tmp' } });
                 if (stderr) console.warn(`LibreOffice Stderr: ${stderr}`);
             } catch (cmdErr) {
-                console.error(`LibreOffice Exec failed:`, cmdErr);
+                console.error('LibreOffice Exec failed:', cmdErr);
                 throw new Error(`LibreOffice failed: ${cmdErr.message}`);
             }
 
             try {
-                await fs.access(linuxOutputPathInit);
+                await fs.access(outputPath);
             } catch {
-                throw new Error("Conversion failed: Output file not created by LibreOffice in Docker.");
+                throw new Error('Conversion failed: Output file not created by LibreOffice.');
             }
 
-            docxBuffer = await fs.readFile(linuxOutputPathInit);
-
-            // Cleanup Linux temp
-            try { await fs.unlink(linuxInputPath); } catch (e) { }
-            try { await fs.unlink(linuxOutputPathInit); } catch (e) { }
+            docxBuffer = await fs.readFile(outputPath);
         }
 
         console.log(`✅ API Conversion successful. Buffer length: ${docxBuffer.length}`);
@@ -131,7 +128,7 @@ export async function POST(request) {
         console.error('DOCX Export/Conversion Error:', error);
         return NextResponse.json({
             success: false,
-            message: 'Failed to convert to DOCX via MS Word AppleScript. Make sure MS Word is installed and Terminal has permission to control it.',
+            message: 'Failed to convert to DOCX. Make sure LibreOffice is installed and available to the server runtime.',
             error: error.message
         }, { status: 500 });
     } finally {

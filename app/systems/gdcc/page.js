@@ -618,7 +618,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
 
 // 1. Report Modal Component
 const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId }) => {
-    // mode: 'report' | 'static-template' | 'middle-template'
+    // mode: 'report' | 'sub-template' | 'static-template' | 'middle-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
@@ -632,7 +632,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const editorRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const isTemplateMode = mode === 'static-template' || mode === 'middle-template';
+    const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
     const filteredVariables = availableVariables.filter(v =>
         v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -667,6 +667,35 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen, onClose]);
+
+    // Thai digits preference is per-template, per-user.
+    // Must be declared before any early returns to keep Hooks order stable.
+    const userKey = useMemo(() => (currentUserId ? String(currentUserId) : 'anonymous'), [currentUserId]);
+    const thaiDigitsPrefKey = useMemo(
+        () => `gdcc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
+        [userKey, templateId]
+    );
+    const [useThaiDigits, setUseThaiDigits] = useState(true);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (typeof window === 'undefined') return;
+        try {
+            const stored = localStorage.getItem(thaiDigitsPrefKey);
+            if (stored === null) return; // default stays true
+            setUseThaiDigits(stored === '1');
+        } catch (_) {
+            // ignore
+        }
+    }, [isOpen, thaiDigitsPrefKey]);
+
+    const toggleThaiDigits = () => {
+        const next = !useThaiDigits;
+        setUseThaiDigits(next);
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem(thaiDigitsPrefKey, next ? '1' : '0'); } catch (_) { }
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -719,33 +748,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         } catch (e) {
             console.warn('Thai digit conversion failed:', e);
             return html;
-        }
-    };
-
-    const userKey = useMemo(() => (currentUserId ? String(currentUserId) : 'anonymous'), [currentUserId]);
-    const thaiDigitsPrefKey = useMemo(
-        () => `gdcc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
-        [userKey, templateId]
-    );
-    const [useThaiDigits, setUseThaiDigits] = useState(true);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === 'undefined') return;
-        try {
-            const stored = localStorage.getItem(thaiDigitsPrefKey);
-            if (stored === null) return; // default stays true
-            setUseThaiDigits(stored === '1');
-        } catch (_) {
-            // ignore
-        }
-    }, [isOpen, thaiDigitsPrefKey]);
-
-    const toggleThaiDigits = () => {
-        const next = !useThaiDigits;
-        setUseThaiDigits(next);
-        if (typeof window !== 'undefined') {
-            try { localStorage.setItem(thaiDigitsPrefKey, next ? '1' : '0'); } catch (_) { }
         }
     };
 
@@ -838,37 +840,83 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         const sourceHTML = legacyHeader + cleanHTML + footer;
 
-        try {
-            // Use the new API with CLEAN HTML
-            const response = await fetch('/api/export-docx', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    html: cleanHeader + cleanHTML + footer,
-                    filename: filename,
-                    title: filename.includes('template') ? 'Report Template' : 'Cloudflare Report'
-                })
-            });
-
-            if (!response.ok) throw new Error('Failed to generate .docx');
-
-            const blob = await response.blob();
+        const downloadHtmlAsDoc = (html) => {
+            const blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = filename;
+            a.download = filename.replace('.docx', '.doc');
+            a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        };
+
+        const submitExportFormToHiddenIframe = (html) => {
+            const iframeName = `docx_export_${Date.now()}`;
+            const iframe = document.createElement('iframe');
+            iframe.name = iframeName;
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/api/export-docx';
+            form.style.display = 'none';
+            form.target = iframeName;
+
+            const htmlField = document.createElement('textarea');
+            htmlField.name = 'html';
+            htmlField.value = html;
+            form.appendChild(htmlField);
+
+            const filenameField = document.createElement('input');
+            filenameField.type = 'hidden';
+            filenameField.name = 'filename';
+            filenameField.value = filename;
+            form.appendChild(filenameField);
+
+            const titleField = document.createElement('input');
+            titleField.type = 'hidden';
+            titleField.name = 'title';
+            titleField.value = filename.includes('template') ? 'Report Template' : 'Cloudflare Report';
+            form.appendChild(titleField);
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+
+            // Remove iframe shortly after to avoid a persistent loading indicator.
+            window.setTimeout(() => {
+                try { document.body.removeChild(iframe); } catch (_) { }
+            }, 1500);
+        };
+
+        try {
+            // Template editing exports can be large (embedded base64 images).
+            // Prefer fast .doc download in that case to avoid long server conversion.
+            if (isTemplateMode) {
+                downloadHtmlAsDoc(sourceHTML);
+                return;
+            }
+
+            // Use a hidden iframe target so the browser downloads normally
+            // without opening a new tab that looks like it's "loading".
+            submitExportFormToHiddenIframe(cleanHeader + cleanHTML + footer);
         } catch (error) {
             console.error('Word export error:', error);
-            // Fallback to the old method if API fails
-            const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-            const a = document.createElement("a");
-            a.href = source;
-            a.download = filename.replace('.docx', '.doc');
-            a.click();
+            try {
+                Swal.fire({
+                    title: 'Export Failed',
+                    text: error?.message || 'Failed to generate Word file',
+                    icon: 'error',
+                    background: '#111827',
+                    color: '#fff'
+                });
+            } catch (_) {}
+            // Fallback to fast .doc download if API fails
+            downloadHtmlAsDoc(sourceHTML);
         }
     };
 
@@ -949,6 +997,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     ? 'Domain Report'
                                     : mode === 'middle-template'
                                         ? 'Middle Report'
+                                        : mode === 'sub-template'
+                                            ? 'Sub Report'
                                     : (isEditing
                                         ? 'Edit Report'
                                         : 'Preview Report'
@@ -4675,7 +4725,7 @@ export default function GDCCPage() {
         setTemplateToEditName(name);
         const content = await loadTemplate(id);
         if (content !== null) setReportTemplate(content);
-        setReportModalMode('report');
+        setReportModalMode('sub-template');
         setIsReportModalOpen(true);
     };
 

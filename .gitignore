@@ -45,3 +45,11 @@ next-env.d.ts
 *.doc
 *.csv
 /.agents
+
+# Local runtime data (do not commit)
+/app/data/templates.json
+/app/data/templates/
+
+# SQLite transient files
+*.db-shm
+*.db-wal
