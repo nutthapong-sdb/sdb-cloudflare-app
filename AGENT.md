@@ -102,3 +102,15 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
     *   File: `app/systems/gdcc/page.js`
     *   Storage key: `gdcc:templates:<userId>:thaiDigits:<templateId>`
     *   Behavior: affects Preview + Word download only; saved template HTML remains unchanged (Arabic digits).
+
+# Current Status (May 2026)
+
+*   **Main focus area:** GDCC dashboard/reporting UX and correctness.
+*   **Template management UX is now per-user (UI-only):** Default template + hidden templates are stored in `localStorage` keyed by `currentUser.id`. This does not change backend semantics of the built-in `default` template.
+*   **Manage Templates supports:**
+    *   Soft delete (hide) for all users (cannot hide the last visible template).
+    *   Root-only hard delete for templates where `id !== 'default'`.
+    *   "Show hidden templates" toggle to restore hidden ones.
+*   **Attack Prevention History (Block/Challenge):** now built from `get-traffic-analytics` -> `data.firewallActivity` (fixes the previously empty chart caused by reading a non-existent field).
+*   **Thai vs Arabic digits toggle (per-template):** button in the Edit/Preview modal controls whether Preview + Word download renders Thai digits; saved template stays Arabic.
+*   **Docs entrypoint:** this file was renamed from `CLAUDE.md` to `AGENT.md`.
