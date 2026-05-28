@@ -782,86 +782,28 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             tocTitle.setAttribute('style', `text-align: center; margin-bottom: 20px; font-size: 20pt; font-family: "TH SarabunPSK", "Sarabun", sans-serif; margin-top: 0; color: ${textColor};`);
             tocContainer.appendChild(tocTitle);
 
-            if (!isForExport) {
-                // Browser Preview: Plain Paragraphs with dynamic dots using display: flex
-                headings.forEach((heading, idx) => {
-                    const level = parseInt(heading.tagName.substring(1));
-                    let text = heading.textContent.replace(/\s+/g, ' ').trim();
-                    const pageNum = getPageNumber(text, idx);
-                    
-                    let indentStyle = '';
-                    if (level === 2) {
-                        indentStyle = 'padding-left: 24px;';
-                    } else if (level === 3) {
-                        indentStyle = 'padding-left: 48px;';
-                    } else if (level === 4) {
-                        indentStyle = 'padding-left: 72px;';
-                    }
+            // Simple Paragraphs with exactly 20 dots
+            headings.forEach((heading, idx) => {
+                const level = parseInt(heading.tagName.substring(1));
+                let text = heading.textContent.replace(/\s+/g, ' ').trim();
+                const pageNum = getPageNumber(text, idx);
+                
+                let indent = '';
+                if (level === 2) {
+                    indent = '&nbsp; &nbsp; &nbsp;';
+                } else if (level === 3) {
+                    indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
+                } else if (level === 4) {
+                    indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
+                }
 
-                    const pRow = doc.createElement('div');
-                    pRow.setAttribute('style', `display: flex; align-items: baseline; width: 100%; margin-top: 0; margin-bottom: 6px; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35;`);
-                    
-                    const spanText = doc.createElement('span');
-                    spanText.setAttribute('style', `white-space: nowrap; flex-shrink: 0; color: ${textColor}; padding-right: 4px; ${indentStyle}`);
-                    spanText.textContent = text;
-                    pRow.appendChild(spanText);
+                const dots = '.'.repeat(20);
 
-                    const spanDots = doc.createElement('span');
-                    spanDots.setAttribute('style', `flex-grow: 1; overflow: hidden; white-space: nowrap; margin: 0 4px; color: ${textColor}; letter-spacing: 2px; font-weight: normal;`);
-                    spanDots.textContent = '.'.repeat(150);
-                    pRow.appendChild(spanDots);
-
-                    const spanPage = doc.createElement('span');
-                    spanPage.setAttribute('style', `white-space: nowrap; flex-shrink: 0; font-weight: bold; color: ${textColor}; padding-left: 4px;`);
-                    spanPage.textContent = pageNum;
-                    pRow.appendChild(spanPage);
-
-                    tocContainer.appendChild(pRow);
-                });
-            } else {
-                // Word Export: Borderless Table containing text dots for Word compatibility
-                const table = doc.createElement('table');
-                table.setAttribute('style', 'width: 100%; border-collapse: collapse; border: none; margin-bottom: 20px;');
-                const tbody = doc.createElement('tbody');
-                table.appendChild(tbody);
-
-                headings.forEach((heading, idx) => {
-                    const level = parseInt(heading.tagName.substring(1));
-                    let text = heading.textContent.replace(/\s+/g, ' ').trim();
-                    const pageNum = getPageNumber(text, idx);
-                    
-                    let indentStyle = '';
-                    if (level === 2) {
-                        indentStyle = 'padding-left: 24px;';
-                    } else if (level === 3) {
-                        indentStyle = 'padding-left: 48px;';
-                    } else if (level === 4) {
-                        indentStyle = 'padding-left: 72px;';
-                    }
-
-                    const tr = doc.createElement('tr');
-                    tr.setAttribute('style', 'border: none;');
-
-                    const tdText = doc.createElement('td');
-                    tdText.setAttribute('style', `border: none; padding: 4px 5px 4px 0; text-align: left; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; ${indentStyle}`);
-                    tdText.textContent = text;
-                    tr.appendChild(tdText);
-
-                    const tdDots = doc.createElement('td');
-                    tdDots.setAttribute('style', `border: none; padding: 4px 5px; width: 99%; overflow: hidden; white-space: nowrap; vertical-align: bottom; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; letter-spacing: 2px;`);
-                    tdDots.textContent = '.'.repeat(120);
-                    tr.appendChild(tdDots);
-
-                    const tdPage = doc.createElement('td');
-                    tdPage.setAttribute('style', `border: none; padding: 4px 0 4px 5px; text-align: right; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; font-weight: bold;`);
-                    tdPage.textContent = pageNum;
-                    tr.appendChild(tdPage);
-
-                    tbody.appendChild(tr);
-                });
-
-                tocContainer.appendChild(table);
-            }
+                const p = doc.createElement('p');
+                p.setAttribute('style', `margin-bottom: 6px; margin-top: 0; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35;`);
+                p.innerHTML = `${indent}${text} ${dots} ${pageNum}`;
+                tocContainer.appendChild(p);
+            });
 
             // Check if @TOC@ placeholder exists anywhere in the body
             const bodyHtml = doc.body.innerHTML;
@@ -888,13 +830,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     doc.body.innerHTML = bodyHtml.replace('@TOC@', tocContainer.outerHTML);
                 }
             } else if (useAutoTOC) {
-                // Default fallback: insert immediately before the first real content heading
-                if (headings.length > 0) {
-                    const firstRealHeading = headings[0];
-                    firstRealHeading.parentNode.insertBefore(tocContainer, firstRealHeading);
-                    
+                // Default fallback: prepend TOC right after the first H1 tag, or at the very beginning
+                const firstH1 = doc.body.querySelector('h1');
+                if (firstH1 && firstH1.nextSibling) {
+                    doc.body.insertBefore(tocContainer, firstH1.nextSibling);
                     const br = doc.createElement('br');
-                    firstRealHeading.parentNode.insertBefore(br, firstRealHeading);
+                    doc.body.insertBefore(br, firstH1.nextSibling);
                 } else {
                     doc.body.insertBefore(tocContainer, doc.body.firstChild);
                 }
