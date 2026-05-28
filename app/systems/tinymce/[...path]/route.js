@@ -21,7 +21,8 @@ const MIME = {
 };
 
 export async function GET(_req, { params }) {
-  const parts = Array.isArray(params?.path) ? params.path : [];
+  const resolvedParams = await params;
+  const parts = Array.isArray(resolvedParams?.path) ? resolvedParams.path : [];
   const safeParts = parts
     .map((p) => String(p))
     .filter((p) => p && p !== '.' && p !== '..' && !p.includes('\\') && !p.includes('%2f') && !p.includes('%5c'));
