@@ -1032,7 +1032,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 <div className="flex-1 flex flex-col min-w-0">
                                     <div className="flex-1 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
                                         <Editor
-                                            tinymceScriptSrc='/tinymce/tinymce.min.js'
+                                            tinymceScriptSrc='./tinymce/tinymce.min.js'
                                             licenseKey='gpl'
                                             onInit={(evt, editor) => editorRef.current = editor}
                                             value={localTemplate}
