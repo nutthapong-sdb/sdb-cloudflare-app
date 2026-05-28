@@ -631,6 +631,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const reportContentRef = useRef(null);
     const editorRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
@@ -729,7 +734,15 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             const parser = new DOMParser();
             const doc = parser.parseFromString(String(html), 'text/html');
             
-            const headings = Array.from(doc.body.querySelectorAll('h1, h2, h3'));
+            // Filter out cover page titles and empty headings
+            const headings = Array.from(doc.body.querySelectorAll('h1, h2, h3, h4')).filter(heading => {
+                const style = heading.getAttribute('style') || '';
+                const align = heading.getAttribute('align') || '';
+                const isCenter = style.includes('text-align: center') || align.includes('center');
+                const hasContent = heading.textContent.trim().length > 0;
+                return !isCenter && hasContent;
+            });
+
             if (headings.length === 0) return html;
 
             headings.forEach((heading, idx) => {
@@ -740,7 +753,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
             // Set colors based on preview vs export
             const textColor = isForExport ? '#000000' : '#ffffff';
-            const dotsColor = isForExport ? '#000000' : '#ffffff';
 
             // Define page number mapper based on user example
             const getPageNumber = (text, idx) => {
@@ -782,6 +794,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         indentStyle = 'padding-left: 24px;';
                     } else if (level === 3) {
                         indentStyle = 'padding-left: 48px;';
+                    } else if (level === 4) {
+                        indentStyle = 'padding-left: 72px;';
                     }
 
                     const pRow = doc.createElement('div');
@@ -821,6 +835,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         indentStyle = 'padding-left: 24px;';
                     } else if (level === 3) {
                         indentStyle = 'padding-left: 48px;';
+                    } else if (level === 4) {
+                        indentStyle = 'padding-left: 72px;';
                     }
 
                     const tr = doc.createElement('tr');
@@ -872,12 +888,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     doc.body.innerHTML = bodyHtml.replace('@TOC@', tocContainer.outerHTML);
                 }
             } else if (useAutoTOC) {
-                // Default fallback: prepend TOC right after the first H1 tag, or at the very beginning
-                const firstH1 = doc.body.querySelector('h1');
-                if (firstH1 && firstH1.nextSibling) {
-                    doc.body.insertBefore(tocContainer, firstH1.nextSibling);
+                // Default fallback: insert immediately before the first real content heading
+                if (headings.length > 0) {
+                    const firstRealHeading = headings[0];
+                    firstRealHeading.parentNode.insertBefore(tocContainer, firstRealHeading);
+                    
                     const br = doc.createElement('br');
-                    doc.body.insertBefore(br, firstH1.nextSibling);
+                    firstRealHeading.parentNode.insertBefore(br, firstRealHeading);
                 } else {
                     doc.body.insertBefore(tocContainer, doc.body.firstChild);
                 }
@@ -894,7 +911,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         // Even for static template, we want to process date variables
         let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
         const hasTOCPlaceholder = html.includes('@TOC@');
-        if (useAutoTOC || hasTOCPlaceholder) {
+        if (mounted && (useAutoTOC || hasTOCPlaceholder)) {
             html = addAutomaticTOC(html, false); // false = isForExport (renders white in preview!)
         }
         // Cleanup leftover @TOC@ placeholder (if headings were empty or if TOC was disabled)
