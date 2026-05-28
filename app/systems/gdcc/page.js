@@ -784,7 +784,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         indentStyle = 'padding-left: 48px;';
                     }
 
-                    const pRow = doc.createElement('p');
+                    const pRow = doc.createElement('div');
                     pRow.setAttribute('style', `display: flex; align-items: baseline; width: 100%; margin-top: 0; margin-bottom: 6px; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35;`);
                     
                     const spanText = doc.createElement('span');
@@ -862,13 +862,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 
                 if (targetNode) {
                     const parent = targetNode.parentNode;
-                    const tempSpan = doc.createElement('span');
-                    tempSpan.innerHTML = tocContainer.outerHTML;
-                    parent.replaceChild(tempSpan, targetNode);
-                    while (tempSpan.firstChild) {
-                        parent.insertBefore(tempSpan.firstChild, tempSpan);
+                    // If the parent is a paragraph (<p>), replace the paragraph itself to avoid block nesting
+                    if (parent && parent.tagName.toLowerCase() === 'p') {
+                        parent.parentNode.replaceChild(tocContainer, parent);
+                    } else {
+                        parent.replaceChild(tocContainer, targetNode);
                     }
-                    parent.removeChild(tempSpan);
                 } else {
                     doc.body.innerHTML = bodyHtml.replace('@TOC@', tocContainer.outerHTML);
                 }
