@@ -1052,6 +1052,26 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 forced_root_block: 'p',
                                                 nonbreaking_force_tab: true,
+                                                image_title: true,
+                                                automatic_uploads: true,
+                                                file_picker_types: 'image',
+                                                file_picker_callback: (cb, value, meta) => {
+                                                    const input = document.createElement('input');
+                                                    input.setAttribute('type', 'file');
+                                                    input.setAttribute('accept', 'image/*');
+
+                                                    input.addEventListener('change', (e) => {
+                                                        const file = e.target.files[0];
+                                                        if (!file) return;
+                                                        const reader = new FileReader();
+                                                        reader.addEventListener('load', () => {
+                                                            cb(reader.result, { title: file.name });
+                                                        });
+                                                        reader.readAsDataURL(file);
+                                                    });
+
+                                                    input.click();
+                                                },
                                                 images_upload_handler: (blobInfo, progress) => new Promise((resolve, reject) => {
                                                     const reader = new FileReader();
                                                     reader.readAsDataURL(blobInfo.blob());
