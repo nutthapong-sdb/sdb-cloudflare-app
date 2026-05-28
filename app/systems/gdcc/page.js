@@ -786,13 +786,41 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             
             tocContainer.appendChild(tocList);
 
-            const firstH1 = doc.body.querySelector('h1');
-            if (firstH1 && firstH1.nextSibling) {
-                doc.body.insertBefore(tocContainer, firstH1.nextSibling);
-                const br = doc.createElement('br');
-                doc.body.insertBefore(br, firstH1.nextSibling);
-            } else {
-                doc.body.insertBefore(tocContainer, doc.body.firstChild);
+            // Check if @TOC@ placeholder exists anywhere in the body
+            const bodyHtml = doc.body.innerHTML;
+            if (bodyHtml.includes('@TOC@')) {
+                const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+                let node;
+                let targetNode = null;
+                while ((node = walker.nextNode())) {
+                    if (node.nodeValue && node.nodeValue.includes('@TOC@')) {
+                        targetNode = node;
+                        break;
+                    }
+                }
+                
+                if (targetNode) {
+                    const parent = targetNode.parentNode;
+                    const tempSpan = doc.createElement('span');
+                    tempSpan.innerHTML = tocContainer.outerHTML;
+                    parent.replaceChild(tempSpan, targetNode);
+                    while (tempSpan.firstChild) {
+                        parent.insertBefore(tempSpan.firstChild, tempSpan);
+                    }
+                    parent.removeChild(tempSpan);
+                } else {
+                    doc.body.innerHTML = bodyHtml.replace('@TOC@', tocContainer.outerHTML);
+                }
+            } else if (useAutoTOC) {
+                // Default fallback: prepend TOC right after the first H1 tag, or at the very beginning
+                const firstH1 = doc.body.querySelector('h1');
+                if (firstH1 && firstH1.nextSibling) {
+                    doc.body.insertBefore(tocContainer, firstH1.nextSibling);
+                    const br = doc.createElement('br');
+                    doc.body.insertBefore(br, firstH1.nextSibling);
+                } else {
+                    doc.body.insertBefore(tocContainer, doc.body.firstChild);
+                }
             }
 
             return doc.body.innerHTML;
@@ -805,8 +833,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const getProcessedHtml = () => {
         // Even for static template, we want to process date variables
         let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
-        if (useAutoTOC) {
+        const hasTOCPlaceholder = html.includes('@TOC@');
+        if (useAutoTOC || hasTOCPlaceholder) {
             html = addAutomaticTOC(html);
+        }
+        // Cleanup leftover @TOC@ placeholder (if headings were empty or if TOC was disabled)
+        if (html.includes('@TOC@')) {
+            html = html.replaceAll('@TOC@', '');
         }
         return html;
     };
@@ -1136,7 +1169,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking',
                                                     'toc'
                                                 ],
-                                                toolbar: 'undo redo | blocks | ' +
+                                                toolbar: 'undo redo | blocks fontfamily fontsize | ' +
                                                     'bold italic forecolor | alignleft aligncenter ' +
                                                     'alignright alignjustify | bullist numlist outdent indent | ' +
                                                     'image table | toc | removeformat | help',

@@ -46,6 +46,7 @@ export const REPORT_VARIABLES = [
     { name: '@FW_ACCESS_EVENTS', desc: 'Access Rules Events', example: '500', category: 'Firewall' },
     { name: '@PAGE_BREAK@', desc: 'ตัวคั่นหน้ากระดาษ (Word)', example: '<br page-break.../>', category: 'Format' },
     { name: '@DASHBOARD_IMAGE@', desc: 'รูปภาพ Dashboard Snapshot', example: '<img>', category: 'Format' },
+    { name: '@TOC@', desc: 'สารบัญอัตโนมัติ (เลือกวางจุดใดก็ได้ในเทมเพลต)', example: '<div>...</div>', category: 'Format' },
 ];
 
 export const STATIC_VARIABLES = [
@@ -80,4 +81,5 @@ export const STATIC_VARIABLES = [
     { name: '@BROWSER_INTEGRITY_CHECK', desc: 'Browser Integrity Check', example: 'Enabled', category: 'More' },
     { name: '@HOTLINK_PROTECTION', desc: 'Hotlink Protection', example: 'Disabled', category: 'More' },
     { name: '@PAGE_BREAK@', desc: 'ตัวคั่นหน้ากระดาษ', example: '<br.../>', category: 'Format' },
+    { name: '@TOC@', desc: 'สารบัญอัตโนมัติ (เลือกวางจุดใดก็ได้ในเทมเพลต)', example: '<div>...</div>', category: 'Format' },
 ];
