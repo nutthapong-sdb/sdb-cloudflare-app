@@ -770,49 +770,82 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             tocTitle.setAttribute('style', `text-align: center; margin-bottom: 20px; font-size: 20pt; font-family: "TH SarabunPSK", "Sarabun", sans-serif; margin-top: 0; color: ${textColor};`);
             tocContainer.appendChild(tocTitle);
 
-            const table = doc.createElement('table');
-            table.setAttribute('style', 'width: 100%; border-collapse: collapse; border: none; margin-bottom: 20px;');
-            const tbody = doc.createElement('tbody');
-            table.appendChild(tbody);
+            if (!isForExport) {
+                // Browser Preview: Modern Flex-Based Layout with spaced text dot characters
+                headings.forEach((heading, idx) => {
+                    const level = parseInt(heading.tagName.substring(1));
+                    let text = heading.textContent.replace(/\s+/g, ' ').trim();
+                    const pageNum = getPageNumber(text, idx);
+                    
+                    let indentStyle = '';
+                    if (level === 2) {
+                        indentStyle = 'padding-left: 24px;';
+                    } else if (level === 3) {
+                        indentStyle = 'padding-left: 48px;';
+                    }
 
-            headings.forEach((heading, idx) => {
-                const level = parseInt(heading.tagName.substring(1));
-                let text = heading.textContent.replace(/\s+/g, ' ').trim();
-                const pageNum = getPageNumber(text, idx);
-                
-                // Indentation styling
-                let indentStyle = '';
-                if (level === 2) {
-                    indentStyle = 'padding-left: 20px;';
-                } else if (level === 3) {
-                    indentStyle = 'padding-left: 40px;';
-                }
+                    const rowDiv = doc.createElement('div');
+                    rowDiv.setAttribute('style', `display: flex; align-items: baseline; width: 100%; margin-bottom: 6px; color: ${textColor};`);
+                    
+                    const spanText = doc.createElement('span');
+                    spanText.setAttribute('style', `white-space: nowrap; flex-shrink: 0; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; ${indentStyle}`);
+                    spanText.textContent = text;
+                    rowDiv.appendChild(spanText);
 
-                const tr = doc.createElement('tr');
-                tr.setAttribute('style', 'border: none;');
+                    const spanDots = doc.createElement('span');
+                    spanDots.setAttribute('style', `flex-grow: 1; overflow: hidden; white-space: nowrap; margin: 0 8px; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; letter-spacing: 2px; font-weight: normal;`);
+                    spanDots.textContent = '.'.repeat(150);
+                    rowDiv.appendChild(spanDots);
 
-                // Cell 1: Heading Text
-                const tdText = doc.createElement('td');
-                tdText.setAttribute('style', `border: none; padding: 4px 5px 4px 0; text-align: left; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; ${indentStyle}`);
-                tdText.textContent = text;
-                tr.appendChild(tdText);
+                    const spanPage = doc.createElement('span');
+                    spanPage.setAttribute('style', `white-space: nowrap; flex-shrink: 0; font-weight: bold; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt;`);
+                    spanPage.textContent = pageNum;
+                    rowDiv.appendChild(spanPage);
 
-                // Cell 2: Dotted border (TOC Leader)
-                const tdDots = doc.createElement('td');
-                tdDots.setAttribute('style', `border: none; border-bottom: 2px dotted ${dotsColor}; padding: 0; width: 99%; vertical-align: bottom; height: 1px;`);
-                tdDots.innerHTML = '&nbsp;';
-                tr.appendChild(tdDots);
+                    tocContainer.appendChild(rowDiv);
+                });
+            } else {
+                // Word Export: Borderless Table containing spaced text dot characters for Word compatibility
+                const table = doc.createElement('table');
+                table.setAttribute('style', 'width: 100%; border-collapse: collapse; border: none; margin-bottom: 20px;');
+                const tbody = doc.createElement('tbody');
+                table.appendChild(tbody);
 
-                // Cell 3: Page Number
-                const tdPage = doc.createElement('td');
-                tdPage.setAttribute('style', `border: none; padding: 4px 0 4px 5px; text-align: right; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; font-weight: bold;`);
-                tdPage.textContent = pageNum;
-                tr.appendChild(tdPage);
+                headings.forEach((heading, idx) => {
+                    const level = parseInt(heading.tagName.substring(1));
+                    let text = heading.textContent.replace(/\s+/g, ' ').trim();
+                    const pageNum = getPageNumber(text, idx);
+                    
+                    let indentStyle = '';
+                    if (level === 2) {
+                        indentStyle = 'padding-left: 24px;';
+                    } else if (level === 3) {
+                        indentStyle = 'padding-left: 48px;';
+                    }
 
-                tbody.appendChild(tr);
-            });
+                    const tr = doc.createElement('tr');
+                    tr.setAttribute('style', 'border: none;');
 
-            tocContainer.appendChild(table);
+                    const tdText = doc.createElement('td');
+                    tdText.setAttribute('style', `border: none; padding: 4px 5px 4px 0; text-align: left; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; ${indentStyle}`);
+                    tdText.textContent = text;
+                    tr.appendChild(tdText);
+
+                    const tdDots = doc.createElement('td');
+                    tdDots.setAttribute('style', `border: none; padding: 4px 5px; width: 99%; overflow: hidden; white-space: nowrap; vertical-align: bottom; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; letter-spacing: 2px;`);
+                    tdDots.textContent = '.'.repeat(120);
+                    tr.appendChild(tdDots);
+
+                    const tdPage = doc.createElement('td');
+                    tdPage.setAttribute('style', `border: none; padding: 4px 0 4px 5px; text-align: right; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; font-weight: bold;`);
+                    tdPage.textContent = pageNum;
+                    tr.appendChild(tdPage);
+
+                    tbody.appendChild(tr);
+                });
+
+                tocContainer.appendChild(table);
+            }
 
             // Check if @TOC@ placeholder exists anywhere in the body
             const bodyHtml = doc.body.innerHTML;
@@ -971,14 +1004,20 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(baseHtml) : baseHtml;
         } else {
             const clone = reportContentRef.current.cloneNode(true);
-            const clonedTocs = clone.querySelectorAll('.toc-container, .toc-container *');
-            clonedTocs.forEach(el => {
-                const style = el.getAttribute('style') || '';
-                if (style.includes('#ffffff')) {
-                    el.setAttribute('style', style.replaceAll('#ffffff', '#000000'));
-                }
-            });
-            const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
+            const previewToc = clone.querySelector('.toc-container');
+            if (previewToc) {
+                previewToc.remove();
+            }
+
+            let cloneHtml = clone.innerHTML;
+            if (useAutoTOC) {
+                cloneHtml = addAutomaticTOC(cloneHtml, true);
+            }
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = cloneHtml;
+
+            const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
             let node;
             while (node = walker.nextNode()) {
                 if (node.nodeValue) {
@@ -986,7 +1025,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 }
             }
 
-            cleanHTML = clone.innerHTML;
+            cleanHTML = tempDiv.innerHTML;
             cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(cleanHTML) : cleanHTML;
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
