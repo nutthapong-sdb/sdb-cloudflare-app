@@ -675,12 +675,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         () => `gdcc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
         [userKey, templateId]
     );
-    const tocPrefKey = useMemo(
-        () => `gdcc:templates:${userKey}:autoTOC:${templateId ? String(templateId) : 'default'}`,
-        [userKey, templateId]
-    );
     const [useThaiDigits, setUseThaiDigits] = useState(true);
-    const [useAutoTOC, setUseAutoTOC] = useState(false);
+    const useAutoTOC = true;
 
     useEffect(() => {
         if (!isOpen) return;
@@ -690,28 +686,16 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             if (storedDigits !== null) {
                 setUseThaiDigits(storedDigits === '1');
             }
-            const storedTOC = localStorage.getItem(tocPrefKey);
-            if (storedTOC !== null) {
-                setUseAutoTOC(storedTOC === '1');
-            }
         } catch (_) {
             // ignore
         }
-    }, [isOpen, thaiDigitsPrefKey, tocPrefKey]);
+    }, [isOpen, thaiDigitsPrefKey]);
 
     const toggleThaiDigits = () => {
         const next = !useThaiDigits;
         setUseThaiDigits(next);
         if (typeof window !== 'undefined') {
             try { localStorage.setItem(thaiDigitsPrefKey, next ? '1' : '0'); } catch (_) { }
-        }
-    };
-
-    const toggleAutoTOC = () => {
-        const next = !useAutoTOC;
-        setUseAutoTOC(next);
-        if (typeof window !== 'undefined') {
-            try { localStorage.setItem(tocPrefKey, next ? '1' : '0'); } catch (_) { }
         }
     };
 
@@ -738,7 +722,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
     // --- TEMPLATE PROCESSING ---
-    const addAutomaticTOC = (html) => {
+    const addAutomaticTOC = (html, isForExport = false) => {
         if (!html) return html;
         if (typeof DOMParser === 'undefined') return html;
         try {
@@ -753,6 +737,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     heading.id = `toc-heading-${idx + 1}`;
                 }
             });
+
+            // Set colors based on preview vs export
+            const textColor = isForExport ? '#000000' : '#ffffff';
+            const dotsColor = isForExport ? '#000000' : '#ffffff';
 
             // Define page number mapper based on user example
             const getPageNumber = (text, idx) => {
@@ -775,43 +763,56 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
             const tocContainer = doc.createElement('div');
             tocContainer.className = 'toc-container';
-            tocContainer.setAttribute('style', 'margin-bottom: 30px; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: black; line-height: 1.35;');
+            tocContainer.setAttribute('style', `margin-bottom: 30px; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35; width: 100%;`);
             
             const tocTitle = doc.createElement('p');
             tocTitle.innerHTML = '<strong>สารบัญ</strong>';
-            tocTitle.setAttribute('style', 'text-align: center; margin-bottom: 15px; font-size: 20pt; font-family: "TH SarabunPSK", "Sarabun", sans-serif; margin-top: 0;');
+            tocTitle.setAttribute('style', `text-align: center; margin-bottom: 20px; font-size: 20pt; font-family: "TH SarabunPSK", "Sarabun", sans-serif; margin-top: 0; color: ${textColor};`);
             tocContainer.appendChild(tocTitle);
+
+            const table = doc.createElement('table');
+            table.setAttribute('style', 'width: 100%; border-collapse: collapse; border: none; margin-bottom: 20px;');
+            const tbody = doc.createElement('tbody');
+            table.appendChild(tbody);
 
             headings.forEach((heading, idx) => {
                 const level = parseInt(heading.tagName.substring(1));
-                
-                // Clean the text from list styles or bad whitespace
                 let text = heading.textContent.replace(/\s+/g, ' ').trim();
-                
-                // Get custom page number
                 const pageNum = getPageNumber(text, idx);
                 
-                // Setup indentation
-                let indent = '';
-                let indentLength = 0;
+                // Indentation styling
+                let indentStyle = '';
                 if (level === 2) {
-                    indent = '&nbsp; &nbsp; &nbsp;';
-                    indentLength = 5;
+                    indentStyle = 'padding-left: 20px;';
                 } else if (level === 3) {
-                    indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
-                    indentLength = 9;
+                    indentStyle = 'padding-left: 40px;';
                 }
-                
-                // Pad dots to align numbers on the right
-                const textLen = text.length + indentLength;
-                const dotsCount = Math.max(15, 115 - Math.floor(textLen * 1.15));
-                const dots = '.'.repeat(dotsCount);
-                
-                const p = doc.createElement('p');
-                p.setAttribute('style', 'margin-bottom: 4px; margin-top: 0; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt;');
-                p.innerHTML = `${indent}${text} ${dots} ${pageNum}`;
-                tocContainer.appendChild(p);
+
+                const tr = doc.createElement('tr');
+                tr.setAttribute('style', 'border: none;');
+
+                // Cell 1: Heading Text
+                const tdText = doc.createElement('td');
+                tdText.setAttribute('style', `border: none; padding: 4px 5px 4px 0; text-align: left; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; ${indentStyle}`);
+                tdText.textContent = text;
+                tr.appendChild(tdText);
+
+                // Cell 2: Dotted border (TOC Leader)
+                const tdDots = doc.createElement('td');
+                tdDots.setAttribute('style', `border: none; border-bottom: 2px dotted ${dotsColor}; padding: 0; width: 99%; vertical-align: bottom; height: 1px;`);
+                tdDots.innerHTML = '&nbsp;';
+                tr.appendChild(tdDots);
+
+                // Cell 3: Page Number
+                const tdPage = doc.createElement('td');
+                tdPage.setAttribute('style', `border: none; padding: 4px 0 4px 5px; text-align: right; vertical-align: bottom; white-space: nowrap; color: ${textColor}; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; font-weight: bold;`);
+                tdPage.textContent = pageNum;
+                tr.appendChild(tdPage);
+
+                tbody.appendChild(tr);
             });
+
+            tocContainer.appendChild(table);
 
             // Check if @TOC@ placeholder exists anywhere in the body
             const bodyHtml = doc.body.innerHTML;
@@ -862,7 +863,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
         const hasTOCPlaceholder = html.includes('@TOC@');
         if (useAutoTOC || hasTOCPlaceholder) {
-            html = addAutomaticTOC(html);
+            html = addAutomaticTOC(html, false); // false = isForExport (renders white in preview!)
         }
         // Cleanup leftover @TOC@ placeholder (if headings were empty or if TOC was disabled)
         if (html.includes('@TOC@')) {
@@ -965,11 +966,18 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             // Stored templates stay Arabic; only convert for output.
             let baseHtml = localTemplate;
             if (useAutoTOC) {
-                baseHtml = addAutomaticTOC(baseHtml);
+                baseHtml = addAutomaticTOC(baseHtml, true);
             }
             cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(baseHtml) : baseHtml;
         } else {
             const clone = reportContentRef.current.cloneNode(true);
+            const clonedTocs = clone.querySelectorAll('.toc-container, .toc-container *');
+            clonedTocs.forEach(el => {
+                const style = el.getAttribute('style') || '';
+                if (style.includes('#ffffff')) {
+                    el.setAttribute('style', style.replaceAll('#ffffff', '#000000'));
+                }
+            });
             const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
             let node;
             while (node = walker.nextNode()) {
@@ -1173,6 +1181,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         .report-content ol { list-style-type: decimal; padding-left: 2em; }
                         .report-content li { display: list-item; }
                         .report-content, .report-content p, .report-content div { white-space: pre-wrap !important; }
+                        .report-content .toc-container, .report-content .toc-container * { white-space: normal !important; }
                     `}} />
                     <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
@@ -1311,13 +1320,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             >
                                 {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
                             </button>
-                            <button
-                                onClick={toggleAutoTOC}
-                                className={`px-4 py-2 ${useAutoTOC ? (t.buttonPrimary || 'bg-blue-600 text-white') : t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}
-                                title="Applies to Preview + Download only"
-                            >
-                                {useAutoTOC ? 'TOC: On' : 'TOC: Off'}
-                            </button>
                             <button onClick={() => setIsEditing(false)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded`}>
                                 Cancel
                             </button>
@@ -1333,13 +1335,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 title="Applies to Preview + Download only"
                             >
                                 {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
-                            </button>
-                            <button
-                                onClick={toggleAutoTOC}
-                                className={`px-4 py-2 ${useAutoTOC ? (t.buttonPrimary || 'bg-blue-600 text-white') : t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}
-                                title="Applies to Preview + Download only"
-                            >
-                                {useAutoTOC ? 'TOC: On' : 'TOC: Off'}
                             </button>
                             <button onClick={() => setIsEditing(true)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
                                 <Edit3 className="w-3 h-3" /> Edit Template
