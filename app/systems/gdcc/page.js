@@ -675,25 +675,43 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         () => `gdcc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
         [userKey, templateId]
     );
+    const tocPrefKey = useMemo(
+        () => `gdcc:templates:${userKey}:autoTOC:${templateId ? String(templateId) : 'default'}`,
+        [userKey, templateId]
+    );
     const [useThaiDigits, setUseThaiDigits] = useState(true);
+    const [useAutoTOC, setUseAutoTOC] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
         if (typeof window === 'undefined') return;
         try {
-            const stored = localStorage.getItem(thaiDigitsPrefKey);
-            if (stored === null) return; // default stays true
-            setUseThaiDigits(stored === '1');
+            const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
+            if (storedDigits !== null) {
+                setUseThaiDigits(storedDigits === '1');
+            }
+            const storedTOC = localStorage.getItem(tocPrefKey);
+            if (storedTOC !== null) {
+                setUseAutoTOC(storedTOC === '1');
+            }
         } catch (_) {
             // ignore
         }
-    }, [isOpen, thaiDigitsPrefKey]);
+    }, [isOpen, thaiDigitsPrefKey, tocPrefKey]);
 
     const toggleThaiDigits = () => {
         const next = !useThaiDigits;
         setUseThaiDigits(next);
         if (typeof window !== 'undefined') {
             try { localStorage.setItem(thaiDigitsPrefKey, next ? '1' : '0'); } catch (_) { }
+        }
+    };
+
+    const toggleAutoTOC = () => {
+        const next = !useAutoTOC;
+        setUseAutoTOC(next);
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem(tocPrefKey, next ? '1' : '0'); } catch (_) { }
         }
     };
 
@@ -720,9 +738,77 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
     // --- TEMPLATE PROCESSING ---
+    const addAutomaticTOC = (html) => {
+        if (!html) return html;
+        if (typeof DOMParser === 'undefined') return html;
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(String(html), 'text/html');
+            
+            const headings = Array.from(doc.body.querySelectorAll('h1, h2, h3'));
+            if (headings.length === 0) return html;
+
+            headings.forEach((heading, idx) => {
+                if (!heading.id) {
+                    heading.id = `toc-heading-${idx + 1}`;
+                }
+            });
+
+            const tocContainer = doc.createElement('div');
+            tocContainer.className = 'toc-container';
+            tocContainer.setAttribute('style', 'border: 1px solid #cbd5e1; padding: 18px; margin-bottom: 25px; border-radius: 8px; background-color: #f8fafc; font-family: sans-serif;');
+            
+            const tocTitle = doc.createElement('h3');
+            tocTitle.textContent = 'สารบัญ (Table of Contents)';
+            tocTitle.setAttribute('style', 'margin-top: 0; color: #1a56db; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; font-size: 15pt; font-weight: bold; margin-bottom: 12px;');
+            tocContainer.appendChild(tocTitle);
+
+            const tocList = doc.createElement('ul');
+            tocList.setAttribute('style', 'list-style-type: none; padding-left: 0; margin: 0; line-height: 1.8;');
+            
+            headings.forEach((heading) => {
+                const li = doc.createElement('li');
+                const level = parseInt(heading.tagName.substring(1));
+                const indent = (level - 1) * 20;
+                const fontWeight = level === 1 ? 'bold' : 'normal';
+                const color = level === 1 ? '#1e293b' : '#475569';
+                
+                li.setAttribute('style', `margin-left: ${indent}px; font-weight: ${fontWeight}; font-size: 11pt;`);
+                
+                const link = doc.createElement('a');
+                link.setAttribute('href', `#${heading.id}`);
+                link.setAttribute('style', `text-decoration: none; color: ${color};`);
+                link.textContent = heading.textContent.trim();
+                
+                li.appendChild(link);
+                tocList.appendChild(li);
+            });
+            
+            tocContainer.appendChild(tocList);
+
+            const firstH1 = doc.body.querySelector('h1');
+            if (firstH1 && firstH1.nextSibling) {
+                doc.body.insertBefore(tocContainer, firstH1.nextSibling);
+                const br = doc.createElement('br');
+                doc.body.insertBefore(br, firstH1.nextSibling);
+            } else {
+                doc.body.insertBefore(tocContainer, doc.body.firstChild);
+            }
+
+            return doc.body.innerHTML;
+        } catch (e) {
+            console.warn('Auto TOC generation failed:', e);
+            return html;
+        }
+    };
+
     const getProcessedHtml = () => {
         // Even for static template, we want to process date variables
-        return processTemplate(localTemplate, safeData, new Date(), dashboardImage);
+        let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
+        if (useAutoTOC) {
+            html = addAutomaticTOC(html);
+        }
+        return html;
     };
 
     const toThaiDigits = (input) => {
@@ -817,7 +903,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         if (isEditing) {
             // Stored templates stay Arabic; only convert for output.
-            cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(localTemplate) : localTemplate;
+            let baseHtml = localTemplate;
+            if (useAutoTOC) {
+                baseHtml = addAutomaticTOC(baseHtml);
+            }
+            cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(baseHtml) : baseHtml;
         } else {
             const clone = reportContentRef.current.cloneNode(true);
             const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
@@ -1043,12 +1133,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 plugins: [
                                                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                                                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking'
+                                                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking',
+                                                    'toc'
                                                 ],
                                                 toolbar: 'undo redo | blocks | ' +
                                                     'bold italic forecolor | alignleft aligncenter ' +
                                                     'alignright alignjustify | bullist numlist outdent indent | ' +
-                                                    'image table | removeformat | help',
+                                                    'image table | toc | removeformat | help',
                                                 content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 forced_root_block: 'p',
                                                 nonbreaking_force_tab: true,
@@ -1160,6 +1251,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             >
                                 {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
                             </button>
+                            <button
+                                onClick={toggleAutoTOC}
+                                className={`px-4 py-2 ${useAutoTOC ? (t.buttonPrimary || 'bg-blue-600 text-white') : t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}
+                                title="Applies to Preview + Download only"
+                            >
+                                {useAutoTOC ? 'TOC: On' : 'TOC: Off'}
+                            </button>
                             <button onClick={() => setIsEditing(false)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded`}>
                                 Cancel
                             </button>
@@ -1175,6 +1273,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 title="Applies to Preview + Download only"
                             >
                                 {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
+                            </button>
+                            <button
+                                onClick={toggleAutoTOC}
+                                className={`px-4 py-2 ${useAutoTOC ? (t.buttonPrimary || 'bg-blue-600 text-white') : t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}
+                                title="Applies to Preview + Download only"
+                            >
+                                {useAutoTOC ? 'TOC: On' : 'TOC: Off'}
                             </button>
                             <button onClick={() => setIsEditing(true)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
                                 <Edit3 className="w-3 h-3" /> Edit Template
