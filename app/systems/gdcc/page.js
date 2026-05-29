@@ -1195,13 +1195,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 plugins: [
                                                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                                                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking',
-                                                    'toc'
+                                                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking'
                                                 ],
                                                 toolbar: 'undo redo | blocks fontfamily fontsize | ' +
                                                     'bold italic forecolor | alignleft aligncenter ' +
                                                     'alignright alignjustify | bullist numlist outdent indent | ' +
-                                                    'image table | toc | removeformat | help',
+                                                    'image table | removeformat | help',
                                                 content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 forced_root_block: 'p',
                                                 nonbreaking_force_tab: true,
