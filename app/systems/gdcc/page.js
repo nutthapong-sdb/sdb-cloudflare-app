@@ -734,13 +734,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             const parser = new DOMParser();
             const doc = parser.parseFromString(String(html), 'text/html');
             
-            // Filter out cover page titles and empty headings
+            // Query all h1, h2, h3, h4 headings (ignoring only empty ones, just like early versions)
             const headings = Array.from(doc.body.querySelectorAll('h1, h2, h3, h4')).filter(heading => {
-                const style = heading.getAttribute('style') || '';
-                const align = heading.getAttribute('align') || '';
-                const isCenter = style.includes('text-align: center') || align.includes('center');
-                const hasContent = heading.textContent.trim().length > 0;
-                return !isCenter && hasContent;
+                return heading.textContent.trim().length > 0;
             });
 
             if (headings.length === 0) return html;
@@ -820,12 +816,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 
                 if (targetNode) {
                     const parent = targetNode.parentNode;
-                    // If the parent is a paragraph (<p>), replace the paragraph itself to avoid block nesting
-                    if (parent && parent.tagName.toLowerCase() === 'p') {
-                        parent.parentNode.replaceChild(tocContainer, parent);
-                    } else {
-                        parent.replaceChild(tocContainer, targetNode);
+                    const tempSpan = doc.createElement('span');
+                    tempSpan.innerHTML = tocContainer.outerHTML;
+                    parent.replaceChild(tempSpan, targetNode);
+                    while (tempSpan.firstChild) {
+                        parent.insertBefore(tempSpan.firstChild, tempSpan);
                     }
+                    parent.removeChild(tempSpan);
                 } else {
                     doc.body.innerHTML = bodyHtml.replace('@TOC@', tocContainer.outerHTML);
                 }
@@ -852,7 +849,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         // Even for static template, we want to process date variables
         let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
         const hasTOCPlaceholder = html.includes('@TOC@');
-        if (mounted && (useAutoTOC || hasTOCPlaceholder)) {
+        if (useAutoTOC || hasTOCPlaceholder) {
             html = addAutomaticTOC(html, false); // false = isForExport (renders white in preview!)
         }
         // Cleanup leftover @TOC@ placeholder (if headings were empty or if TOC was disabled)
