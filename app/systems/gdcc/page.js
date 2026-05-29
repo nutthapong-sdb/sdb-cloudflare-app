@@ -845,12 +845,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         }
     };
 
-    const getProcessedHtml = () => {
+    const getProcessedHtml = (isForExport = false) => {
         // Even for static template, we want to process date variables
         let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
         const hasTOCPlaceholder = html.includes('@TOC@');
         if (useAutoTOC || hasTOCPlaceholder) {
-            html = addAutomaticTOC(html, false); // false = isForExport (renders white in preview!)
+            html = addAutomaticTOC(html, isForExport);
         }
         // Cleanup leftover @TOC@ placeholder (if headings were empty or if TOC was disabled)
         if (html.includes('@TOC@')) {
@@ -957,16 +957,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             }
             cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(baseHtml) : baseHtml;
         } else {
-            const clone = reportContentRef.current.cloneNode(true);
-            const previewToc = clone.querySelector('.toc-container');
-            if (previewToc) {
-                previewToc.remove();
-            }
-
-            let cloneHtml = clone.innerHTML;
-            if (useAutoTOC) {
-                cloneHtml = addAutomaticTOC(cloneHtml, true);
-            }
+            let cloneHtml = getProcessedHtml(true); // Generates processed template with the black TOC at the correct @TOC@ placeholder location!
 
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = cloneHtml;
