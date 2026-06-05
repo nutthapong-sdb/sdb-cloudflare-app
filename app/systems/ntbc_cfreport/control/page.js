@@ -31,7 +31,9 @@ export default function ControlPage() {
      const [envStartDate, setEnvStartDate] = useState('2026-05-30');
      const [envEndDate, setEnvEndDate] = useState('2026-06-04');
      const [capturedScreenshot, setCapturedScreenshot] = useState(null);
-     const [captureDomains, setCaptureDomains] = useState(false);
+     const [capturedDnsScreenshot, setCapturedDnsScreenshot] = useState(null);
+     const [captureDomains, setCaptureDomains] = useState(true);
+     const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
 
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
@@ -192,9 +194,17 @@ export default function ControlPage() {
             if (savedScreenshot) {
                 setCapturedScreenshot(savedScreenshot);
             }
+            const savedDnsScreenshot = localStorage.getItem('control_capturedDnsScreenshot');
+            if (savedDnsScreenshot) {
+                setCapturedDnsScreenshot(savedDnsScreenshot);
+            }
             const savedCaptureDomains = localStorage.getItem('control_captureDomains');
-            if (savedCaptureDomains === 'true') {
-                setCaptureDomains(true);
+            if (savedCaptureDomains !== null) {
+                setCaptureDomains(savedCaptureDomains === 'true');
+            }
+            const savedCaptureDnsRecord = localStorage.getItem('control_captureDnsRecord');
+            if (savedCaptureDnsRecord !== null) {
+                setCaptureDnsRecord(savedCaptureDnsRecord === 'true');
             }
             // Clear stepStatus from localStorage on refresh
             localStorage.removeItem('control_stepStatus');
@@ -278,26 +288,41 @@ export default function ControlPage() {
             return;
         }
 
-        const markCompleted = (screenshot = null) => {
+        const markCompleted = (screenshot = null, dnsScreenshot = null) => {
             updateStepStatusAtIndex(index, 'completed');
             addLog(`${steps[index].name} completed successfully.`, 'success');
 
             let htmlContent = `<div class="text-center font-bold text-lg text-white">Already done[ step ${index + 1} ]</div>`;
-            if (index === 1 && screenshot) {
-                htmlContent += `
-                    <div class="mt-4 border border-gray-800 rounded bg-black p-2 flex items-center justify-center overflow-hidden">
-                        <img src="${screenshot}" class="max-w-full rounded h-auto max-h-[300px] object-contain border border-gray-700" alt="Captured Domains List" />
-                    </div>
-                `;
+            if (index === 1 && (screenshot || dnsScreenshot)) {
+                htmlContent += `<div class="mt-4 flex flex-col gap-4 max-h-[350px] overflow-y-auto">`;
+                if (screenshot) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden">
+                            <span class="text-xs text-gray-400 mb-1">Domains Overview</span>
+                            <img src="${screenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Domains List" />
+                        </div>
+                    `;
+                }
+                if (dnsScreenshot) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden">
+                            <span class="text-xs text-gray-400 mb-1">DNS Records</span>
+                            <img src="${dnsScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured DNS Records" />
+                        </div>
+                    `;
+                }
+                htmlContent += `</div>`;
             }
+
+            const hasAnyScreenshot = screenshot || dnsScreenshot;
 
             Swal.fire({
                 title: 'Notification',
                 html: htmlContent,
                 icon: 'success',
                 position: 'center',
-                timer: index === 1 && screenshot ? undefined : 2000,
-                showConfirmButton: index === 1 && screenshot,
+                timer: index === 1 && hasAnyScreenshot ? undefined : 2000,
+                showConfirmButton: index === 1 && hasAnyScreenshot,
                 confirmButtonText: 'Great!',
                 confirmButtonColor: '#e11d48',
                 background: '#111827',
@@ -327,42 +352,79 @@ export default function ControlPage() {
             return;
         }
 
-        // Step 2: Redirect active tab to target Account ID & Capture screenshot
+        // Step 2: Redirect active tab & Capture screenshot for selected options
         if (index === 1) {
             try {
-                addLog('Connecting to debug browser on port 9222...', 'info');
-                addLog(`Redirecting active tab to account overview for ID: ${envAccount || 'Default'}`, 'info');
-                const res = await fetch(`/api/ntbc-control-chrome?accountId=${envAccount}`);
-                const data = await res.json();
-                if (data.success) {
-                    addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
-                    
-                    // Wait 500ms for browser transition to stabilize, then trigger capture
-                    addLog('Waiting for page rendering to stabilize...', 'info');
-                    await new Promise(r => setTimeout(r, 500));
+                let domainsImg = null;
+                let dnsImg = null;
 
-                    // Trigger Screenshot capture immediately after redirection success
-                    addLog('Triggering cropped screenshot capture ("Domains" heading to pagination)...', 'info');
-                    const captureRes = await fetch('/api/ntbc-capture');
-                    const captureData = await captureRes.json();
-                    let img = null;
-                    if (captureData.success && captureData.image) {
-                        img = captureData.image;
-                        setCapturedScreenshot(captureData.image);
-                        if (typeof window !== 'undefined') {
-                            localStorage.setItem('control_capturedScreenshot', captureData.image);
+                // 1. Domains overview capture
+                if (captureDomains) {
+                    addLog('Connecting to debug browser on port 9222 for domains list...', 'info');
+                    addLog(`Redirecting active tab to account overview for ID: ${envAccount || 'Default'}`, 'info');
+                    const res = await fetch(`/api/ntbc-control-chrome?accountId=${envAccount}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
+                        addLog('Waiting for page rendering to stabilize...', 'info');
+                        await new Promise(r => setTimeout(r, 500));
+
+                        addLog('Triggering cropped screenshot capture ("Domains" heading to pagination)...', 'info');
+                        const captureRes = await fetch('/api/ntbc-capture?type=domains');
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            domainsImg = captureData.image;
+                            setCapturedScreenshot(captureData.image);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('control_capturedScreenshot', captureData.image);
+                            }
+                            addLog('Domains screenshot captured successfully.', 'success');
+                        } else {
+                            addLog(`Domains capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
                         }
-                        addLog('Screenshot captured and loaded onto control panel successfully.', 'success');
                     } else {
-                        addLog(`Screenshot capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
+                        addLog(`Domains redirect error: ${data.error}`, 'error');
                     }
-                    
-                    addLog('Session capturing completed successfully.', 'success');
-                    markCompleted(img);
-                } else {
-                    addLog(`Error: ${data.error}`, 'error');
-                    updateStepStatusAtIndex(index, 'pending');
                 }
+
+                // 2. DNS records capture
+                if (captureDnsRecord) {
+                    const debugDomain = 'softdebut.online';
+                    const targetDnsUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/dns/records`;
+                    addLog(`Connecting to debug browser on port 9222 for DNS records...`, 'info');
+                    addLog(`Redirecting active tab to DNS Records page: ${targetDnsUrl}`, 'info');
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetDnsUrl)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
+                        addLog('Waiting for page rendering to stabilize...', 'info');
+                        await new Promise(r => setTimeout(r, 500));
+
+                        addLog('Triggering cropped screenshot capture ("DNS" heading)...', 'info');
+                        const captureRes = await fetch('/api/ntbc-capture?type=dns');
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            dnsImg = captureData.image;
+                            setCapturedDnsScreenshot(captureData.image);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('control_capturedDnsScreenshot', captureData.image);
+                            }
+                            addLog('DNS records screenshot captured successfully.', 'success');
+                        } else {
+                            addLog(`DNS records capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
+                        }
+                    } else {
+                        addLog(`DNS redirect error: ${data.error}`, 'error');
+                    }
+                }
+
+                if ((captureDomains && !domainsImg) || (captureDnsRecord && !dnsImg)) {
+                    addLog('Session capturing completed with some warnings/failures.', 'warn');
+                } else {
+                    addLog('Session capturing completed successfully.', 'success');
+                }
+                
+                markCompleted(domainsImg, dnsImg);
             } catch (err) {
                 console.error('Control Chrome failed:', err);
                 addLog(`Control Chrome failed: ${err.message}`, 'error');
@@ -380,11 +442,15 @@ export default function ControlPage() {
     const resetAll = () => {
         setStepStatus(Array(10).fill('pending'));
         setCapturedScreenshot(null);
+        setCapturedDnsScreenshot(null);
         setCaptureDomains(false);
+        setCaptureDnsRecord(false);
         if (typeof window !== 'undefined') {
             localStorage.removeItem('control_stepStatus');
             localStorage.removeItem('control_capturedScreenshot');
+            localStorage.removeItem('control_capturedDnsScreenshot');
             localStorage.removeItem('control_captureDomains');
+            localStorage.removeItem('control_captureDnsRecord');
         }
         setActiveStep(0);
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'Control panel reset to initial state.', type: 'info' }]);
@@ -567,7 +633,7 @@ export default function ControlPage() {
                                     statusIcon = <RefreshCw className="w-4 h-4 text-rose-400 animate-spin" />;
                                 }
 
-                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && !captureDomains);
+                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord));
 
                                 return (
                                     <div
@@ -595,20 +661,36 @@ export default function ControlPage() {
                                         {idx === 1 && (
                                             <div className="mt-2 pl-8 flex flex-col gap-2 border-t border-gray-800/50 pt-3" onClick={(e) => e.stopPropagation()}>
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Required Capture Checklist:</span>
-                                                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={captureDomains} 
-                                                        onChange={(e) => {
-                                                            setCaptureDomains(e.target.checked);
-                                                            if (typeof window !== 'undefined') {
-                                                                localStorage.setItem('control_captureDomains', e.target.checked ? 'true' : 'false');
-                                                            }
-                                                        }}
-                                                        className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                    />
-                                                    Domains Option (Check to enable Step 2 Execution)
-                                                </label>
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={captureDomains} 
+                                                            onChange={(e) => {
+                                                                setCaptureDomains(e.target.checked);
+                                                                if (typeof window !== 'undefined') {
+                                                                    localStorage.setItem('control_captureDomains', e.target.checked ? 'true' : 'false');
+                                                                }
+                                                            }}
+                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
+                                                        />
+                                                        Domains Option (Check to enable Step 2 Execution)
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={captureDnsRecord} 
+                                                            onChange={(e) => {
+                                                                setCaptureDnsRecord(e.target.checked);
+                                                                if (typeof window !== 'undefined') {
+                                                                    localStorage.setItem('control_captureDnsRecord', e.target.checked ? 'true' : 'false');
+                                                                }
+                                                            }}
+                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
+                                                        />
+                                                        Dns Record Option (Check to enable Step 2 Execution)
+                                                    </label>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -656,6 +738,18 @@ export default function ControlPage() {
                             </h4>
                             <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
                                 <img src={capturedScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Domains Overview" />
+                            </div>
+                        </div>
+                    )}
+
+                    {capturedDnsScreenshot && (
+                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
+                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Captured DNS Records
+                            </h4>
+                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
+                                <img src={capturedDnsScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="DNS Records" />
                             </div>
                         </div>
                     )}
