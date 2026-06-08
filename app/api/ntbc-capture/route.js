@@ -122,7 +122,10 @@ export async function GET(request) {
                 const headingTop = headingRect.top + scrollY;
                 let absoluteBottom = window.innerHeight + scrollY;
 
-                if (footer) {
+                const siteFooter = document.querySelector('#site-footer') || document.querySelector('footer');
+                if (siteFooter) {
+                    absoluteBottom = siteFooter.getBoundingClientRect().top + scrollY - 10;
+                } else if (footer) {
                     const footerRect = footer.getBoundingClientRect();
                     absoluteBottom = footerRect.bottom + scrollY;
                 } else {
@@ -132,9 +135,25 @@ export async function GET(request) {
                     }
                 }
 
-                const yOffset = captureType === 'dns' ? -20 - Math.round(window.innerHeight * 0.02) : -20;
-                const startX = captureType === 'dns' ? Math.round(window.innerWidth * 0.19) : Math.round(window.innerWidth * 0.15);
-                const endX = captureType === 'dns' ? Math.round(window.innerWidth * 0.96) : Math.round(window.innerWidth * 0.90);
+                let yOffset = -20;
+                if (captureType === 'dns') {
+                    yOffset = -20 - Math.round(window.innerHeight * 0.02);
+                } else if (captureType === 'traffic') {
+                    yOffset = -20 - Math.round(window.innerHeight * 0.01);
+                }
+
+                let startX = Math.round(window.innerWidth * 0.15);
+                if (captureType === 'dns') {
+                    startX = Math.round(window.innerWidth * 0.19);
+                } else if (captureType === 'traffic') {
+                    startX = Math.round(window.innerWidth * 0.20);
+                }
+
+                let endX = Math.round(window.innerWidth * 0.90);
+                if (captureType === 'dns') {
+                    endX = Math.round(window.innerWidth * 0.96);
+                }
+
                 const startY = Math.max(0, headingTop + yOffset);
 
                 return {
