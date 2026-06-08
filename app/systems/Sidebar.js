@@ -47,6 +47,7 @@ export default function Sidebar() {
         { name: 'API Discovery', icon: LayoutDashboard, path: '/systems/api_discovery', color: 'text-orange-400' },
         { name: 'Firewall Logs', icon: Shield, path: '/systems/firewall_logs', color: 'text-red-400' },
         { name: 'Cloudflare Report', icon: Cloud, path: '/systems/gdcc', color: 'text-purple-400' },
+        { name: 'NTBC CFReport', icon: Cloud, path: '/systems/ntbc_cfreport', color: 'text-pink-400' },
     ];
 
     if (currentUser?.role === 'root') {

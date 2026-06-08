@@ -2198,7 +2198,7 @@ export async function POST(request) {
             return NextResponse.json({ success: true });
         }
 
-        else if (action === 'sync-gdcc-history') {
+        else if (action === 'sync-gdcc-history' || action === 'sync-ntbc-history') {
             if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
 
             const encoder = new TextEncoder();

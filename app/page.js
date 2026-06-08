@@ -123,6 +123,24 @@ export default function PortalPage() {
                         </div>
                     </div>
 
+                    {/* Card: NTBC CFReport */}
+                    <div
+                        onClick={() => router.push('/systems/ntbc_cfreport')}
+                        className="group bg-gray-800/50 hover:bg-gradient-to-br hover:from-purple-900/40 hover:to-indigo-900/40 border border-gray-700 hover:border-purple-500/50 rounded-2xl p-6 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+                            <svg className="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                        </div>
+
+                        <div className="relative z-10">
+                            <div className="bg-purple-600 w-12 h-12 rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" /></svg>
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">NTBC CFReport</h3>
+                            <p className="text-gray-400 text-sm group-hover:text-gray-300">Cloudflare Report for NTBC.</p>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
