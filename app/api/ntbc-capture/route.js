@@ -27,10 +27,65 @@ export async function GET(request) {
         console.log('Waiting 3 seconds for initial page initialization...');
         await new Promise(r => setTimeout(r, 3000));
 
-        // 2. Wait dynamically for page elements to be loaded and verify NO lazy loading skeleton or spinner exists
-        console.log(`Checking for lazy loading elements and waiting for ${type} content to finish rendering...`);
-        try {
-            await page.waitForFunction((captureType) => {
+        let pageIndex = 1;
+        let hasNextPage = true;
+        const pageBuffers = [];
+
+        while (hasNextPage) {
+            console.log(`Processing page ${pageIndex} of ${type}...`);
+
+            // 2. Wait dynamically for page elements to be loaded and verify NO lazy loading skeleton or spinner exists
+            console.log(`Checking for lazy loading elements and waiting for ${type} page ${pageIndex} content to finish rendering...`);
+            try {
+                await page.waitForFunction((captureType) => {
+                    const findElementByText = (selector, text) => {
+                        const elements = Array.from(document.querySelectorAll(selector));
+                        return elements.find(el => {
+                            const content = el.textContent || '';
+                            const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
+                            return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
+                        });
+                    };
+                    
+                    // Check if any visible skeleton loader, loading spinner, progress bar or spinner is active
+                    const isLoaderActive = !!(
+                        document.querySelector('[class*="skeleton"], [class*="loading"], [role="progressbar"], svg[class*="spin"], [class*="spinner"]') ||
+                        Array.from(document.querySelectorAll('span, div, p')).find(el => {
+                            const text = (el.textContent || '').toLowerCase();
+                            return (el.offsetWidth > 0 || el.offsetHeight > 0) && (text.includes('loading') || text.includes('please wait'));
+                        })
+                    );
+
+                    // Ensure heading H1-H4 title is visible
+                    const headingText = captureType === 'dns' ? 'dns' : 'domains';
+                    const heading = findElementByText('h1, h2, h3, h4', headingText);
+                    // Ensure table body or pagination footer is loaded
+                    const tableOrFooter = findElementByText('div, span, button, p, td', 'of') || 
+                                          findElementByText('div, span, button, p, td', 'items') ||
+                                          document.querySelector('table');
+                                          
+                    // Complete if heading and footer/table exist AND no loading placeholders are active
+                    return !!(heading && tableOrFooter && !isLoaderActive);
+                }, { timeout: 15000 }, type);
+                console.log(`${type} page ${pageIndex} loaded and verified: zero active lazy loading elements found.`);
+                // Add a short stabilize delay for visual rendering animations
+                await new Promise(r => setTimeout(r, 400));
+            } catch (err) {
+                console.warn(`Timeout waiting for page elements to finish lazy loading. Proceeding anyway:`, err.message);
+            }
+
+            // Evaluate coordinates for post-capture cropping (no viewport clipping)
+            console.log('Calculating bounding box coordinates on active page...');
+            const cropCoords = await page.evaluate((captureType) => {
+                const findLastElementByText = (selector, text) => {
+                    const elements = Array.from(document.querySelectorAll(selector));
+                    return elements.reverse().find(el => {
+                        const content = el.textContent || '';
+                        const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
+                        return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
+                    });
+                };
+
                 const findElementByText = (selector, text) => {
                     const elements = Array.from(document.querySelectorAll(selector));
                     return elements.find(el => {
@@ -39,173 +94,195 @@ export async function GET(request) {
                         return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
                     });
                 };
-                
-                // Check if any visible skeleton loader, loading spinner, progress bar or spinner is active
-                const isLoaderActive = !!(
-                    document.querySelector('[class*="skeleton"], [class*="loading"], [role="progressbar"], svg[class*="spin"], [class*="spinner"]') ||
-                    Array.from(document.querySelectorAll('span, div, p')).find(el => {
-                        const text = (el.textContent || '').toLowerCase();
-                        return (el.offsetWidth > 0 || el.offsetHeight > 0) && (text.includes('loading') || text.includes('please wait'));
-                    })
-                );
 
-                // Ensure heading H1-H4 title is visible
+                // Look for visible headings containing target text
                 const headingText = captureType === 'dns' ? 'dns' : 'domains';
-                const heading = findElementByText('h1, h2, h3, h4', headingText);
-                // Ensure table body or pagination footer is loaded
-                const tableOrFooter = findElementByText('div, span, button, p, td', 'of') || 
-                                      findElementByText('div, span, button, p, td', 'items') ||
-                                      document.querySelector('table');
-                                      
-                // Complete if heading and footer/table exist AND no loading placeholders are active
-                return !!(heading && tableOrFooter && !isLoaderActive);
-            }, { timeout: 15000 }, type);
-            console.log(`${type} list loaded and verified: zero active lazy loading elements found.`);
-            // Add a short stabilize delay for visual rendering animations
-            await new Promise(r => setTimeout(r, 400));
-        } catch (err) {
-            console.warn(`Timeout waiting for page elements to finish lazy loading. Proceeding anyway:`, err.message);
-        }
+                const heading = findElementByText('h1, h2, h3, h4', headingText) || 
+                                findElementByText('span, div', headingText);
+                // Look for visible pagination footer text containing item counts from the bottom-up
+                const footer = captureType === 'dns'
+                    ? (findLastElementByText('div, span, button, p, td', 'records added') || 
+                       findLastElementByText('div, span, button, p, td', 'of'))
+                    : (findLastElementByText('div, span, button, p, td', '1 - 5 of 5') || 
+                       findLastElementByText('div, span, button, p, td', 'items') ||
+                       findLastElementByText('div, span, button, p, td', '1 - ') ||
+                       findLastElementByText('div, span, button, p, td', 'of'));
 
-        // Evaluate coordinates for post-capture cropping (no viewport clipping)
-        console.log('Calculating bounding box coordinates on active page...');
-        const cropCoords = await page.evaluate((captureType) => {
-            const findLastElementByText = (selector, text) => {
-                const elements = Array.from(document.querySelectorAll(selector));
-                return elements.reverse().find(el => {
-                    const content = el.textContent || '';
-                    const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
-                    return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
-                });
-            };
+                if (!heading) {
+                    console.warn(`${captureType} heading not found in page DOM`);
+                    return null;
+                }
 
-            const findElementByText = (selector, text) => {
-                const elements = Array.from(document.querySelectorAll(selector));
-                return elements.find(el => {
-                    const content = el.textContent || '';
-                    const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
-                    return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
-                });
-            };
+                const scrollY = window.scrollY || window.pageYOffset || 0;
+                const headingRect = heading.getBoundingClientRect();
+                const headingTop = headingRect.top + scrollY;
+                let absoluteBottom = window.innerHeight + scrollY;
 
-            // Look for visible headings containing target text
-            const headingText = captureType === 'dns' ? 'dns' : 'domains';
-            const heading = findElementByText('h1, h2, h3, h4', headingText) || 
-                            findElementByText('span, div', headingText);
-            // Look for visible pagination footer text containing item counts from the bottom-up
-            const footer = captureType === 'dns'
-                ? (findLastElementByText('div, span, button, p, td', 'records added') || 
-                   findLastElementByText('div, span, button, p, td', 'of'))
-                : (findLastElementByText('div, span, button, p, td', '1 - 5 of 5') || 
-                   findLastElementByText('div, span, button, p, td', 'items') ||
-                   findLastElementByText('div, span, button, p, td', '1 - ') ||
-                   findLastElementByText('div, span, button, p, td', 'of'));
+                if (footer) {
+                    const footerRect = footer.getBoundingClientRect();
+                    absoluteBottom = footerRect.bottom + scrollY;
+                } else {
+                    const listContainer = heading.closest('div')?.querySelector('table, ul, [role="table"], [class*="list"]');
+                    if (listContainer) {
+                        absoluteBottom = listContainer.getBoundingClientRect().bottom + scrollY + 20;
+                    }
+                }
 
-            if (!heading) {
-                console.warn(`${captureType} heading not found in page DOM`);
-                return null;
-            }
+                const yOffset = captureType === 'dns' ? -20 - Math.round(window.innerHeight * 0.02) : -20;
+                const startX = captureType === 'dns' ? Math.round(window.innerWidth * 0.19) : Math.round(window.innerWidth * 0.15);
+                const endX = captureType === 'dns' ? Math.round(window.innerWidth * 0.96) : Math.round(window.innerWidth * 0.90);
+                const startY = Math.max(0, headingTop + yOffset);
 
-            const scrollY = window.scrollY || window.pageYOffset || 0;
-            const headingRect = heading.getBoundingClientRect();
-            const headingTop = headingRect.top + scrollY;
-            let absoluteBottom = window.innerHeight + scrollY;
+                return {
+                    x: startX,
+                    y: startY,
+                    width: endX - startX,
+                    height: Math.max(150, (absoluteBottom - startY) + 20)
+                };
+            }, type);
 
-            if (footer) {
-                const footerRect = footer.getBoundingClientRect();
-                absoluteBottom = footerRect.bottom + scrollY;
-            } else {
-                const listContainer = heading.closest('div')?.querySelector('table, ul, [role="table"], [class*="list"]');
-                if (listContainer) {
-                    absoluteBottom = listContainer.getBoundingClientRect().bottom + scrollY + 20;
+            // Retrieve document height to expand the viewport temporarily and prevent visual flickering from fullPage: true
+            const originalViewportSize = await page.evaluate(() => {
+                return {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    documentHeight: Math.max(
+                        document.body.scrollHeight,
+                        document.documentElement.scrollHeight,
+                        document.body.offsetHeight,
+                        document.documentElement.offsetHeight,
+                        window.innerHeight
+                    )
+                };
+            });
+
+            console.log(`Temporarily resizing viewport height from ${originalViewportSize.height} to ${originalViewportSize.documentHeight} for full page capture...`);
+            await page.setViewport({
+                width: originalViewportSize.width,
+                height: originalViewportSize.documentHeight
+            });
+
+            console.log('Capturing page screenshot (flicker-free)...');
+            const fullScreenshotBase64 = await page.screenshot({
+                encoding: 'base64',
+                type: 'png'
+            });
+
+            // Restore viewport size to original window dimensions
+            await page.setViewport({
+                width: originalViewportSize.width,
+                height: originalViewportSize.height
+            });
+
+            let pageBuffer = Buffer.from(fullScreenshotBase64, 'base64');
+
+            // Apply sharp crop
+            if (cropCoords) {
+                try {
+                    console.log('Programmatically cropping image using sharp:', cropCoords);
+                    const image = sharp(pageBuffer);
+                    const metadata = await image.metadata();
+
+                    // Align coordinates with devicePixelRatio (since Retina displays scale pixels 2x)
+                    const pagesDevicePixelRatio = await page.evaluate(() => window.devicePixelRatio || 1);
+
+                    const scaleX = Math.round(cropCoords.x * pagesDevicePixelRatio);
+                    const scaleY = Math.round(cropCoords.y * pagesDevicePixelRatio);
+                    const scaleWidth = Math.round(cropCoords.width * pagesDevicePixelRatio);
+                    const scaleHeight = Math.round(cropCoords.height * pagesDevicePixelRatio);
+
+                    // Safe boundaries
+                    const extractLeft = Math.max(0, Math.min(scaleX, metadata.width - 1));
+                    const extractTop = Math.max(0, Math.min(scaleY, metadata.height - 1));
+                    const extractWidth = Math.max(10, Math.min(scaleWidth, metadata.width - extractLeft));
+                    const extractHeight = Math.max(10, Math.min(scaleHeight, metadata.height - extractTop));
+
+                    pageBuffer = await image
+                        .extract({
+                            left: extractLeft,
+                            top: extractTop,
+                            width: extractWidth,
+                            height: extractHeight
+                        })
+                        .toBuffer();
+                    console.log('Cropping completed successfully.');
+                } catch (err) {
+                    console.error('Failed to crop screenshot with sharp:', err);
                 }
             }
 
-            const yOffset = captureType === 'dns' ? -20 - Math.round(window.innerHeight * 0.02) : -20;
-            const startX = captureType === 'dns' ? Math.round(window.innerWidth * 0.19) : Math.round(window.innerWidth * 0.15);
-            const endX = captureType === 'dns' ? Math.round(window.innerWidth * 0.96) : Math.round(window.innerWidth * 0.90);
-            const startY = Math.max(0, headingTop + yOffset);
+            pageBuffers.push(pageBuffer);
 
-            return {
-                x: startX,
-                y: startY,
-                width: endX - startX,
-                height: Math.max(150, (absoluteBottom - startY) + 20)
-            };
-        }, type);
+            // Handle Pagination for DNS Records
+            if (type === 'dns') {
+                const nextButtonStatus = await page.evaluate(() => {
+                    const btn = document.querySelector('button[data-testid="undefined-next-page"]') || 
+                                document.querySelector('button[aria-label="Next"]') || 
+                                document.querySelector('button[title="Next"]');
+                    if (!btn) return { exists: false };
+                    
+                    const isDisabled = btn.disabled || 
+                                       btn.getAttribute('aria-disabled') === 'true' || 
+                                       btn.hasAttribute('disabled');
+                    return { exists: true, disabled: isDisabled };
+                });
 
-        // Retrieve document height to expand the viewport temporarily and prevent visual flickering from fullPage: true
-        const originalViewportSize = await page.evaluate(() => {
-            return {
-                width: window.innerWidth,
-                height: window.innerHeight,
-                documentHeight: Math.max(
-                    document.body.scrollHeight,
-                    document.documentElement.scrollHeight,
-                    document.body.offsetHeight,
-                    document.documentElement.offsetHeight,
-                    window.innerHeight
-                )
-            };
-        });
+                if (nextButtonStatus.exists && !nextButtonStatus.disabled) {
+                    console.log(`[Page ${pageIndex}] Clicking Next Page button...`);
+                    await page.evaluate(() => {
+                        const btn = document.querySelector('button[data-testid="undefined-next-page"]') || 
+                                    document.querySelector('button[aria-label="Next"]') || 
+                                    document.querySelector('button[title="Next"]');
+                        btn.click();
+                    });
 
-        console.log(`Temporarily resizing viewport height from ${originalViewportSize.height} to ${originalViewportSize.documentHeight} for full page capture...`);
-        await page.setViewport({
-            width: originalViewportSize.width,
-            height: originalViewportSize.documentHeight
-        });
+                    // Wait 2.5 seconds for transition loading
+                    await new Promise(r => setTimeout(r, 2500));
+                    pageIndex++;
+                } else {
+                    console.log(`No active Next button found on page ${pageIndex}. Completing loop.`);
+                    hasNextPage = false;
+                }
+            } else {
+                hasNextPage = false;
+            }
+        }
 
-        console.log('Capturing page screenshot (flicker-free)...');
-        const fullScreenshotBase64 = await page.screenshot({
-            encoding: 'base64',
-            type: 'png'
-        });
-
-        // Restore viewport size to original window dimensions
-        await page.setViewport({
-            width: originalViewportSize.width,
-            height: originalViewportSize.height
-        });
-
-        let finalImageBase64 = fullScreenshotBase64;
-        let finalBuffer = Buffer.from(fullScreenshotBase64, 'base64');
-
-        // Apply Concept 1: Crop the image programmatically on Node.js side using sharp
-        if (cropCoords) {
+        // Stitch page buffers vertically if multiple pages exist
+        let finalBuffer = pageBuffers[0];
+        if (pageBuffers.length > 1) {
+            console.log(`Stitching ${pageBuffers.length} captured page screenshots vertically...`);
             try {
-                console.log('Programmatically cropping image using sharp:', cropCoords);
-                const image = sharp(finalBuffer);
-                const metadata = await image.metadata();
-
-                // Align coordinates with devicePixelRatio (since Retina displays scale pixels 2x)
-                const pagesDevicePixelRatio = await page.evaluate(() => window.devicePixelRatio || 1);
-                console.log(`Device Pixel Ratio of captured browser is: ${pagesDevicePixelRatio}`);
-
-                const scaleX = Math.round(cropCoords.x * pagesDevicePixelRatio);
-                const scaleY = Math.round(cropCoords.y * pagesDevicePixelRatio);
-                const scaleWidth = Math.round(cropCoords.width * pagesDevicePixelRatio);
-                const scaleHeight = Math.round(cropCoords.height * pagesDevicePixelRatio);
-
-                // Safe boundaries
-                const extractLeft = Math.max(0, Math.min(scaleX, metadata.width - 1));
-                const extractTop = Math.max(0, Math.min(scaleY, metadata.height - 1));
-                const extractWidth = Math.max(10, Math.min(scaleWidth, metadata.width - extractLeft));
-                const extractHeight = Math.max(10, Math.min(scaleHeight, metadata.height - extractTop));
-
-                finalBuffer = await image
-                    .extract({
-                        left: extractLeft,
-                        top: extractTop,
-                        width: extractWidth,
-                        height: extractHeight
-                    })
-                    .toBuffer();
-
-                finalImageBase64 = finalBuffer.toString('base64');
-                console.log('Cropping completed successfully.');
-            } catch (err) {
-                console.error('Failed to crop screenshot with sharp:', err);
-                // Fallback to full screenshot
+                const imageMetadatas = await Promise.all(pageBuffers.map(buf => sharp(buf).metadata()));
+                const totalHeight = imageMetadatas.reduce((sum, meta) => sum + meta.height, 0);
+                const maxWidth = Math.max(...imageMetadatas.map(meta => meta.width));
+                
+                let yOffset = 0;
+                const compositeList = pageBuffers.map((buf, idx) => {
+                    const item = {
+                        input: buf,
+                        top: yOffset,
+                        left: 0
+                    };
+                    yOffset += imageMetadatas[idx].height;
+                    return item;
+                });
+                
+                finalBuffer = await sharp({
+                    create: {
+                        width: maxWidth,
+                        height: totalHeight,
+                        channels: 4,
+                        background: { r: 0, g: 0, b: 0, alpha: 0 }
+                    }
+                })
+                .composite(compositeList)
+                .png()
+                .toBuffer();
+                console.log('Stitching completed successfully.');
+            } catch (stitchErr) {
+                console.error('Stitching images failed:', stitchErr);
+                // Fallback to first page
             }
         }
 
@@ -220,6 +297,8 @@ export async function GET(request) {
         console.log(`Screenshot saved to ${filePath}`);
 
         await browser.disconnect();
+
+        const finalImageBase64 = finalBuffer.toString('base64');
 
         return Response.json({
             success: true,
