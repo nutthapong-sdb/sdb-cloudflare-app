@@ -33,6 +33,11 @@ export default function ControlPage() {
      const [capturedScreenshot, setCapturedScreenshot] = useState(null);
      const [capturedDnsScreenshot, setCapturedDnsScreenshot] = useState(null);
      const [capturedHttpTrafficScreenshot, setCapturedHttpTrafficScreenshot] = useState(null);
+     const [capturedHttpTrafficScreenshot1, setCapturedHttpTrafficScreenshot1] = useState(null);
+     const [capturedHttpTrafficScreenshot2, setCapturedHttpTrafficScreenshot2] = useState(null);
+     const [capturedHttpTrafficScreenshot3, setCapturedHttpTrafficScreenshot3] = useState(null);
+     const [capturedHttpTrafficScreenshot4, setCapturedHttpTrafficScreenshot4] = useState(null);
+     const [capturedHttpTrafficScreenshot5, setCapturedHttpTrafficScreenshot5] = useState(null);
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
      const [captureHttpTraffic, setCaptureHttpTraffic] = useState(true);
@@ -204,6 +209,26 @@ export default function ControlPage() {
             if (savedHttpTrafficScreenshot) {
                 setCapturedHttpTrafficScreenshot(savedHttpTrafficScreenshot);
             }
+            const savedHttpTrafficScreenshot1 = localStorage.getItem('control_capturedHttpTrafficScreenshot1');
+            if (savedHttpTrafficScreenshot1) {
+                setCapturedHttpTrafficScreenshot1(savedHttpTrafficScreenshot1);
+            }
+            const savedHttpTrafficScreenshot2 = localStorage.getItem('control_capturedHttpTrafficScreenshot2');
+            if (savedHttpTrafficScreenshot2) {
+                setCapturedHttpTrafficScreenshot2(savedHttpTrafficScreenshot2);
+            }
+            const savedHttpTrafficScreenshot3 = localStorage.getItem('control_capturedHttpTrafficScreenshot3');
+            if (savedHttpTrafficScreenshot3) {
+                setCapturedHttpTrafficScreenshot3(savedHttpTrafficScreenshot3);
+            }
+            const savedHttpTrafficScreenshot4 = localStorage.getItem('control_capturedHttpTrafficScreenshot4');
+            if (savedHttpTrafficScreenshot4) {
+                setCapturedHttpTrafficScreenshot4(savedHttpTrafficScreenshot4);
+            }
+            const savedHttpTrafficScreenshot5 = localStorage.getItem('control_capturedHttpTrafficScreenshot5');
+            if (savedHttpTrafficScreenshot5) {
+                setCapturedHttpTrafficScreenshot5(savedHttpTrafficScreenshot5);
+            }
             const savedCaptureDomains = localStorage.getItem('control_captureDomains');
             if (savedCaptureDomains !== null) {
                 setCaptureDomains(savedCaptureDomains === 'true');
@@ -324,10 +349,55 @@ export default function ControlPage() {
                 if (trafficScreenshot) {
                     htmlContent += `
                         <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden">
-                            <span class="text-xs text-gray-400 mb-1">HTTP Traffic Analytics</span>
+                            <span class="text-xs text-gray-400 mb-1">HTTP Traffic Overview</span>
                             <img src="${trafficScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic" />
                         </div>
                     `;
+                    const ts1 = localStorage.getItem('control_capturedHttpTrafficScreenshot1');
+                    if (ts1) {
+                        htmlContent += `
+                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 1 (900px)</span>
+                                <img src="${ts1}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 1" />
+                            </div>
+                        `;
+                    }
+                    const ts2 = localStorage.getItem('control_capturedHttpTrafficScreenshot2');
+                    if (ts2) {
+                        htmlContent += `
+                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 2 (900px)</span>
+                                <img src="${ts2}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 2" />
+                            </div>
+                        `;
+                    }
+                    const ts3 = localStorage.getItem('control_capturedHttpTrafficScreenshot3');
+                    if (ts3) {
+                        htmlContent += `
+                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 3 (900px)</span>
+                                <img src="${ts3}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 3" />
+                            </div>
+                        `;
+                    }
+                    const ts4 = localStorage.getItem('control_capturedHttpTrafficScreenshot4');
+                    if (ts4) {
+                        htmlContent += `
+                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 4 (900px)</span>
+                                <img src="${ts4}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 4" />
+                            </div>
+                        `;
+                    }
+                    const ts5 = localStorage.getItem('control_capturedHttpTrafficScreenshot5');
+                    if (ts5) {
+                        htmlContent += `
+                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 5 (900px)</span>
+                                <img src="${ts5}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 5" />
+                            </div>
+                        `;
+                    }
                 }
                 htmlContent += `</div>`;
             }
@@ -459,7 +529,37 @@ export default function ControlPage() {
                             if (typeof window !== 'undefined') {
                                 localStorage.setItem('control_capturedHttpTrafficScreenshot', captureData.image);
                             }
-                            addLog('HTTP Traffic screenshot captured successfully.', 'success');
+                            if (captureData.imageSub1) {
+                                setCapturedHttpTrafficScreenshot1(captureData.imageSub1);
+                                if (typeof window !== 'undefined') {
+                                    localStorage.setItem('control_capturedHttpTrafficScreenshot1', captureData.imageSub1);
+                                }
+                            }
+                            if (captureData.imageSub2) {
+                                setCapturedHttpTrafficScreenshot2(captureData.imageSub2);
+                                if (typeof window !== 'undefined') {
+                                    localStorage.setItem('control_capturedHttpTrafficScreenshot2', captureData.imageSub2);
+                                }
+                            }
+                            if (captureData.imageSub3) {
+                                setCapturedHttpTrafficScreenshot3(captureData.imageSub3);
+                                if (typeof window !== 'undefined') {
+                                    localStorage.setItem('control_capturedHttpTrafficScreenshot3', captureData.imageSub3);
+                                }
+                            }
+                            if (captureData.imageSub4) {
+                                setCapturedHttpTrafficScreenshot4(captureData.imageSub4);
+                                if (typeof window !== 'undefined') {
+                                    localStorage.setItem('control_capturedHttpTrafficScreenshot4', captureData.imageSub4);
+                                }
+                            }
+                            if (captureData.imageSub5) {
+                                setCapturedHttpTrafficScreenshot5(captureData.imageSub5);
+                                if (typeof window !== 'undefined') {
+                                    localStorage.setItem('control_capturedHttpTrafficScreenshot5', captureData.imageSub5);
+                                }
+                            }
+                            addLog('HTTP Traffic screenshots captured successfully.', 'success');
                         } else {
                             addLog(`HTTP Traffic capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
                         }
@@ -494,6 +594,11 @@ export default function ControlPage() {
         setCapturedScreenshot(null);
         setCapturedDnsScreenshot(null);
         setCapturedHttpTrafficScreenshot(null);
+        setCapturedHttpTrafficScreenshot1(null);
+        setCapturedHttpTrafficScreenshot2(null);
+        setCapturedHttpTrafficScreenshot3(null);
+        setCapturedHttpTrafficScreenshot4(null);
+        setCapturedHttpTrafficScreenshot5(null);
         setCaptureDomains(false);
         setCaptureDnsRecord(false);
         setCaptureHttpTraffic(false);
@@ -502,6 +607,11 @@ export default function ControlPage() {
             localStorage.removeItem('control_capturedScreenshot');
             localStorage.removeItem('control_capturedDnsScreenshot');
             localStorage.removeItem('control_capturedHttpTrafficScreenshot');
+            localStorage.removeItem('control_capturedHttpTrafficScreenshot1');
+            localStorage.removeItem('control_capturedHttpTrafficScreenshot2');
+            localStorage.removeItem('control_capturedHttpTrafficScreenshot3');
+            localStorage.removeItem('control_capturedHttpTrafficScreenshot4');
+            localStorage.removeItem('control_capturedHttpTrafficScreenshot5');
             localStorage.removeItem('control_captureDomains');
             localStorage.removeItem('control_captureDnsRecord');
             localStorage.removeItem('control_captureHttpTraffic');
@@ -828,8 +938,41 @@ export default function ControlPage() {
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                 Captured HTTP Traffic
                             </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedHttpTrafficScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Overview" />
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
+                                    <span className="text-[10px] text-gray-400 mb-1">Overview</span>
+                                    <img src={capturedHttpTrafficScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Overview" />
+                                </div>
+                                {capturedHttpTrafficScreenshot1 && (
+                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
+                                        <span className="text-[10px] text-gray-400 mb-1">Requests (900px)</span>
+                                        <img src={capturedHttpTrafficScreenshot1} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 1" />
+                                    </div>
+                                )}
+                                {capturedHttpTrafficScreenshot2 && (
+                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
+                                        <span className="text-[10px] text-gray-400 mb-1">Data Transfer (900px)</span>
+                                        <img src={capturedHttpTrafficScreenshot2} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 2" />
+                                    </div>
+                                )}
+                                {capturedHttpTrafficScreenshot3 && (
+                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
+                                        <span className="text-[10px] text-gray-400 mb-1">Page views (900px)</span>
+                                        <img src={capturedHttpTrafficScreenshot3} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 3" />
+                                    </div>
+                                )}
+                                {capturedHttpTrafficScreenshot4 && (
+                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
+                                        <span className="text-[10px] text-gray-400 mb-1">Visits (900px)</span>
+                                        <img src={capturedHttpTrafficScreenshot4} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 4" />
+                                    </div>
+                                )}
+                                {capturedHttpTrafficScreenshot5 && (
+                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
+                                        <span className="text-[10px] text-gray-400 mb-1">API Requests (900px)</span>
+                                        <img src={capturedHttpTrafficScreenshot5} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 5" />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

@@ -30,6 +30,11 @@ export async function GET(request) {
         let pageIndex = 1;
         let hasNextPage = true;
         const pageBuffers = [];
+        let sub1Buffer = null;
+        let sub2Buffer = null;
+        let sub3Buffer = null;
+        let sub4Buffer = null;
+        let sub5Buffer = null;
 
         while (hasNextPage) {
             console.log(`Processing page ${pageIndex} of ${type}...`);
@@ -226,6 +231,133 @@ export async function GET(request) {
                     const extractWidth = Math.max(10, Math.min(scaleWidth, metadata.width - extractLeft));
                     const extractHeight = Math.max(10, Math.min(scaleHeight, metadata.height - extractTop));
 
+                    if (type === 'traffic') {
+                        // 1. Crop sub1 (900px height from startY on the initial Requests tab)
+                        console.log('Cropping sub1 (900px height)...');
+                        const scaleHeight900 = Math.round(900 * pagesDevicePixelRatio);
+                        const extractHeight900 = Math.max(10, Math.min(scaleHeight900, metadata.height - extractTop));
+                        sub1Buffer = await sharp(pageBuffer)
+                            .extract({
+                                left: extractLeft,
+                                top: extractTop,
+                                width: extractWidth,
+                                height: extractHeight900
+                            })
+                            .toBuffer();
+
+                        // 2. Click subsequent tabs and capture
+                        const additionalTabs = [
+                            { text: 'data transfer', key: 'sub2' },
+                            { text: 'page views', key: 'sub3' },
+                            { text: 'visits', key: 'sub4' },
+                            { text: 'api requests', key: 'sub5' }
+                        ];
+
+                        const tabBuffers = {};
+
+                        for (const tabInfo of additionalTabs) {
+                            console.log(`Searching for "${tabInfo.text}" tab to click...`);
+                            try {
+                                const tabClicked = await page.evaluate((tabText) => {
+                                    const anchors = Array.from(document.querySelectorAll('nav a, button, [role="tab"], a'));
+                                    const target = anchors.find(a => {
+                                        const text = (a.textContent || '').trim().toLowerCase();
+                                        return text.includes(tabText);
+                                    });
+                                    if (target) {
+                                        target.click();
+                                        return true;
+                                    }
+                                    return false;
+                                }, tabInfo.text);
+
+                                if (tabClicked) {
+                                    console.log(`Waiting 5 seconds for ${tabInfo.text} content...`);
+                                    await new Promise(r => setTimeout(r, 5000));
+
+                                    // Retrieve document height to expand the viewport temporarily
+                                    const tempDocHeight = await page.evaluate(() => {
+                                        return Math.max(
+                                            document.body.scrollHeight,
+                                            document.documentElement.scrollHeight,
+                                            document.body.offsetHeight,
+                                            document.documentElement.offsetHeight,
+                                            window.innerHeight
+                                        );
+                                    });
+
+                                    await page.setViewport({
+                                        width: originalViewportSize.width,
+                                        height: tempDocHeight
+                                    });
+
+                                    console.log(`Capturing ${tabInfo.text} page screenshot...`);
+                                    const subScreenshotBase64 = await page.screenshot({
+                                        encoding: 'base64',
+                                        type: 'png'
+                                    });
+
+                                    await page.setViewport({
+                                        width: originalViewportSize.width,
+                                        height: originalViewportSize.height
+                                    });
+
+                                    const subFullBuffer = Buffer.from(subScreenshotBase64, 'base64');
+                                    const subImage = sharp(subFullBuffer);
+                                    const subMetadata = await subImage.metadata();
+
+                                    // Find element with text "Requests volume by country"
+                                    const requestsVolumeTop = await page.evaluate(() => {
+                                        const findElementByText = (selector, text) => {
+                                            const elements = Array.from(document.querySelectorAll(selector));
+                                            return elements.find(el => {
+                                                const content = el.textContent || '';
+                                                const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
+                                                return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
+                                            });
+                                        };
+                                        const el = findElementByText('h1, h2, h3, h4, h5, div, span, p', 'Requests volume by country');
+                                        if (el) {
+                                            return el.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0);
+                                        }
+                                        return null;
+                                    });
+
+                                    let customSubHeight = scaleHeight900;
+                                    if (requestsVolumeTop) {
+                                        const relativeHeight = requestsVolumeTop - cropCoords.y - 15; // 15px safety margin above the heading
+                                        customSubHeight = Math.round(relativeHeight * pagesDevicePixelRatio);
+                                        console.log(`Dynamic ${tabInfo.text} height: ending before 'Requests volume by country' at height: ${relativeHeight}px (${customSubHeight} scaled px)`);
+                                    }
+
+                                    const extractHeightSub = Math.max(10, Math.min(customSubHeight, subMetadata.height - extractTop));
+
+                                    const croppedBuf = await subImage
+                                        .extract({
+                                            left: extractLeft,
+                                            top: extractTop,
+                                            width: extractWidth,
+                                            height: extractHeightSub
+                                        })
+                                        .toBuffer();
+                                    
+                                    tabBuffers[tabInfo.key] = croppedBuf;
+                                    console.log(`${tabInfo.text} cropping completed successfully.`);
+                                } else {
+                                    console.warn(`Could not find or click the "${tabInfo.text}" tab.`);
+                                }
+                            } catch (tabErr) {
+                                console.error(`Failed to process tab "${tabInfo.text}":`, tabErr);
+                            }
+                        }
+
+                        sub2Buffer = tabBuffers.sub2 || null;
+                        sub3Buffer = tabBuffers.sub3 || null;
+                        sub4Buffer = tabBuffers.sub4 || null;
+                        sub5Buffer = tabBuffers.sub5 || null;
+                    }
+
+                    // Proceed with standard crop for the main image
                     pageBuffer = await image
                         .extract({
                             left: extractLeft,
@@ -234,7 +366,7 @@ export async function GET(request) {
                             height: extractHeight
                         })
                         .toBuffer();
-                    console.log('Cropping completed successfully.');
+                    console.log('Main cropping completed successfully.');
                 } catch (err) {
                     console.error('Failed to crop screenshot with sharp:', err);
                 }
@@ -320,20 +452,67 @@ export async function GET(request) {
         if (!fs.existsSync(publicDir)) {
             fs.mkdirSync(publicDir, { recursive: true });
         }
-        const fileName = type === 'dns' ? 'captured-dns.png' : 'captured-domains.png';
+        const fileName = type === 'dns' ? 'captured-dns.png' : (type === 'traffic' ? 'captured-traffic.png' : 'captured-domains.png');
         const filePath = path.join(publicDir, fileName);
         fs.writeFileSync(filePath, finalBuffer);
         console.log(`Screenshot saved to ${filePath}`);
 
+        if (type === 'traffic') {
+            if (sub1Buffer) {
+                fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub1.png'), sub1Buffer);
+                console.log('Saved traffic sub1 screenshot');
+            }
+            if (sub2Buffer) {
+                fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub2.png'), sub2Buffer);
+                console.log('Saved traffic sub2 screenshot');
+            }
+            if (sub3Buffer) {
+                fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub3.png'), sub3Buffer);
+                console.log('Saved traffic sub3 screenshot');
+            }
+            if (sub4Buffer) {
+                fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub4.png'), sub4Buffer);
+                console.log('Saved traffic sub4 screenshot');
+            }
+            if (sub5Buffer) {
+                fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub5.png'), sub5Buffer);
+                console.log('Saved traffic sub5 screenshot');
+            }
+        }
+
         await browser.disconnect();
 
         const finalImageBase64 = finalBuffer.toString('base64');
-
-        return Response.json({
+        const responseData = {
             success: true,
             image: `data:image/png;base64,${finalImageBase64}`,
             filePath: `/${fileName}?t=${Date.now()}`
-        });
+        };
+
+        if (type === 'traffic') {
+            if (sub1Buffer) {
+                responseData.imageSub1 = `data:image/png;base64,${sub1Buffer.toString('base64')}`;
+                responseData.filePathSub1 = `/captured-traffic-sub1.png?t=${Date.now()}`;
+            }
+            if (sub2Buffer) {
+                responseData.imageSub2 = `data:image/png;base64,${sub2Buffer.toString('base64')}`;
+                responseData.filePathSub2 = `/captured-traffic-sub2.png?t=${Date.now()}`;
+            }
+            if (sub3Buffer) {
+                responseData.imageSub3 = `data:image/png;base64,${sub3Buffer.toString('base64')}`;
+                responseData.filePathSub3 = `/captured-traffic-sub3.png?t=${Date.now()}`;
+            }
+            if (sub4Buffer) {
+                responseData.imageSub4 = `data:image/png;base64,${sub4Buffer.toString('base64')}`;
+                responseData.filePathSub4 = `/captured-traffic-sub4.png?t=${Date.now()}`;
+            }
+            if (sub5Buffer) {
+                responseData.imageSub5 = `data:image/png;base64,${sub5Buffer.toString('base64')}`;
+                responseData.filePathSub5 = `/captured-traffic-sub5.png?t=${Date.now()}`;
+            }
+        }
+
+        return Response.json(responseData);
     } catch (e) {
         console.error('Puppeteer remote capture error:', e);
         return Response.json({ success: false, error: e.message }, { status: 500 });
