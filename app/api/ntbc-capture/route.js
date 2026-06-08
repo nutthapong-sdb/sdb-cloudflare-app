@@ -57,12 +57,14 @@ export async function GET(request) {
                     );
 
                     // Ensure heading H1-H4 title is visible
-                    const headingText = captureType === 'dns' ? 'dns' : 'domains';
+                    const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : 'domains');
                     const heading = findElementByText('h1, h2, h3, h4', headingText);
-                    // Ensure table body or pagination footer is loaded
-                    const tableOrFooter = findElementByText('div, span, button, p, td', 'of') || 
-                                          findElementByText('div, span, button, p, td', 'items') ||
-                                          document.querySelector('table');
+                    // Ensure table body, pagination footer, or traffic chart is loaded
+                    const tableOrFooter = captureType === 'traffic'
+                        ? (findElementByText('div, span, button, p, td', 'requests') || findElementByText('div, span, h1, h2, h3, h4', 'traffic') || document.querySelector('svg, canvas'))
+                        : (findElementByText('div, span, button, p, td', 'of') || 
+                           findElementByText('div, span, button, p, td', 'items') ||
+                           document.querySelector('table'));
                                           
                     // Complete if heading and footer/table exist AND no loading placeholders are active
                     return !!(heading && tableOrFooter && !isLoaderActive);
@@ -96,17 +98,19 @@ export async function GET(request) {
                 };
 
                 // Look for visible headings containing target text
-                const headingText = captureType === 'dns' ? 'dns' : 'domains';
+                const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : 'domains');
                 const heading = findElementByText('h1, h2, h3, h4', headingText) || 
                                 findElementByText('span, div', headingText);
                 // Look for visible pagination footer text containing item counts from the bottom-up
                 const footer = captureType === 'dns'
                     ? (findLastElementByText('div, span, button, p, td', 'records added') || 
                        findLastElementByText('div, span, button, p, td', 'of'))
-                    : (findLastElementByText('div, span, button, p, td', '1 - 5 of 5') || 
-                       findLastElementByText('div, span, button, p, td', 'items') ||
-                       findLastElementByText('div, span, button, p, td', '1 - ') ||
-                       findLastElementByText('div, span, button, p, td', 'of'));
+                    : (captureType === 'traffic' 
+                        ? null
+                        : (findLastElementByText('div, span, button, p, td', '1 - 5 of 5') || 
+                           findLastElementByText('div, span, button, p, td', 'items') ||
+                           findLastElementByText('div, span, button, p, td', '1 - ') ||
+                           findLastElementByText('div, span, button, p, td', 'of')));
 
                 if (!heading) {
                     console.warn(`${captureType} heading not found in page DOM`);
@@ -122,9 +126,9 @@ export async function GET(request) {
                     const footerRect = footer.getBoundingClientRect();
                     absoluteBottom = footerRect.bottom + scrollY;
                 } else {
-                    const listContainer = heading.closest('div')?.querySelector('table, ul, [role="table"], [class*="list"]');
+                    const listContainer = heading.closest('div')?.querySelector('table, ul, [role="table"], [class*="list"], svg, canvas, [class*="chart"]');
                     if (listContainer) {
-                        absoluteBottom = listContainer.getBoundingClientRect().bottom + scrollY + 20;
+                        absoluteBottom = listContainer.getBoundingClientRect().bottom + scrollY + 40;
                     }
                 }
 
