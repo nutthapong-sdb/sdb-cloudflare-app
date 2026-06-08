@@ -135,6 +135,10 @@ export async function GET(request) {
                     }
                 }
 
+                if (captureType === 'traffic') {
+                    absoluteBottom = absoluteBottom - Math.round(window.innerHeight * 0.03);
+                }
+
                 let yOffset = -20;
                 if (captureType === 'dns') {
                     yOffset = -20 - Math.round(window.innerHeight * 0.02);
@@ -146,12 +150,14 @@ export async function GET(request) {
                 if (captureType === 'dns') {
                     startX = Math.round(window.innerWidth * 0.19);
                 } else if (captureType === 'traffic') {
-                    startX = Math.round(window.innerWidth * 0.20);
+                    startX = Math.round(window.innerWidth * 0.22);
                 }
 
                 let endX = Math.round(window.innerWidth * 0.90);
                 if (captureType === 'dns') {
                     endX = Math.round(window.innerWidth * 0.96);
+                } else if (captureType === 'traffic') {
+                    endX = Math.round(window.innerWidth * 0.92);
                 }
 
                 const startY = Math.max(0, headingTop + yOffset);
