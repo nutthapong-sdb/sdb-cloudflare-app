@@ -122,8 +122,8 @@ export async function GET(request) {
             }
 
             const yOffset = captureType === 'dns' ? -20 - Math.round(window.innerHeight * 0.02) : -20;
-            const startX = captureType === 'dns' ? Math.round(window.innerWidth * 0.18) : Math.round(window.innerWidth * 0.15);
-            const endX = captureType === 'dns' ? Math.round(window.innerWidth * 0.94) : Math.round(window.innerWidth * 0.90);
+            const startX = captureType === 'dns' ? Math.round(window.innerWidth * 0.19) : Math.round(window.innerWidth * 0.15);
+            const endX = captureType === 'dns' ? Math.round(window.innerWidth * 0.96) : Math.round(window.innerWidth * 0.90);
             const startY = Math.max(0, headingTop + yOffset);
 
             return {
