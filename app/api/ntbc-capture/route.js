@@ -134,10 +134,37 @@ export async function GET(request) {
             };
         }, type);
 
+        // Retrieve document height to expand the viewport temporarily and prevent visual flickering from fullPage: true
+        const originalViewportSize = await page.evaluate(() => {
+            return {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                documentHeight: Math.max(
+                    document.body.scrollHeight,
+                    document.documentElement.scrollHeight,
+                    document.body.offsetHeight,
+                    document.documentElement.offsetHeight,
+                    window.innerHeight
+                )
+            };
+        });
+
+        console.log(`Temporarily resizing viewport height from ${originalViewportSize.height} to ${originalViewportSize.documentHeight} for full page capture...`);
+        await page.setViewport({
+            width: originalViewportSize.width,
+            height: originalViewportSize.documentHeight
+        });
+
         console.log('Capturing page screenshot (flicker-free)...');
         const fullScreenshotBase64 = await page.screenshot({
             encoding: 'base64',
             type: 'png'
+        });
+
+        // Restore viewport size to original window dimensions
+        await page.setViewport({
+            width: originalViewportSize.width,
+            height: originalViewportSize.height
         });
 
         let finalImageBase64 = fullScreenshotBase64;
