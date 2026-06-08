@@ -1,4 +1,5 @@
 import { exec } from 'child_process';
+import puppeteer from 'puppeteer';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,19 @@ export async function GET() {
             if (checkRes.ok) {
                 const tabs = await checkRes.json();
                 if (tabs && tabs.length > 0) {
-                    console.log('Chrome is already running on port 9222. Reusing active debugging window.');
+                    console.log('Chrome is already running on port 9222. Navigating active debugging session to Cloudflare...');
+                    const browser = await puppeteer.connect({
+                        browserURL: 'http://localhost:9222',
+                        defaultViewport: null
+                    });
+                    const pages = await browser.pages();
+                    let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+                    if (!page) {
+                        page = await browser.newPage();
+                    }
+                    await page.bringToFront();
+                    await page.goto('https://dash.cloudflare.com/', { waitUntil: 'load', timeout: 30000 });
+                    await browser.disconnect();
                     return Response.json({ success: true, reused: true });
                 }
             }
