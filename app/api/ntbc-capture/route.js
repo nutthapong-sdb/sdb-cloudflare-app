@@ -134,11 +134,10 @@ export async function GET(request) {
             };
         }, type);
 
-        console.log('Capturing full page scrollable screenshot (flicker-free)...');
+        console.log('Capturing page screenshot (flicker-free)...');
         const fullScreenshotBase64 = await page.screenshot({
             encoding: 'base64',
-            type: 'png',
-            fullPage: true // Capture through entire page if scroll down is available
+            type: 'png'
         });
 
         let finalImageBase64 = fullScreenshotBase64;
