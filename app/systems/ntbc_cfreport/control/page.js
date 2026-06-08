@@ -38,9 +38,11 @@ export default function ControlPage() {
      const [capturedHttpTrafficScreenshot3, setCapturedHttpTrafficScreenshot3] = useState(null);
      const [capturedHttpTrafficScreenshot4, setCapturedHttpTrafficScreenshot4] = useState(null);
      const [capturedHttpTrafficScreenshot5, setCapturedHttpTrafficScreenshot5] = useState(null);
+     const [capturedFirewallScreenshot, setCapturedFirewallScreenshot] = useState(null);
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
      const [captureHttpTraffic, setCaptureHttpTraffic] = useState(true);
+     const [captureFirewall, setCaptureFirewall] = useState(true);
 
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
@@ -229,6 +231,10 @@ export default function ControlPage() {
             if (savedHttpTrafficScreenshot5) {
                 setCapturedHttpTrafficScreenshot5(savedHttpTrafficScreenshot5);
             }
+            const savedFirewallScreenshot = localStorage.getItem('control_capturedFirewallScreenshot');
+            if (savedFirewallScreenshot) {
+                setCapturedFirewallScreenshot(savedFirewallScreenshot);
+            }
             const savedCaptureDomains = localStorage.getItem('control_captureDomains');
             if (savedCaptureDomains !== null) {
                 setCaptureDomains(savedCaptureDomains === 'true');
@@ -240,6 +246,10 @@ export default function ControlPage() {
             const savedCaptureHttpTraffic = localStorage.getItem('control_captureHttpTraffic');
             if (savedCaptureHttpTraffic !== null) {
                 setCaptureHttpTraffic(savedCaptureHttpTraffic === 'true');
+            }
+            const savedCaptureFirewall = localStorage.getItem('control_captureFirewall');
+            if (savedCaptureFirewall !== null) {
+                setCaptureFirewall(savedCaptureFirewall === 'true');
             }
             // Clear stepStatus from localStorage on refresh
             localStorage.removeItem('control_stepStatus');
@@ -323,12 +333,12 @@ export default function ControlPage() {
             return;
         }
 
-        const markCompleted = (screenshot = null, dnsScreenshot = null, trafficScreenshot = null) => {
+        const markCompleted = (screenshot = null, dnsScreenshot = null, trafficScreenshot = null, firewallScreenshot = null) => {
             updateStepStatusAtIndex(index, 'completed');
             addLog(`${steps[index].name} completed successfully.`, 'success');
 
             let htmlContent = `<div class="text-center font-bold text-lg text-white">Already done[ step ${index + 1} ]</div>`;
-            if (index === 1 && (screenshot || dnsScreenshot || trafficScreenshot)) {
+            if (index === 1 && (screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot)) {
                 htmlContent += `<div class="mt-4 flex flex-col gap-4 max-h-[350px] overflow-y-auto">`;
                 if (screenshot) {
                     htmlContent += `
@@ -399,10 +409,18 @@ export default function ControlPage() {
                         `;
                     }
                 }
+                if (firewallScreenshot) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                            <span class="text-xs text-gray-400 mb-1">Event Analytics (Firewall)</span>
+                            <img src="${firewallScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Firewall Analytics" />
+                        </div>
+                    `;
+                }
                 htmlContent += `</div>`;
             }
 
-            const hasAnyScreenshot = screenshot || dnsScreenshot || trafficScreenshot;
+            const hasAnyScreenshot = screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot;
 
             Swal.fire({
                 title: 'Notification',
@@ -446,6 +464,7 @@ export default function ControlPage() {
                 let domainsImg = null;
                 let dnsImg = null;
                 let trafficImg = null;
+                let firewallImg = null;
 
                 // 1. Domains overview capture
                 if (captureDomains) {
@@ -568,13 +587,44 @@ export default function ControlPage() {
                     }
                 }
 
-                if ((captureDomains && !domainsImg) || (captureDnsRecord && !dnsImg) || (captureHttpTraffic && !trafficImg)) {
+                // 4. Event Analytics (Firewall) capture
+                if (captureFirewall) {
+                    const debugDomain = 'softdebut.online';
+                    const targetFirewallUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/security/analytics/events`;
+                    addLog(`Connecting to debug browser on port 9222 for Firewall Events...`, 'info');
+                    addLog(`Redirecting active tab to Firewall Analytics page: ${targetFirewallUrl}`, 'info');
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetFirewallUrl)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
+                        addLog('Waiting for page rendering to stabilize...', 'info');
+                        await new Promise(r => setTimeout(r, 500));
+
+                        addLog('Triggering cropped screenshot capture ("Firewall" heading)...', 'info');
+                        const captureRes = await fetch('/api/ntbc-capture?type=firewall');
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            firewallImg = captureData.image;
+                            setCapturedFirewallScreenshot(captureData.image);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('control_capturedFirewallScreenshot', captureData.image);
+                            }
+                            addLog('Event Analytics (Firewall) screenshot captured successfully.', 'success');
+                        } else {
+                            addLog(`Event Analytics (Firewall) capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
+                        }
+                    } else {
+                        addLog(`Event Analytics (Firewall) redirect error: ${data.error}`, 'error');
+                    }
+                }
+
+                if ((captureDomains && !domainsImg) || (captureDnsRecord && !dnsImg) || (captureHttpTraffic && !trafficImg) || (captureFirewall && !firewallImg)) {
                     addLog('Session capturing completed with some warnings/failures.', 'warn');
                 } else {
                     addLog('Session capturing completed successfully.', 'success');
                 }
                 
-                markCompleted(domainsImg, dnsImg, trafficImg);
+                markCompleted(domainsImg, dnsImg, trafficImg, firewallImg);
             } catch (err) {
                 console.error('Control Chrome failed:', err);
                 addLog(`Control Chrome failed: ${err.message}`, 'error');
@@ -599,9 +649,11 @@ export default function ControlPage() {
         setCapturedHttpTrafficScreenshot3(null);
         setCapturedHttpTrafficScreenshot4(null);
         setCapturedHttpTrafficScreenshot5(null);
+        setCapturedFirewallScreenshot(null);
         setCaptureDomains(false);
         setCaptureDnsRecord(false);
         setCaptureHttpTraffic(false);
+        setCaptureFirewall(false);
         if (typeof window !== 'undefined') {
             localStorage.removeItem('control_stepStatus');
             localStorage.removeItem('control_capturedScreenshot');
@@ -612,9 +664,11 @@ export default function ControlPage() {
             localStorage.removeItem('control_capturedHttpTrafficScreenshot3');
             localStorage.removeItem('control_capturedHttpTrafficScreenshot4');
             localStorage.removeItem('control_capturedHttpTrafficScreenshot5');
+            localStorage.removeItem('control_capturedFirewallScreenshot');
             localStorage.removeItem('control_captureDomains');
             localStorage.removeItem('control_captureDnsRecord');
             localStorage.removeItem('control_captureHttpTraffic');
+            localStorage.removeItem('control_captureFirewall');
         }
         setActiveStep(0);
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'Control panel reset to initial state.', type: 'info' }]);
@@ -797,7 +851,7 @@ export default function ControlPage() {
                                     statusIcon = <RefreshCw className="w-4 h-4 text-rose-400 animate-spin" />;
                                 }
 
-                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic));
+                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic && !captureFirewall));
 
                                 return (
                                     <div
@@ -867,6 +921,20 @@ export default function ControlPage() {
                                                             className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
                                                         />
                                                         HTTP Traffic Option (Check to enable Step 2 Execution)
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={captureFirewall} 
+                                                            onChange={(e) => {
+                                                                setCaptureFirewall(e.target.checked);
+                                                                if (typeof window !== 'undefined') {
+                                                                    localStorage.setItem('control_captureFirewall', e.target.checked ? 'true' : 'false');
+                                                                }
+                                                            }}
+                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
+                                                        />
+                                                        Event Analytics (Firewall) Option (Check to enable Step 2 Execution)
                                                     </label>
                                                 </div>
                                             </div>
@@ -973,6 +1041,18 @@ export default function ControlPage() {
                                         <img src={capturedHttpTrafficScreenshot5} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 5" />
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {capturedFirewallScreenshot && (
+                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
+                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Captured Firewall Events
+                            </h4>
+                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
+                                <img src={capturedFirewallScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Firewall Events Overview" />
                             </div>
                         </div>
                     )}
