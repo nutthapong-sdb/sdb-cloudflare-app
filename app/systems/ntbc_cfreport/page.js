@@ -228,25 +228,25 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@BROWSER_INTEGRITY_CHECK': safeData.browserIntegrityCheck || 'unknown',
         '@HOTLINK_PROTECTION': safeData.hotlinkProtection || 'unknown',
         '@captured_domain_page': safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'
-            ? `<img src="${safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Domain Page"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'}" alt="Captured Domain Page" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_domain_page mockup]</span>',
         '@captured_dns_page': safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'
-            ? `<img src="${safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured DNS Records"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_dns_page mockup]</span>',
         '@captured_traffic_page': safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'
-            ? `<img src="${safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured HTTP Traffic"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_traffic_page mockup]</span>',
         '@captured_firewall_page': safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'
-            ? `<img src="${safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Firewall Overview"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'}" alt="Captured Firewall Overview" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_firewall_page mockup]</span>',
         '@captured_security_rules_page': safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'
-            ? `<img src="${safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Security Rules"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'}" alt="Captured Security Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_security_rules_page mockup]</span>',
         '@captured_argo_page': safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'
-            ? `<img src="${safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Argo Smart Routing"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_argo_page mockup]</span>',
         '@captured_speed_page': safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'
-            ? `<img src="${safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Speed Test"/>`
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_speed_page mockup]</span>',
 
 
