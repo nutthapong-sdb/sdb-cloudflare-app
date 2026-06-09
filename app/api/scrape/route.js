@@ -2456,16 +2456,180 @@ export async function POST(request) {
             });
         }
 
-        else if (action === 'delete-sync-data') {
-            if (!zoneId) return NextResponse.json({ success: false, message: 'Missing zoneId' }, { status: 400 });
-            const targetSubdomain = body.subdomain || 'ALL_SUBDOMAINS';
-            try {
-                await deleteSyncData(zoneId, targetSubdomain);
-                return NextResponse.json({ success: true, message: `Deleted sync data for ${zoneId} (${targetSubdomain})` });
-            } catch (err) {
-                console.error('Error deleting sync data:', err);
-                return NextResponse.json({ success: false, message: 'Failed to delete sync data' }, { status: 500 });
+        else if (action === 'run-speed-test') {
+            const domainVal = body.domainVal || 'nbtc.go.th';
+            console.log(`Running speed test for domainVal: ${domainVal}`);
+            const puppeteer = require('puppeteer');
+            const browser = await puppeteer.connect({
+                browserURL: 'http://localhost:9222',
+                defaultViewport: null
+            });
+            const pages = await browser.pages();
+            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            if (!page) {
+                await browser.disconnect();
+                return NextResponse.json({ success: false, error: 'No active browser page found.' }, { status: 400 });
             }
+
+            // Bring to front
+            await page.bringToFront();
+
+            // Wait for input selector
+            await page.waitForSelector('input[name="url"]', { timeout: 10000 });
+
+            // Update domain value in input attribute & trigger React events
+            await page.evaluate((val) => {
+                const input = document.querySelector('input[name="url"]');
+                if (input) {
+                    input.value = val;
+                    input.setAttribute('value', val);
+                    // Dispatch events so React picks it up
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }, domainVal);
+
+            // Update this element to '<input name="region" type="hidden" value="asia-northeast1">'
+            await page.evaluate(async () => {
+                // Helper to trigger events
+                const triggerEvents = (el, val) => {
+                    el.value = val;
+                    el.setAttribute('value', val);
+                    const tracker = el._valueTracker;
+                    if (tracker) tracker.setValue(val);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+
+                // Method 0: XPath lookup and parent node lookup
+                let input = null;
+                const parent = document.getElementById('cf-form-input5');
+                if (parent) {
+                    input = parent.querySelector('input');
+                }
+                
+                if (!input) {
+                    const result = document.evaluate('//*[@id="cf-form-input5"]/input', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    input = result.singleNodeValue;
+                }
+
+                if (!input) {
+                    input = document.querySelector('input[name="region"]');
+                }
+                
+                if (!input) {
+                    input = document.querySelector('[id*="region"]') || document.querySelector('[class*="region"] input');
+                }
+
+                // If input is found, attempt direct change
+                if (input) {
+                    triggerEvents(input, 'asia-northeast1');
+                    // Check if value successfully changed
+                    if (input.value === 'asia-northeast1') {
+                        return; // Done
+                    }
+                }
+
+                // Dropdown fallback action (React Select wrapper)
+                // Try finding option directly without opening first
+                let option = document.querySelector('#react-select-4-option-15');
+                if (option) {
+                    option.click();
+                    return;
+                }
+
+                // If not found, open the selection box
+                const dropdownIndicator = document.querySelector('#cf-form-input5 div[class*="-indicatorContainer"]') || 
+                                          document.querySelector('#cf-form-input5 [class*="DropdownIndicator"]') || 
+                                          document.querySelector('#cf-form-input5 .react-select__dropdown-indicator') ||
+                                          document.querySelector('#cf-form-input5 div.react-select__control div.react-select__indicators div.react-select__indicator');
+                
+                if (dropdownIndicator) {
+                    dropdownIndicator.click();
+                    
+                    // Wait a short time for listbox to render
+                    await new Promise(r => setTimeout(r, 600));
+                    
+                    option = document.querySelector('#react-select-4-option-15');
+                    if (!option) {
+                        const options = Array.from(document.querySelectorAll('[id*="-option-"]'));
+                        option = options.find(opt => opt.innerText.includes('asia-northeast1') || opt.id.endsWith('-option-15'));
+                    }
+                    
+                    if (option) {
+                        option.click();
+                    } else {
+                        // Click indicator again to close the selection box since we didn't find the option
+                        dropdownIndicator.click();
+                    }
+                    return;
+                }
+
+                // Final injection fallback
+                const form = document.querySelector('form') || document.querySelector('input[name="url"]')?.closest('form');
+                if (form) {
+                    // Remove existing input to prevent duplicates
+                    const old = form.querySelector('input[name="region"]');
+                    if (old) old.remove();
+
+                    const newInput = document.createElement('input');
+                    newInput.setAttribute('name', 'region');
+                    newInput.setAttribute('type', 'hidden');
+                    newInput.setAttribute('value', 'asia-northeast1');
+                    newInput.value = 'asia-northeast1';
+                    form.appendChild(newInput);
+                    triggerEvents(newInput, 'asia-northeast1');
+                }
+            });
+
+            // Click the submit button
+            // Button class selector or general submit button under speed page
+            await page.evaluate(() => {
+                // First search via matching the exact class list or partial matches
+                let button = document.querySelector('button[type="submit"].c_mc') || 
+                             document.querySelector('button[type="submit"].c_mj') || 
+                             document.querySelector('button.c_mc.c_md.c_me') ||
+                             document.querySelector('button.c_mj.c_mk.c_ml');
+                             
+                if (!button) {
+                    button = Array.from(document.querySelectorAll('button')).find(btn => {
+                        const classText = btn.className || '';
+                        return classText.includes('c_mc') || classText.includes('c_mj') || btn.innerText.includes('Run test once') || btn.type === 'submit';
+                    });
+                }
+                
+                if (button) {
+                    button.click();
+                } else {
+                    throw new Error('Run test once button not found');
+                }
+            });
+
+            await browser.disconnect();
+            return NextResponse.json({ success: true, message: 'Speed test started successfully' });
+        }
+
+        else if (action === 'check-speed-results') {
+            const puppeteer = require('puppeteer');
+            const browser = await puppeteer.connect({
+                browserURL: 'http://localhost:9222',
+                defaultViewport: null
+            });
+            const pages = await browser.pages();
+            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            if (!page) {
+                await browser.disconnect();
+                return NextResponse.json({ success: false, error: 'No active browser page found.' }, { status: 400 });
+            }
+
+            // Search for "Speed test result"
+            const found = await page.evaluate(() => {
+                const bodyText = document.body.innerText;
+                return bodyText.includes('Speed test result');
+            });
+
+            await browser.disconnect();
+            return NextResponse.json({ success: true, found });
         }
 
         else {

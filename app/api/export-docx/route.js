@@ -38,6 +38,68 @@ export async function POST(request) {
         html = typeof html === 'string' ? html : (html ? String(html) : '');
         filename = typeof filename === 'string' ? filename : String(filename);
 
+        // Pre-process HTML content to convert local image URLs into base64 strings so they render in the downloaded Word file
+        if (html) {
+            const fsNode = require('fs');
+            const pathNode = require('path');
+            const publicDir = pathNode.join(process.cwd(), 'public');
+            
+            console.log("📄 Pre-processing HTML images for Word export...");
+            
+            // Search for any img tag and inspect its src attribute
+            const imgTagRegex = /<img[^>]+src=["']([^"']+)["']/gi;
+            let match;
+            let modifiedHtml = html;
+            
+            while ((match = imgTagRegex.exec(html)) !== null) {
+                let rawSrc = match[1];
+                console.log(`🔍 Found image tag with src: "${rawSrc}"`);
+                
+                // Decode URL entities (e.g. %20, %3F, etc.)
+                let decodedSrc = rawSrc;
+                try {
+                    decodedSrc = decodeURIComponent(rawSrc);
+                } catch (e) {
+                    console.warn(`Could not decode URI components of src: ${rawSrc}`);
+                }
+                
+                // Extract clean filename from query string or folder path
+                let imgFile = decodedSrc;
+                if (imgFile.includes('?')) {
+                    imgFile = imgFile.split('?')[0];
+                }
+                if (imgFile.includes('/')) {
+                    imgFile = imgFile.substring(imgFile.lastIndexOf('/') + 1);
+                }
+                
+                console.log(`   Cleaned filename target: "${imgFile}"`);
+                
+                if (imgFile.startsWith('captured-') && imgFile.endsWith('.png')) {
+                    const localImgPath = pathNode.join(publicDir, imgFile);
+                    console.log(`   Looking for local image file at: "${localImgPath}"`);
+                    
+                    try {
+                        if (fsNode.existsSync(localImgPath)) {
+                            const imgBuffer = fsNode.readFileSync(localImgPath);
+                            const imgBase64 = imgBuffer.toString('base64');
+                            
+                            // Replace this exact raw src attribute in the HTML
+                            const dataUri = `data:image/png;base64,${imgBase64}`;
+                            // Use direct string replace to be safe against regex escaping issues
+                            modifiedHtml = modifiedHtml.split(`src="${rawSrc}"`).join(`src="${dataUri}"`);
+                            modifiedHtml = modifiedHtml.split(`src='${rawSrc}'`).join(`src='${dataUri}'`);
+                            console.log(`   ✅ Successfully inlined local image "${imgFile}"`);
+                        } else {
+                            console.warn(`   ❌ Image file does NOT exist on disk: "${localImgPath}"`);
+                        }
+                    } catch (err) {
+                        console.warn(`   ❌ Error reading image file "${imgFile}":`, err.message);
+                    }
+                }
+            }
+            html = modifiedHtml;
+        }
+
         if (!html) {
             return NextResponse.json({ success: false, message: 'Missing HTML content' }, { status: 400 });
         }
@@ -90,7 +152,7 @@ export async function POST(request) {
             tempInputPath = inputPath;
             tempOutputPath = outputPath;
 
-            await fs.writeFile(inputPath, String(html), 'utf-8');
+            await fs.writeFile(inputPath, html, 'utf-8');
 
             const command = `soffice --headless --infilter="HTML Document" --convert-to "docx:MS Word 2007 XML" --outdir "${tmpDir}" "${inputPath}"`;
             console.log(`LibreOffice Command: ${command}`);

@@ -210,6 +210,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@FULL_DATE': now.toLocaleString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
         '@ACCOUNT_NAME': safeData.accountName || '-',
         '@ZONE_NAME': safeData.zoneName || '-',
+        '@DOMAIN_COUNT': (safeData.domainCount || '0').toString(),
         // Zone Settings (Security Level removed)
         '@BOT_MANAGEMENT_STATUS': safeData.botManagementEnabled || 'unknown',
         '@BLOCK_AI_BOTS': safeData.blockAiBots || 'unknown',
@@ -226,9 +227,27 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@LEAKED_CREDENTIALS': safeData.leakedCredentials || 'unknown',
         '@BROWSER_INTEGRITY_CHECK': safeData.browserIntegrityCheck || 'unknown',
         '@HOTLINK_PROTECTION': safeData.hotlinkProtection || 'unknown',
-        '@captured_domain_page': safeData.capturedDomainImage 
-            ? `<img src="${safeData.capturedDomainImage}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Domain Page"/>` 
+        '@captured_domain_page': safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'
+            ? `<img src="${safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Domain Page"/>`
             : '<span class="text-orange-500 font-bold">[captured_domain_page mockup]</span>',
+        '@captured_dns_page': safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'
+            ? `<img src="${safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured DNS Records"/>`
+            : '<span class="text-orange-500 font-bold">[captured_dns_page mockup]</span>',
+        '@captured_traffic_page': safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'
+            ? `<img src="${safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured HTTP Traffic"/>`
+            : '<span class="text-orange-500 font-bold">[captured_traffic_page mockup]</span>',
+        '@captured_firewall_page': safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'
+            ? `<img src="${safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Firewall Overview"/>`
+            : '<span class="text-orange-500 font-bold">[captured_firewall_page mockup]</span>',
+        '@captured_security_rules_page': safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'
+            ? `<img src="${safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Security Rules"/>`
+            : '<span class="text-orange-500 font-bold">[captured_security_rules_page mockup]</span>',
+        '@captured_argo_page': safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'
+            ? `<img src="${safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Argo Smart Routing"/>`
+            : '<span class="text-orange-500 font-bold">[captured_argo_page mockup]</span>',
+        '@captured_speed_page': safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'
+            ? `<img src="${safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'}" style="max-width: 100%; border: 1px solid #ddd; margin: 10px 0;" alt="Captured Speed Test"/>`
+            : '<span class="text-orange-500 font-bold">[captured_speed_page mockup]</span>',
 
 
         // DDoS Protection - individual protections (convert Always On to Enable)
@@ -1392,17 +1411,28 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             Link Variables
                                         </div>
                                         <div className="flex flex-wrap gap-2">
-                                            <a
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    editorRef.current?.insertContent('@captured_domain_page');
-                                                }}
-                                                className="text-orange-500 hover:text-orange-400 font-mono text-xs font-semibold bg-orange-500/10 hover:bg-orange-500/20 px-2 py-1 rounded border border-orange-500/30 transition-colors cursor-pointer inline-block"
-                                                title="Click to insert @captured_domain_page"
-                                            >
-                                                @captured_domain_page
-                                            </a>
+                                            {[
+                                                '@captured_domain_page',
+                                                '@captured_dns_page',
+                                                '@captured_traffic_page',
+                                                '@captured_firewall_page',
+                                                '@captured_security_rules_page',
+                                                '@captured_argo_page',
+                                                '@captured_speed_page'
+                                            ].map((vName) => (
+                                                <a
+                                                    key={vName}
+                                                    href="#"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        editorRef.current?.insertContent(vName);
+                                                    }}
+                                                    className="text-orange-500 hover:text-orange-400 font-mono text-xs font-semibold bg-orange-500/10 hover:bg-orange-500/20 px-2 py-1 rounded border border-orange-500/30 transition-colors cursor-pointer inline-block"
+                                                    title={`Click to insert ${vName}`}
+                                                >
+                                                    {vName}
+                                                </a>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
@@ -3174,6 +3204,25 @@ export default function NTBCCFReportPage() {
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
     const dashboardRef = useRef(null);
     const [capturedDomainImage, setCapturedDomainImage] = useState(null);
+    const [capturedDnsImage, setCapturedDnsImage] = useState(null);
+    const [capturedTrafficImage, setCapturedTrafficImage] = useState(null);
+    const [capturedFirewallImage, setCapturedFirewallImage] = useState(null);
+    const [capturedSecurityRulesImage, setCapturedSecurityRulesImage] = useState(null);
+    const [capturedArgoImage, setCapturedArgoImage] = useState(null);
+    const [capturedSpeedImage, setCapturedSpeedImage] = useState(null);
+
+    // Load saved screenshots from control center session
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setCapturedDomainImage(localStorage.getItem('control_capturedScreenshot'));
+            setCapturedDnsImage(localStorage.getItem('control_capturedDnsScreenshot'));
+            setCapturedTrafficImage(localStorage.getItem('control_capturedHttpTrafficScreenshot'));
+            setCapturedFirewallImage(localStorage.getItem('control_capturedFirewallScreenshot'));
+            setCapturedSecurityRulesImage(localStorage.getItem('control_capturedSecurityRulesScreenshot'));
+            setCapturedArgoImage(localStorage.getItem('control_capturedArgoScreenshot'));
+            setCapturedSpeedImage(localStorage.getItem('control_capturedSpeedScreenshot'));
+        }
+    }, [isReportModalOpen]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);
     const [isControlModalOpen, setIsControlModalOpen] = useState(false);
@@ -4602,7 +4651,15 @@ export default function NTBCCFReportPage() {
                     ipAccessRules: zoneSettings?.ipAccessRules || '0',
                     customRules: zoneSettings?.customRules,
                     rateLimits: zoneSettings?.rateLimits,
-                    dnsRecords: dnsRecords || []
+                    dnsRecords: dnsRecords || [],
+                    domainCount: (zones || []).length || '0',
+                    capturedDomainImage,
+                    capturedDnsImage,
+                    capturedTrafficImage,
+                    capturedFirewallImage,
+                    capturedSecurityRulesImage,
+                    capturedArgoImage,
+                    capturedSpeedImage
                 }}
                 dashboardImage={dashboardImage}
                 template={reportModalMode === 'static-template' ? staticReportTemplate : reportModalMode === 'middle-template' ? middleReportTemplate : reportTemplate}

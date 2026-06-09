@@ -39,10 +39,16 @@ export default function ControlPage() {
      const [capturedHttpTrafficScreenshot4, setCapturedHttpTrafficScreenshot4] = useState(null);
      const [capturedHttpTrafficScreenshot5, setCapturedHttpTrafficScreenshot5] = useState(null);
      const [capturedFirewallScreenshot, setCapturedFirewallScreenshot] = useState(null);
+     const [capturedSecurityRulesScreenshot, setCapturedSecurityRulesScreenshot] = useState(null);
+     const [capturedArgoScreenshot, setCapturedArgoScreenshot] = useState(null);
+     const [capturedSpeedScreenshot, setCapturedSpeedScreenshot] = useState(null);
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
      const [captureHttpTraffic, setCaptureHttpTraffic] = useState(true);
      const [captureFirewall, setCaptureFirewall] = useState(true);
+     const [captureSecurityRules, setCaptureSecurityRules] = useState(true);
+     const [captureArgo, setCaptureArgo] = useState(true);
+     const [captureSpeed, setCaptureSpeed] = useState(true);
 
     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
@@ -235,6 +241,18 @@ export default function ControlPage() {
             if (savedFirewallScreenshot) {
                 setCapturedFirewallScreenshot(savedFirewallScreenshot);
             }
+            const savedSecurityRulesScreenshot = localStorage.getItem('control_capturedSecurityRulesScreenshot');
+            if (savedSecurityRulesScreenshot) {
+                setCapturedSecurityRulesScreenshot(savedSecurityRulesScreenshot);
+            }
+            const savedArgoScreenshot = localStorage.getItem('control_capturedArgoScreenshot');
+            if (savedArgoScreenshot) {
+                setCapturedArgoScreenshot(savedArgoScreenshot);
+            }
+            const savedSpeedScreenshot = localStorage.getItem('control_capturedSpeedScreenshot');
+            if (savedSpeedScreenshot) {
+                setCapturedSpeedScreenshot(savedSpeedScreenshot);
+            }
             const savedCaptureDomains = localStorage.getItem('control_captureDomains');
             if (savedCaptureDomains !== null) {
                 setCaptureDomains(savedCaptureDomains === 'true');
@@ -250,6 +268,18 @@ export default function ControlPage() {
             const savedCaptureFirewall = localStorage.getItem('control_captureFirewall');
             if (savedCaptureFirewall !== null) {
                 setCaptureFirewall(savedCaptureFirewall === 'true');
+            }
+            const savedCaptureSecurityRules = localStorage.getItem('control_captureSecurityRules');
+            if (savedCaptureSecurityRules !== null) {
+                setCaptureSecurityRules(savedCaptureSecurityRules === 'true');
+            }
+            const savedCaptureArgo = localStorage.getItem('control_captureArgo');
+            if (savedCaptureArgo !== null) {
+                setCaptureArgo(savedCaptureArgo === 'true');
+            }
+            const savedCaptureSpeed = localStorage.getItem('control_captureSpeed');
+            if (savedCaptureSpeed !== null) {
+                setCaptureSpeed(savedCaptureSpeed === 'true');
             }
             // Clear stepStatus from localStorage on refresh
             localStorage.removeItem('control_stepStatus');
@@ -333,12 +363,12 @@ export default function ControlPage() {
             return;
         }
 
-        const markCompleted = (screenshot = null, dnsScreenshot = null, trafficScreenshot = null, firewallScreenshot = null) => {
+        const markCompleted = (screenshot = null, dnsScreenshot = null, trafficScreenshot = null, firewallScreenshot = null, securityRulesScreenshot = null, argoScreenshot = null, speedScreenshot = null) => {
             updateStepStatusAtIndex(index, 'completed');
             addLog(`${steps[index].name} completed successfully.`, 'success');
 
             let htmlContent = `<div class="text-center font-bold text-lg text-white">Already done[ step ${index + 1} ]</div>`;
-            if (index === 1 && (screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot)) {
+            if (index === 1 && (screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot || securityRulesScreenshot || argoScreenshot || speedScreenshot)) {
                 htmlContent += `<div class="mt-4 flex flex-col gap-4 max-h-[350px] overflow-y-auto">`;
                 if (screenshot) {
                     htmlContent += `
@@ -417,10 +447,34 @@ export default function ControlPage() {
                         </div>
                     `;
                 }
+                if (securityRulesScreenshot) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                            <span class="text-xs text-gray-400 mb-1">Security Rules</span>
+                            <img src="${securityRulesScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Security Rules" />
+                        </div>
+                    `;
+                }
+                if (argoScreenshot) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                            <span class="text-xs text-gray-400 mb-1">Argo Smart Routing</span>
+                            <img src="${argoScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Argo Smart Routing" />
+                        </div>
+                    `;
+                }
+                if (speedScreenshot) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                            <span class="text-xs text-gray-400 mb-1">Speed Test</span>
+                            <img src="${speedScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Speed Test" />
+                        </div>
+                    `;
+                }
                 htmlContent += `</div>`;
             }
 
-            const hasAnyScreenshot = screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot;
+            const hasAnyScreenshot = screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot || securityRulesScreenshot || argoScreenshot || speedScreenshot;
 
             Swal.fire({
                 title: 'Notification',
@@ -465,6 +519,9 @@ export default function ControlPage() {
                 let dnsImg = null;
                 let trafficImg = null;
                 let firewallImg = null;
+                let securityRulesImg = null;
+                let argoImg = null;
+                let speedImg = null;
 
                 // 1. Domains overview capture
                 if (captureDomains) {
@@ -497,7 +554,7 @@ export default function ControlPage() {
 
                 // 2. DNS records capture
                 if (captureDnsRecord) {
-                    const debugDomain = 'softdebut.online';
+                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
                     const targetDnsUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/dns/records`;
                     addLog(`Connecting to debug browser on port 9222 for DNS records...`, 'info');
                     addLog(`Redirecting active tab to DNS Records page: ${targetDnsUrl}`, 'info');
@@ -528,7 +585,7 @@ export default function ControlPage() {
 
                 // 3. HTTP Traffic overview capture
                 if (captureHttpTraffic) {
-                    const debugDomain = 'softdebut.online';
+                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
                     const targetTrafficUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/analytics/traffic`;
                     addLog(`Connecting to debug browser on port 9222 for HTTP Traffic...`, 'info');
                     addLog(`Redirecting active tab to Traffic Analytics page: ${targetTrafficUrl}`, 'info');
@@ -589,7 +646,7 @@ export default function ControlPage() {
 
                 // 4. Event Analytics (Firewall) capture
                 if (captureFirewall) {
-                    const debugDomain = 'softdebut.online';
+                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
                     const targetFirewallUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/security/analytics/events`;
                     addLog(`Connecting to debug browser on port 9222 for Firewall Events...`, 'info');
                     addLog(`Redirecting active tab to Firewall Analytics page: ${targetFirewallUrl}`, 'info');
@@ -618,13 +675,162 @@ export default function ControlPage() {
                     }
                 }
 
-                if ((captureDomains && !domainsImg) || (captureDnsRecord && !dnsImg) || (captureHttpTraffic && !trafficImg) || (captureFirewall && !firewallImg)) {
+                // 5. Security Rules capture
+                if (captureSecurityRules) {
+                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const targetRulesUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/security/security-rules`;
+                    addLog(`Connecting to debug browser on port 9222 for Security Rules...`, 'info');
+                    addLog(`Redirecting active tab to Security Rules page: ${targetRulesUrl}`, 'info');
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetRulesUrl)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
+                        addLog('Waiting for page rendering to stabilize...', 'info');
+                        await new Promise(r => setTimeout(r, 500));
+
+                        addLog('Triggering cropped screenshot capture ("Security Rules" heading)...', 'info');
+                        const captureRes = await fetch('/api/ntbc-capture?type=security-rules');
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            securityRulesImg = captureData.image;
+                            setCapturedSecurityRulesScreenshot(captureData.image);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('control_capturedSecurityRulesScreenshot', captureData.image);
+                            }
+                            addLog('Security Rules screenshot captured successfully.', 'success');
+                        } else {
+                            addLog(`Security Rules capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
+                        }
+                    } else {
+                        addLog(`Security Rules redirect error: ${data.error}`, 'error');
+                    }
+                }
+
+                // 6. Argo Smart Routing capture
+                if (captureArgo) {
+                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const targetArgoUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/traffic`;
+                    addLog(`Connecting to debug browser on port 9222 for Argo Smart Routing...`, 'info');
+                    addLog(`Redirecting active tab to Argo page: ${targetArgoUrl}`, 'info');
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetArgoUrl)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
+                        addLog('Waiting for page rendering to stabilize...', 'info');
+                        await new Promise(r => setTimeout(r, 500));
+
+                        addLog('Triggering cropped screenshot capture ("Argo" heading)...', 'info');
+                        const captureRes = await fetch('/api/ntbc-capture?type=argo');
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            argoImg = captureData.image;
+                            setCapturedArgoScreenshot(captureData.image);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('control_capturedArgoScreenshot', captureData.image);
+                            }
+                            addLog('Argo Smart Routing screenshot captured successfully.', 'success');
+                        } else {
+                            addLog(`Argo Smart Routing capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
+                        }
+                    } else {
+                        addLog(`Argo Smart Routing redirect error: ${data.error}`, 'error');
+                    }
+                }
+
+                // 7. Speed Test capture
+                if (captureSpeed) {
+                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const targetSpeedUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/speed/test/browser`;
+                    addLog(`Connecting to debug browser on port 9222 for Speed Test...`, 'info');
+                    addLog(`Redirecting active tab to Speed Test page: ${targetSpeedUrl}`, 'info');
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetSpeedUrl)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        addLog(`Redirect successful. Injecting fields and triggering test run...`, 'info');
+                        
+                        // Execute Puppeteer execution inside control chrome logic using scraper actions
+                        const runRes = await fetch('/api/scrape', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: 'run-speed-test',
+                                apiToken: currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token,
+                                domainVal: debugDomain
+                            })
+                        });
+                        const runData = await runRes.json();
+                        if (runData.success) {
+                            addLog('Speed test successfully triggered. Waiting 60 seconds before checking results...', 'info');
+                            await new Promise(r => setTimeout(r, 60000));
+                            
+                            // Check loop
+                            let isSuccess = false;
+                            for (let retry = 1; retry <= 3; retry++) {
+                                addLog(`Checking for speed test result (Attempt ${retry}/3)...`, 'info');
+                                
+                                const checkRes = await fetch('/api/scrape', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'check-speed-results',
+                                        apiToken: currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
+                                    })
+                                });
+                                const checkData = await checkRes.json();
+                                if (checkData.success && checkData.found) {
+                                    addLog('Found "Speed test result" text on active page!', 'success');
+                                    isSuccess = true;
+                                    break;
+                                }
+                                
+                                if (retry < 3) {
+                                    addLog('Result not found yet. Retrying in 5 seconds...', 'info');
+                                    await new Promise(r => setTimeout(r, 5000));
+                                }
+                            }
+                            
+                            if (isSuccess) {
+                                addLog('Triggering cropped screenshot capture ("Speed" heading)...', 'info');
+                                const captureRes = await fetch('/api/ntbc-capture?type=speed');
+                                const captureData = await captureRes.json();
+                                if (captureData.success && captureData.image) {
+                                    speedImg = captureData.image;
+                                    setCapturedSpeedScreenshot(captureData.image);
+                                    if (typeof window !== 'undefined') {
+                                        localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                                    }
+                                    addLog('Speed Test screenshot captured successfully.', 'success');
+                                } else {
+                                    addLog(`Speed Test capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
+                                }
+                            } else {
+                                addLog('Timeout waiting for Speed test results (Text not found after retries). Proceeding with screenshot fallback.', 'warn');
+                                const captureRes = await fetch('/api/ntbc-capture?type=speed');
+                                const captureData = await captureRes.json();
+                                if (captureData.success && captureData.image) {
+                                    speedImg = captureData.image;
+                                    setCapturedSpeedScreenshot(captureData.image);
+                                    if (typeof window !== 'undefined') {
+                                        localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                                    }
+                                    addLog('Speed Test fallback screenshot captured successfully.', 'success');
+                                }
+                            }
+                        } else {
+                            addLog(`Failed to run speed test form submission: ${runData.error || 'Check fields on screen'}`, 'error');
+                        }
+                    } else {
+                        addLog(`Speed Test redirect error: ${data.error}`, 'error');
+                    }
+                }
+
+                if ((captureDomains && !domainsImg) || (captureDnsRecord && !dnsImg) || (captureHttpTraffic && !trafficImg) || (captureFirewall && !firewallImg) || (captureSecurityRules && !securityRulesImg) || (captureArgo && !argoImg) || (captureSpeed && !speedImg)) {
                     addLog('Session capturing completed with some warnings/failures.', 'warn');
                 } else {
                     addLog('Session capturing completed successfully.', 'success');
                 }
                 
-                markCompleted(domainsImg, dnsImg, trafficImg, firewallImg);
+                markCompleted(domainsImg, dnsImg, trafficImg, firewallImg, securityRulesImg, argoImg, speedImg);
             } catch (err) {
                 console.error('Control Chrome failed:', err);
                 addLog(`Control Chrome failed: ${err.message}`, 'error');
@@ -650,10 +856,16 @@ export default function ControlPage() {
         setCapturedHttpTrafficScreenshot4(null);
         setCapturedHttpTrafficScreenshot5(null);
         setCapturedFirewallScreenshot(null);
+        setCapturedSecurityRulesScreenshot(null);
+        setCapturedArgoScreenshot(null);
+        setCapturedSpeedScreenshot(null);
         setCaptureDomains(false);
         setCaptureDnsRecord(false);
         setCaptureHttpTraffic(false);
         setCaptureFirewall(false);
+        setCaptureSecurityRules(false);
+        setCaptureArgo(false);
+        setCaptureSpeed(false);
         if (typeof window !== 'undefined') {
             localStorage.removeItem('control_stepStatus');
             localStorage.removeItem('control_capturedScreenshot');
@@ -665,10 +877,16 @@ export default function ControlPage() {
             localStorage.removeItem('control_capturedHttpTrafficScreenshot4');
             localStorage.removeItem('control_capturedHttpTrafficScreenshot5');
             localStorage.removeItem('control_capturedFirewallScreenshot');
+            localStorage.removeItem('control_capturedSecurityRulesScreenshot');
+            localStorage.removeItem('control_capturedArgoScreenshot');
+            localStorage.removeItem('control_capturedSpeedScreenshot');
             localStorage.removeItem('control_captureDomains');
             localStorage.removeItem('control_captureDnsRecord');
             localStorage.removeItem('control_captureHttpTraffic');
             localStorage.removeItem('control_captureFirewall');
+            localStorage.removeItem('control_captureSecurityRules');
+            localStorage.removeItem('control_captureArgo');
+            localStorage.removeItem('control_captureSpeed');
         }
         setActiveStep(0);
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'Control panel reset to initial state.', type: 'info' }]);
@@ -851,7 +1069,7 @@ export default function ControlPage() {
                                     statusIcon = <RefreshCw className="w-4 h-4 text-rose-400 animate-spin" />;
                                 }
 
-                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic && !captureFirewall));
+                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic && !captureFirewall && !captureSecurityRules && !captureArgo && !captureSpeed));
 
                                 return (
                                     <div
@@ -935,6 +1153,48 @@ export default function ControlPage() {
                                                             className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
                                                         />
                                                         Event Analytics (Firewall) Option (Check to enable Step 2 Execution)
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={captureSecurityRules} 
+                                                            onChange={(e) => {
+                                                                setCaptureSecurityRules(e.target.checked);
+                                                                if (typeof window !== 'undefined') {
+                                                                    localStorage.setItem('control_captureSecurityRules', e.target.checked ? 'true' : 'false');
+                                                                }
+                                                            }}
+                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
+                                                        />
+                                                        Security Rules Option (Check to enable Step 2 Execution)
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={captureArgo} 
+                                                            onChange={(e) => {
+                                                                setCaptureArgo(e.target.checked);
+                                                                if (typeof window !== 'undefined') {
+                                                                    localStorage.setItem('control_captureArgo', e.target.checked ? 'true' : 'false');
+                                                                }
+                                                            }}
+                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
+                                                        />
+                                                        Argo Smart Routing Option (Check to enable Step 2 Execution)
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={captureSpeed} 
+                                                            onChange={(e) => {
+                                                                setCaptureSpeed(e.target.checked);
+                                                                if (typeof window !== 'undefined') {
+                                                                    localStorage.setItem('control_captureSpeed', e.target.checked ? 'true' : 'false');
+                                                                }
+                                                            }}
+                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
+                                                        />
+                                                        Speed Test Option (Check to enable Step 2 Execution)
                                                     </label>
                                                 </div>
                                             </div>
@@ -1053,6 +1313,42 @@ export default function ControlPage() {
                             </h4>
                             <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
                                 <img src={capturedFirewallScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Firewall Events Overview" />
+                            </div>
+                        </div>
+                    )}
+
+                    {capturedSecurityRulesScreenshot && (
+                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
+                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Captured Security Rules
+                            </h4>
+                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
+                                <img src={capturedSecurityRulesScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Security Rules Overview" />
+                            </div>
+                        </div>
+                    )}
+
+                    {capturedArgoScreenshot && (
+                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
+                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Captured Argo Smart Routing
+                            </h4>
+                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
+                                <img src={capturedArgoScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Argo Smart Routing Overview" />
+                            </div>
+                        </div>
+                    )}
+
+                    {capturedSpeedScreenshot && (
+                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
+                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Captured Speed Test
+                            </h4>
+                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
+                                <img src={capturedSpeedScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Speed Test Overview" />
                             </div>
                         </div>
                     )}

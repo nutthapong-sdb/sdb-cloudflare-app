@@ -80,6 +80,7 @@ export const STATIC_VARIABLES = [
     { name: '@LEAKED_CREDENTIALS', desc: 'Leaked Credentials Detection', example: 'Enabled', category: 'More' },
     { name: '@BROWSER_INTEGRITY_CHECK', desc: 'Browser Integrity Check', example: 'Enabled', category: 'More' },
     { name: '@HOTLINK_PROTECTION', desc: 'Hotlink Protection', example: 'Disabled', category: 'More' },
+    { name: '@DOMAIN_COUNT', desc: 'จำนวนโดเมนทั้งหมดใน Account', example: '20', category: 'Basic' },
     { name: '@PAGE_BREAK@', desc: 'ตัวคั่นหน้ากระดาษ', example: '<br.../>', category: 'Format' },
     { name: '@TOC@', desc: 'สารบัญอัตโนมัติ (เลือกวางจุดใดก็ได้ในเทมเพลต)', example: '<div>...</div>', category: 'Format' },
 ];
