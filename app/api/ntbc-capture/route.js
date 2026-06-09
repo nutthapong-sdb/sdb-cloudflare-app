@@ -460,7 +460,7 @@ export async function GET(request) {
 
         // Stitch page buffers vertically if multiple pages exist
         let finalBuffer = pageBuffers[0];
-        if (pageBuffers.length > 1) {
+        if (pageBuffers.length > 1 && type !== 'dns') {
             console.log(`Stitching ${pageBuffers.length} captured page screenshots vertically...`);
             try {
                 const imageMetadatas = await Promise.all(pageBuffers.map(buf => sharp(buf).metadata()));
