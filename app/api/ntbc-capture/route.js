@@ -128,7 +128,25 @@ export async function GET(request) {
                 let absoluteBottom = window.innerHeight + scrollY;
 
                 const siteFooter = document.querySelector('#site-footer') || document.querySelector('footer');
-                if (footer) {
+                if (captureType === 'dns') {
+                    const dnsRows = document.querySelectorAll('tr[data-testid="dns-table-row"]');
+                    if (dnsRows && dnsRows.length > 0) {
+                        const lastRow = dnsRows[dnsRows.length - 1];
+                        const lastRowRect = lastRow.getBoundingClientRect();
+                        absoluteBottom = lastRowRect.bottom + scrollY + 15;
+                    } else {
+                        const dnsTable = document.querySelector('table');
+                        if (dnsTable) {
+                            const tableRect = dnsTable.getBoundingClientRect();
+                            absoluteBottom = tableRect.bottom + scrollY + 15;
+                        } else if (footer) {
+                            const footerRect = footer.getBoundingClientRect();
+                            absoluteBottom = footerRect.bottom + scrollY;
+                        } else if (siteFooter) {
+                            absoluteBottom = siteFooter.getBoundingClientRect().top + scrollY - 10;
+                        }
+                    }
+                } else if (footer) {
                     const footerRect = footer.getBoundingClientRect();
                     absoluteBottom = footerRect.bottom + scrollY;
                 } else if (siteFooter) {
