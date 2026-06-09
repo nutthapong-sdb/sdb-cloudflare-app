@@ -44,6 +44,8 @@ export const REPORT_VARIABLES = [
     { name: '@FW_CUSTOM_EVENTS', desc: 'Custom Rules Events', example: '5k', category: 'Firewall' },
     { name: '@FW_BIC_EVENTS', desc: 'Browser Integrity Check Events', example: '1k', category: 'Firewall' },
     { name: '@FW_ACCESS_EVENTS', desc: 'Access Rules Events', example: '500', category: 'Firewall' },
+    { name: '@SUBDOMAIN_COUNT', desc: 'จำนวน Subdomain ทั้งหมดใน Zone', example: '15', category: 'Info' },
+    { name: '@PROXIED_COUNT', desc: 'จำนวน Subdomain ที่เปิดใช้งาน Proxy', example: '8', category: 'Info' },
     { name: '@PAGE_BREAK@', desc: 'ตัวคั่นหน้ากระดาษ (Word)', example: '<br page-break.../>', category: 'Format' },
     { name: '@DASHBOARD_IMAGE@', desc: 'รูปภาพ Dashboard Snapshot', example: '<img>', category: 'Format' },
     { name: '@TOC@', desc: 'สารบัญอัตโนมัติ (เลือกวางจุดใดก็ได้ในเทมเพลต)', example: '<div>...</div>', category: 'Format' },
@@ -81,6 +83,8 @@ export const STATIC_VARIABLES = [
     { name: '@BROWSER_INTEGRITY_CHECK', desc: 'Browser Integrity Check', example: 'Enabled', category: 'More' },
     { name: '@HOTLINK_PROTECTION', desc: 'Hotlink Protection', example: 'Disabled', category: 'More' },
     { name: '@DOMAIN_COUNT', desc: 'จำนวนโดเมนทั้งหมดใน Account', example: '20', category: 'Basic' },
+    { name: '@SUBDOMAIN_COUNT', desc: 'จำนวน Subdomain ทั้งหมดใน Zone', example: '15', category: 'DNS' },
+    { name: '@PROXIED_COUNT', desc: 'จำนวน Subdomain ที่เปิดใช้งาน Proxy', example: '8', category: 'DNS' },
     { name: '@PAGE_BREAK@', desc: 'ตัวคั่นหน้ากระดาษ', example: '<br.../>', category: 'Format' },
     { name: '@TOC@', desc: 'สารบัญอัตโนมัติ (เลือกวางจุดใดก็ได้ในเทมเพลต)', example: '<div>...</div>', category: 'Format' },
 ];

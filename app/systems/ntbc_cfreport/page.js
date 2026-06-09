@@ -211,6 +211,8 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@ACCOUNT_NAME': safeData.accountName || '-',
         '@ZONE_NAME': safeData.zoneName || '-',
         '@DOMAIN_COUNT': (safeData.domainCount || '0').toString(),
+        '@SUBDOMAIN_COUNT': (safeData.dnsRecords ? safeData.dnsRecords.length : 0).toString(),
+        '@PROXIED_COUNT': (safeData.dnsRecords ? safeData.dnsRecords.filter(r => r.proxied === true).length : 0).toString(),
         // Zone Settings (Security Level removed)
         '@BOT_MANAGEMENT_STATUS': safeData.botManagementEnabled || 'unknown',
         '@BLOCK_AI_BOTS': safeData.blockAiBots || 'unknown',
