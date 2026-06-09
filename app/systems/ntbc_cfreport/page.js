@@ -232,9 +232,18 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@captured_domain_page': safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'
             ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'}" alt="Captured Domain Page" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_domain_page mockup]</span>',
-        '@captured_dns_page': safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png'}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_dns_page mockup]</span>',
+        '@captured_dns_page': (() => {
+            const pages = safeData.capturedDnsPages || [];
+            if (pages.length > 0) {
+                return pages.map((pageSrc, idx) => 
+                    `<div class="mb-6" style="text-align: center;"><img src="${pageSrc}" alt="Captured DNS Records Page ${idx + 1}" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
+                ).join('<br/>');
+            }
+            const fallbackSrc = safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png';
+            return fallbackSrc 
+                ? `<div class="mb-6" style="text-align: center;"><img src="${fallbackSrc}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
+                : '<span class="text-orange-500 font-bold">[captured_dns_page mockup]</span>';
+        })(),
         '@captured_traffic_page': safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'
             ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_traffic_page mockup]</span>',
@@ -3207,6 +3216,7 @@ export default function NTBCCFReportPage() {
     const dashboardRef = useRef(null);
     const [capturedDomainImage, setCapturedDomainImage] = useState(null);
     const [capturedDnsImage, setCapturedDnsImage] = useState(null);
+    const [capturedDnsPages, setCapturedDnsPages] = useState([]);
     const [capturedTrafficImage, setCapturedTrafficImage] = useState(null);
     const [capturedFirewallImage, setCapturedFirewallImage] = useState(null);
     const [capturedSecurityRulesImage, setCapturedSecurityRulesImage] = useState(null);
@@ -3218,6 +3228,13 @@ export default function NTBCCFReportPage() {
         if (typeof window !== 'undefined') {
             setCapturedDomainImage(localStorage.getItem('control_capturedScreenshot'));
             setCapturedDnsImage(localStorage.getItem('control_capturedDnsScreenshot'));
+            try {
+                const savedPages = localStorage.getItem('control_capturedDnsPages');
+                setCapturedDnsPages(savedPages ? JSON.parse(savedPages) : []);
+            } catch (e) {
+                console.error(e);
+                setCapturedDnsPages([]);
+            }
             setCapturedTrafficImage(localStorage.getItem('control_capturedHttpTrafficScreenshot'));
             setCapturedFirewallImage(localStorage.getItem('control_capturedFirewallScreenshot'));
             setCapturedSecurityRulesImage(localStorage.getItem('control_capturedSecurityRulesScreenshot'));
@@ -4657,6 +4674,7 @@ export default function NTBCCFReportPage() {
                     domainCount: (zones || []).length || '0',
                     capturedDomainImage,
                     capturedDnsImage,
+                    capturedDnsPages,
                     capturedTrafficImage,
                     capturedFirewallImage,
                     capturedSecurityRulesImage,

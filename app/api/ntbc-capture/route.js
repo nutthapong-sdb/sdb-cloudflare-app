@@ -501,10 +501,34 @@ export async function GET(request) {
         if (!fs.existsSync(publicDir)) {
             fs.mkdirSync(publicDir, { recursive: true });
         }
+
+        // Clean up old captured-dns-*.png files
+        if (type === 'dns') {
+            try {
+                const files = fs.readdirSync(publicDir);
+                for (const file of files) {
+                    if (file.startsWith('captured-dns-') && file.endsWith('.png')) {
+                        fs.unlinkSync(path.join(publicDir, file));
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to clean up old dns capture files:', e);
+            }
+        }
+
         const fileName = type === 'dns' ? 'captured-dns.png' : (type === 'traffic' ? 'captured-traffic.png' : (type === 'firewall' ? 'captured-firewall.png' : (type === 'security-rules' ? 'captured-security-rules.png' : (type === 'argo' ? 'captured-argo.png' : (type === 'speed' ? 'captured-speed.png' : 'captured-domains.png')))));
         const filePath = path.join(publicDir, fileName);
         fs.writeFileSync(filePath, finalBuffer);
         console.log(`Screenshot saved to ${filePath}`);
+
+        if (type === 'dns' && pageBuffers.length > 0) {
+            for (let i = 0; i < pageBuffers.length; i++) {
+                const pageFileName = `captured-dns-${i + 1}.png`;
+                const pageFilePath = path.join(publicDir, pageFileName);
+                fs.writeFileSync(pageFilePath, pageBuffers[i]);
+                console.log(`Saved paginated DNS screenshot to ${pageFilePath}`);
+            }
+        }
 
         if (type === 'traffic') {
             if (sub1Buffer) {
@@ -537,6 +561,10 @@ export async function GET(request) {
             image: `data:image/png;base64,${finalImageBase64}`,
             filePath: `/${fileName}?t=${Date.now()}`
         };
+
+        if (type === 'dns') {
+            responseData.dnsPages = pageBuffers.map(buf => `data:image/png;base64,${buf.toString('base64')}`);
+        }
 
         if (type === 'traffic') {
             if (sub1Buffer) {

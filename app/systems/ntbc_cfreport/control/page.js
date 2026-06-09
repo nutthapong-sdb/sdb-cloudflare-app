@@ -573,6 +573,11 @@ export default function ControlPage() {
                             setCapturedDnsScreenshot(captureData.image);
                             if (typeof window !== 'undefined') {
                                 localStorage.setItem('control_capturedDnsScreenshot', captureData.image);
+                                if (captureData.dnsPages) {
+                                    localStorage.setItem('control_capturedDnsPages', JSON.stringify(captureData.dnsPages));
+                                } else {
+                                    localStorage.removeItem('control_capturedDnsPages');
+                                }
                             }
                             addLog('DNS records screenshot captured successfully.', 'success');
                         } else {
