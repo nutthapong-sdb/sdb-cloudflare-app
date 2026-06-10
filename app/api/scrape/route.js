@@ -122,11 +122,14 @@ const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, u
          viewer {
            zones(filter: { zoneTag: $zoneTag }) {
              zoneSummary: httpRequests1dGroups(
-                limit: 1000, filter: { date_geq: $since_date, date_leq: $until_date }
+                limit: 1000, filter: { date_geq: $since_date, date_leq: $until_date${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
              ) {
                 sum {
-                  requests bytes cachedRequests cachedBytes
+                  requests bytes cachedRequests cachedBytes pageViews
                   countryMap { clientCountryName requests bytes }
+                }
+                uniq {
+                  uniques
                 }
              }
              httpRequestsAdaptiveGroups(
@@ -236,9 +239,10 @@ const fetchSubdomainAnalytics = async (token, zoneId, host, since, until, hostTo
           viewer {
             zones(filter: { zoneTag: $zoneTag }) {
               zoneSummary: httpRequests1dGroups(
-                limit: 1, filter: { date_geq: $since_date, date_leq: $until_date }
+                limit: 1, filter: { date_geq: $since_date, date_leq: $until_date, clientRequestHTTPHost: $host }
               ) {
-                sum { requests bytes cachedRequests cachedBytes }
+                sum { requests bytes cachedRequests cachedBytes pageViews }
+                uniq { uniques }
               }
               httpRequestsAdaptiveGroups(
                 filter: { datetime_geq: $since, datetime_leq: $until, clientRequestHTTPHost: $host }
@@ -370,7 +374,9 @@ const summarizeDailyResult = (raw) => {
         totals: {
             requests: 0, bytes: 0, cachedRequests: 0, cachedBytes: 0,
             countries: [], // uses countryMap from 1dGroups (100% accurate)
-            avgResponseTime: 0
+            avgResponseTime: 0,
+            pageViews: 0,
+            uniques: 0
         },
         // 2. Top-10 lists from adaptive logs
         topUrls: [], topIps: [], topHosts: [], topUAs: [],
@@ -399,6 +405,8 @@ const summarizeDailyResult = (raw) => {
         summary.totals.bytes = s.bytes || 0;
         summary.totals.cachedRequests = s.cachedRequests || 0;
         summary.totals.cachedBytes = s.cachedBytes || 0;
+        summary.totals.pageViews = s.pageViews || 0;
+        summary.totals.uniques = raw.zoneSummary[0].uniq?.uniques || 0;
         summary.totals.countries = (s.countryMap || [])
             .sort((a, b) => b.requests - a.requests)
             .slice(0, 10);
@@ -407,11 +415,15 @@ const summarizeDailyResult = (raw) => {
             acc.bytes += day?.sum?.bytes || 0;
             acc.cachedRequests += day?.sum?.cachedRequests || 0;
             acc.cachedBytes += day?.sum?.cachedBytes || 0;
+            acc.pageViews += day?.sum?.pageViews || 0;
+            acc.uniques += day?.uniq?.uniques || 0;
             return acc;
-        }, { bytes: 0, cachedRequests: 0, cachedBytes: 0 });
+        }, { bytes: 0, cachedRequests: 0, cachedBytes: 0, pageViews: 0, uniques: 0 });
         summary.totals.bytes = zoneSum.bytes;
         summary.totals.cachedRequests = zoneSum.cachedRequests;
         summary.totals.cachedBytes = zoneSum.cachedBytes;
+        summary.totals.pageViews = zoneSum.pageViews;
+        summary.totals.uniques = zoneSum.uniques;
     }
 
     // Process Adaptive Logs for Breakdown (Top 10)

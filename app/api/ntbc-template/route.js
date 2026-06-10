@@ -3,7 +3,7 @@ import path from 'path';
 
 const dataDir = path.join(process.cwd(), 'app', 'data');
 const templatesDir = path.join(dataDir, 'templates');
-const defaultFile = path.join(dataDir, 'reportTemplate.json');
+const defaultFile = path.join(dataDir, 'ntbc_reportTemplate.json');
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);

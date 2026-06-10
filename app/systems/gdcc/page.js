@@ -151,6 +151,14 @@ const formatEventCount = (num) => {
     return formatCompactNumber(num);
 };
 
+const formatDataSize = (bytes) => {
+    if (!bytes || isNaN(bytes)) return '0.00 GB';
+    const tb = bytes / (1024 * 1024 * 1024 * 1024);
+    if (tb >= 1) return tb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TB';
+    const gb = bytes / (1024 * 1024 * 1024);
+    return gb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' GB';
+};
+
 const getCountryName = (code) => {
     try {
         if (!code || code === 'T1' || code === 'XX' || code === 'Unknown' || code === 'Tor') return code || 'Unknown';
@@ -204,6 +212,13 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@PEAK_ATTACK_COUNT': (safeData.peakAttack?.count || 0).toLocaleString(),
         '@PEAK_HTTP_TIME': safeData.peakHttpStatus?.time || '-',
         '@PEAK_HTTP_COUNT': (safeData.peakHttpStatus?.count || 0).toLocaleString(),
+        '@TOTAL_BANDWIDTH': formatDataSize(safeData.totalDataTransfer || 0),
+        '@TOTAL_DATA_TRANSFER': formatDataSize(safeData.totalDataTransfer || 0),
+        '@VISITS': (safeData.visits || 0).toLocaleString(),
+        '@PAGE_VIEWS': (safeData.pageViews || 0).toLocaleString(),
+        '@REQ_PER_PAGEVIEW_PCT': (safeData.pageViews || 0) > 0 ? ((safeData.totalRequests || 0) / (safeData.pageViews || 0) * 100).toFixed(2) + '%' : '0.00%',
+        '@TOP_COUNTRY_REQ': safeData.topCountries && safeData.topCountries.length > 0 ? getCountryName(safeData.topCountries[0].name) : '-',
+        '@TOP_COUNTRY_REQ_COUNT': safeData.topCountries && safeData.topCountries.length > 0 ? (safeData.topCountries[0].count || 0).toLocaleString() : '0',
         '@DAY': now.getDate().toString(),
         '@MONTH': now.toLocaleString('th-TH', { month: 'long' }),
         '@YEAR': (now.getFullYear() + 543).toString(),
@@ -3129,6 +3144,8 @@ export default function GDCCPage() {
     const [zoneWideTopCountriesReq, setZoneWideTopCountriesReq] = useState([]);
     const [zoneWideTopCountriesBytes, setZoneWideTopCountriesBytes] = useState([]);
     const [fwEvents, setFwEvents] = useState({ total: 0, managed: 0, custom: 0, bic: 0, access: 0 });
+    const [pageViews, setPageViews] = useState(0);
+    const [visits, setVisits] = useState(0);
 
     const loadLastSyncDate = async (zoneId, subdomain) => {
         try {
@@ -3234,7 +3251,7 @@ export default function GDCCPage() {
         const isAllSubdomains = subdomain === 'ALL_SUBDOMAINS';
         console.log(`🔍 Fetching traffic for: ${isAllSubdomains ? 'ALL ZONES' : subdomain} (${p_startDate} to ${p_endDate})`);
 
-        let zReq = 0, zBytes = 0, zCacheReq = 0, zCacheBytes = 0;
+        let zReq = 0, zBytes = 0, zCacheReq = 0, zCacheBytes = 0, zPageViews = 0, zUniques = 0;
         let zTopReq = [], zTopBytes = [];
 
         const result = await callAPI('get-traffic-analytics', {
@@ -3392,11 +3409,15 @@ export default function GDCCPage() {
                 zBytes = zoneSummary.reduce((acc, day) => acc + (day.sum?.bytes || 0), 0);
                 zCacheReq = zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedRequests || 0), 0);
                 zCacheBytes = zoneSummary.reduce((acc, day) => acc + (day.sum?.cachedBytes || 0), 0);
+                zPageViews = zoneSummary.reduce((acc, day) => acc + (day.sum?.pageViews || 0), 0);
+                zUniques = zoneSummary.reduce((acc, day) => acc + (day.uniq?.uniques || 0), 0);
 
                 setZoneWideRequests(zReq);
                 setZoneWideDataTransfer(zBytes);
                 setZoneWideCacheRequests(zCacheReq);
                 setZoneWideCacheDataTransfer(zCacheBytes);
+                setPageViews(zPageViews);
+                setVisits(zUniques);
 
                 // Aggregate Countries from Summary (Accurate Zone-wide)
                 const agg = {};
@@ -3424,14 +3445,14 @@ export default function GDCCPage() {
 
             if (!isAllSubdomains) {
                 totalReq = hostRequestTotal > 0 ? hostRequestTotal : totalReqLogs;
-                setTotalDataTransfer(0);
-                setCacheHitRequests(0);
-                setCacheHitDataTransfer(0);
+                setTotalDataTransfer(zBytes);
+                setCacheHitRequests(zCacheReq);
+                setCacheHitDataTransfer(zCacheBytes);
             }
         } else {
             setBlockedEvents(0); setLogEvents(0); setTopFirewallActions([]);
             setTopRules([]); setTopAttackers([]);
-            setTotalDataTransfer(0); setCacheHitRequests(0); setCacheHitDataTransfer(0);
+            setTotalDataTransfer(0); setCacheHitRequests(0); setCacheHitDataTransfer(0); setPageViews(0); setVisits(0);
             setZoneWideRequests(0); setZoneWideDataTransfer(0); setZoneWideCacheRequests(0); setZoneWideCacheDataTransfer(0);
             setZoneWideTopCountriesReq([]); setZoneWideTopCountriesBytes([]);
             setCustomRulesList([]); setManagedRulesList([]);
@@ -3716,6 +3737,9 @@ export default function GDCCPage() {
         const stats = {
             filteredData,
             totalRequests: totalReq,
+            totalDataTransfer: zBytes,
+            pageViews: zPageViews,
+            visits: zUniques,
             avgResponseTime: weightedAvgTime,
             blockedEvents: blockedCount,
             logEvents: logCount,
@@ -3974,6 +3998,9 @@ export default function GDCCPage() {
                 const domainReportData = {
                     domain: zones.find(z => z.id === defaultZoneId)?.name,
                     totalRequests: totalRequests,
+                    totalDataTransfer: totalDataTransfer,
+                    pageViews: pageViews,
+                    visits: visits,
                     blockedEvents: blockedEvents,
                     logEvents: logEvents,
                     avgTime: avgResponseTime,
@@ -4113,6 +4140,9 @@ export default function GDCCPage() {
                     const domainReportData = {
                         domain: zones.find(z => z.id === zId)?.name,
                         totalRequests: totalRequests,
+                        totalDataTransfer: totalDataTransfer,
+                        pageViews: pageViews,
+                        visits: visits,
                         blockedEvents: blockedEvents,
                         logEvents: logEvents,
                         avgTime: avgResponseTime,
@@ -4266,6 +4296,9 @@ export default function GDCCPage() {
                             startDate: batchStartDate,
                             endDate: batchEndDate,
                             totalRequests: safeStats.totalRequests,
+                            totalDataTransfer: safeStats.totalDataTransfer,
+                            pageViews: safeStats.pageViews,
+                            visits: safeStats.visits,
                             blockedEvents: safeStats.blockedEvents,
                             logEvents: safeStats.logEvents,
                             avgTime: safeStats.avgResponseTime,
@@ -4441,6 +4474,9 @@ export default function GDCCPage() {
                         startDate: batchStartDate,
                         endDate: batchEndDate,
                         totalRequests: safeStats.totalRequests,
+                        totalDataTransfer: safeStats.totalDataTransfer,
+                        pageViews: safeStats.pageViews,
+                        visits: safeStats.visits,
                         blockedEvents: safeStats.blockedEvents,
                         logEvents: safeStats.logEvents,
                         avgTime: safeStats.avgResponseTime,
@@ -5005,6 +5041,9 @@ export default function GDCCPage() {
         startDate: startDate,
         endDate: endDate,
         totalRequests: totalRequests,
+        totalDataTransfer: totalDataTransfer,
+        pageViews: pageViews,
+        visits: visits,
         blockedEvents: blockedEvents,
         logEvents: logEvents,
         avgTime: avgResponseTime,

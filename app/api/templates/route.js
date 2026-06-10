@@ -13,9 +13,9 @@ const ensureDir = async () => {
 };
 
 // Paths for default files
-const defaultSubPath = path.join(dataDir, 'reportTemplate.json');
-const defaultDomainPath = path.join(dataDir, 'staticReportTemplate.json');
-const defaultMiddlePath = path.join(dataDir, 'middleReportTemplate.json');
+const defaultSubPath = path.join(dataDir, 'gdcc_reportTemplate.json');
+const defaultDomainPath = path.join(dataDir, 'gdcc_staticReportTemplate.json');
+const defaultMiddlePath = path.join(dataDir, 'gdcc_middleReportTemplate.json');
 
 export async function GET() {
     try {
