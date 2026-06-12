@@ -152,6 +152,7 @@ async function main() {
     'scripts/test-all/gdcc/test-gdcc-history-ui.js',
     'scripts/test-all/gdcc/test-template-api.js',
     'scripts/test-all/gdcc/test-dns-specific.js',
+    'scripts/test-all/gdcc/test-ntbc-cfreport-capture.js',
 
     'scripts/test-all/api_discovery/test-api.js',
     'scripts/test-all/api_discovery/test-api-discovery.js',

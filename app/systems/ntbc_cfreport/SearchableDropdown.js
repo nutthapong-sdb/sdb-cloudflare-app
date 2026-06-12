@@ -70,6 +70,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
                 break;
             case 'Escape':
                 e.preventDefault();
+                e.stopPropagation();
                 setIsOpen(false);
                 break;
             case 'Tab':

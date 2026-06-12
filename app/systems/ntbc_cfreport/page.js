@@ -825,7 +825,7 @@ const ControlStepsModal = ({ isOpen, onClose, theme }) => {
 };
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot, autoDownloadWord = false, onAutoDownloadComplete }) => {
     // mode: 'report' | 'sub-template' | 'static-template' | 'middle-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
@@ -845,6 +845,19 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (isOpen && autoDownloadWord && mounted) {
+            console.log('⚡ Triggering automatic Word document download...');
+            const timer = setTimeout(() => {
+                handleDownloadWord();
+                if (onAutoDownloadComplete) {
+                    onAutoDownloadComplete();
+                }
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen, autoDownloadWord, mounted]);
 
     const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
@@ -2149,7 +2162,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
                                 const promotedArray = Array.from(promotedHosts);
                                 // extra final arg: exportSeparated
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, selectedAccountId);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.button} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -2177,7 +2190,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 }
 
                                 const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, selectedAccountId);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -3290,6 +3303,7 @@ export default function NTBCCFReportPage() {
     const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
+    const [autoDownloadWord, setAutoDownloadWord] = useState(false);
     const dashboardRef = useRef(null);
     const [capturedDomainImage, setCapturedDomainImage] = useState(null);
     const [capturedDnsImage, setCapturedDnsImage] = useState(null);
@@ -3535,6 +3549,8 @@ export default function NTBCCFReportPage() {
         let firewallSourcesData = [];
         let customList = [];
         let managedList = [];
+        let firewallActivity = [];
+        let firewallRulesData = [];
 
         if (result && result.success) {
             // console.log('✅ Traffic Data Received:', result.data); // Debug Header
@@ -3542,8 +3558,8 @@ export default function NTBCCFReportPage() {
             hostRequestTotal = result.data?.hostRequestTotal || 0;
             // console.log('   - Adaptive Groups:', filteredData.length);
 
-            const firewallActivity = result.data?.firewallActivity || [];
-            const firewallRulesData = result.data?.firewallRules || [];
+            firewallActivity = result.data?.firewallActivity || [];
+            firewallRulesData = result.data?.firewallRules || [];
             // console.log('   - Firewall Rules:', firewallRulesData.length);
             const firewallIPsData = result.data?.firewallIPs || [];
             firewallSourcesData = result.data?.firewallSources || [];
@@ -4274,9 +4290,426 @@ export default function NTBCCFReportPage() {
         }
     };
 
-    const handleCaptureScreenshotConfirm = async ({ selectedHosts }) => {
+    const handleCaptureScreenshotConfirm = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, accountId = null) => {
         setIsBatchModalOpen(false);
-        await handleCaptureScreenshot();
+
+        // Find domain name from selected zoneId
+        const activeAccountId = accountId || selectedAccount;
+        const activeZoneId = zoneId || selectedZone;
+
+        let activeZones = zones;
+        if (!activeZones || activeZones.length === 0 || !activeZones.find(z => z.id === activeZoneId)) {
+            try {
+                const result = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'list-zones',
+                        accountId: activeAccountId,
+                        apiToken: currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
+                    })
+                });
+                const resData = await result.json();
+                if (resData.success && resData.data) {
+                    activeZones = resData.data;
+                    setZones(resData.data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch zones dynamically:', err);
+            }
+        }
+
+        const zoneObj = activeZones.find(z => z.id === activeZoneId);
+        const domainName = zoneObj ? zoneObj.name : '';
+
+        if (!activeAccountId || !activeZoneId || !domainName) {
+            Swal.fire('Error', 'Invalid Account or Zone configuration.', 'error');
+            return;
+        }
+
+        // Show Progress Modal
+        const statusMap = {
+            launch: 'running',
+            domains: 'pending',
+            dns: 'pending',
+            traffic: 'pending',
+            firewall: 'pending',
+            rules: 'pending',
+            argo: 'pending',
+            speed: 'pending',
+            stats: 'pending',
+            report: 'pending'
+        };
+
+        const renderHtml = () => {
+            const getIcon = (status) => {
+                if (status === 'running') return '<span style="display: inline-block; animation: spin 1s linear infinite; margin-right: 8px;">🔄</span>';
+                if (status === 'success') return '<span style="color: #10b981; margin-right: 8px;">✅</span>';
+                if (status === 'error') return '<span style="color: #ef4444; margin-right: 8px;">❌</span>';
+                if (status === 'warn') return '<span style="color: #f59e0b; margin-right: 8px;">⚠️</span>';
+                return '<span style="color: #6b7280; margin-right: 8px;">⚪</span>';
+            };
+
+            return `
+                <div style="text-align: left; font-size: 14px; color: #d1d5db; line-height: 1.6; margin-top: 15px;">
+                    <style>
+                        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                    </style>
+                    <p>${getIcon(statusMap.launch)} Start debug browser on port 9222</p>
+                    <p>${getIcon(statusMap.domains)} Capture Domains Overview</p>
+                    <p>${getIcon(statusMap.dns)} Capture DNS Records</p>
+                    <p>${getIcon(statusMap.traffic)} Capture HTTP Traffic</p>
+                    <p>${getIcon(statusMap.firewall)} Capture Firewall Events</p>
+                    <p>${getIcon(statusMap.rules)} Capture Security Rules</p>
+                    <p>${getIcon(statusMap.argo)} Capture Argo Routing</p>
+                    <p>${getIcon(statusMap.speed)} Trigger & Capture Speed Test (Desktop + Mobile)</p>
+                    <p>${getIcon(statusMap.stats)} Fetch Cloudflare Statistics</p>
+                    <p>${getIcon(statusMap.report)} Generate & Download Report</p>
+                </div>
+            `;
+        };
+
+        Swal.fire({
+            title: 'Generating Report & Capturing Screenshots...',
+            html: renderHtml(),
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            background: theme?.modalBg || '#111827',
+            color: theme?.text || '#fff'
+        });
+
+        const updateProgress = () => {
+            Swal.update({
+                html: renderHtml()
+            });
+        };
+
+        try {
+            // Set states on main page
+            setSelectedAccount(activeAccountId);
+            setSelectedZone(activeZoneId);
+            const subdomainVal = selectedHosts.length > 0 ? (typeof selectedHosts[0] === 'object' ? selectedHosts[0].name : selectedHosts[0]) : 'ALL_SUBDOMAINS';
+            setSelectedSubDomain(subdomainVal);
+            setStartDate(batchStartDate);
+            setEndDate(batchEndDate);
+
+            // Step 1: Ensure Chrome is running
+            try {
+                const launchRes = await fetch('/api/ntbc-launch-chrome');
+                const launchData = await launchRes.json();
+                if (launchData.success) {
+                    statusMap.launch = 'success';
+                } else {
+                    statusMap.launch = 'warn';
+                }
+            } catch (err) {
+                console.error('Launch Chrome failed:', err);
+                statusMap.launch = 'warn';
+            }
+            updateProgress();
+
+            // Stabilize wait
+            await new Promise(r => setTimeout(r, 1000));
+
+            // Helper to handle navigation and screenshot
+            const controlAndCapture = async (url, type, statusKey) => {
+                statusMap[statusKey] = 'running';
+                updateProgress();
+                try {
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(url)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        await new Promise(r => setTimeout(r, 500));
+                        const captureRes = await fetch(`/api/ntbc-capture?type=${type}`);
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            statusMap[statusKey] = 'success';
+                            updateProgress();
+                            return captureData;
+                        }
+                    }
+                    statusMap[statusKey] = 'warn';
+                } catch (err) {
+                    console.error(`Capture ${type} failed:`, err);
+                    statusMap[statusKey] = 'warn';
+                }
+                updateProgress();
+                return null;
+            };
+
+            // Step 2: Domains Overview
+            statusMap.domains = 'running';
+            updateProgress();
+            try {
+                const targetDomainsUrl = `https://dash.cloudflare.com/${activeAccountId}/domains/overview`;
+                const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetDomainsUrl)}`);
+                const data = await res.json();
+                if (data.success) {
+                    await new Promise(r => setTimeout(r, 500));
+                    const captureRes = await fetch('/api/ntbc-capture?type=domains');
+                    const captureData = await captureRes.json();
+                    if (captureData.success && captureData.image) {
+                        setCapturedDomainImage(captureData.image);
+                        localStorage.setItem('control_capturedScreenshot', captureData.image);
+                        statusMap.domains = 'success';
+                    } else {
+                        statusMap.domains = 'warn';
+                    }
+                } else {
+                    statusMap.domains = 'warn';
+                }
+            } catch (err) {
+                console.error('Capture domains failed:', err);
+                statusMap.domains = 'warn';
+            }
+            updateProgress();
+
+            // Step 3: DNS Records
+            const dnsData = await controlAndCapture(
+                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/dns/records`,
+                'dns',
+                'dns'
+            );
+            if (dnsData) {
+                setCapturedDnsImage(dnsData.image);
+                localStorage.setItem('control_capturedDnsScreenshot', dnsData.image);
+                if (dnsData.dnsPages) {
+                    setCapturedDnsPages(dnsData.dnsPages);
+                    localStorage.setItem('control_capturedDnsPages', JSON.stringify(dnsData.dnsPages));
+                } else {
+                    setCapturedDnsPages([]);
+                    localStorage.removeItem('control_capturedDnsPages');
+                }
+            }
+
+            // Step 4: HTTP Traffic
+            const trafficData = await controlAndCapture(
+                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/analytics/traffic`,
+                'traffic',
+                'traffic'
+            );
+            if (trafficData) {
+                setCapturedTrafficImage(trafficData.image);
+                localStorage.setItem('control_capturedHttpTrafficScreenshot', trafficData.image);
+                if (trafficData.imageSub1) {
+                    localStorage.setItem('control_capturedHttpTrafficScreenshot1', trafficData.imageSub1);
+                }
+                if (trafficData.imageSub2) {
+                    localStorage.setItem('control_capturedHttpTrafficScreenshot2', trafficData.imageSub2);
+                }
+                if (trafficData.imageSub3) {
+                    localStorage.setItem('control_capturedHttpTrafficScreenshot3', trafficData.imageSub3);
+                }
+                if (trafficData.imageSub4) {
+                    localStorage.setItem('control_capturedHttpTrafficScreenshot4', trafficData.imageSub4);
+                }
+                if (trafficData.imageSub5) {
+                    localStorage.setItem('control_capturedHttpTrafficScreenshot5', trafficData.imageSub5);
+                }
+            }
+
+            // Step 5: Firewall Events
+            const firewallData = await controlAndCapture(
+                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/analytics/events`,
+                'firewall',
+                'firewall'
+            );
+            if (firewallData) {
+                setCapturedFirewallImage(firewallData.image);
+                localStorage.setItem('control_capturedFirewallScreenshot', firewallData.image);
+            }
+
+            // Step 6: Security Rules
+            const rulesData = await controlAndCapture(
+                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
+                'security-rules',
+                'rules'
+            );
+            if (rulesData) {
+                setCapturedSecurityRulesImage(rulesData.image);
+                localStorage.setItem('control_capturedSecurityRulesScreenshot', rulesData.image);
+            }
+
+            // Step 7: Argo Routing
+            const argoData = await controlAndCapture(
+                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/traffic`,
+                'argo',
+                'argo'
+            );
+            if (argoData) {
+                setCapturedArgoImage(argoData.image);
+                localStorage.setItem('control_capturedArgoScreenshot', argoData.image);
+            }
+
+            // Step 8: Speed Test Desktop + Mobile
+            statusMap.speed = 'running';
+            updateProgress();
+            try {
+                const targetSpeedUrl = `https://dash.cloudflare.com/${activeAccountId}/${domainName}/speed/test/browser`;
+                const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetSpeedUrl)}`);
+                const data = await res.json();
+                if (data.success) {
+                    await new Promise(r => setTimeout(r, 500));
+                    
+                    // Trigger speed test run
+                    const runRes = await fetch('/api/scrape', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'run-speed-test',
+                            apiToken: currentUser?.cloudflare_api_token,
+                            domainVal: domainName
+                        })
+                    });
+                    const runData = await runRes.json();
+                    if (runData.success) {
+                        // Wait 60 seconds
+                        await new Promise(r => setTimeout(r, 60000));
+                        
+                        // Check loop
+                        let isSuccess = false;
+                        for (let retry = 1; retry <= 3; retry++) {
+                            const checkRes = await fetch('/api/scrape', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    action: 'check-speed-results',
+                                    apiToken: currentUser?.cloudflare_api_token
+                                })
+                            });
+                            const checkData = await checkRes.json();
+                            if (checkData.success && checkData.found) {
+                                isSuccess = true;
+                                break;
+                            }
+                            if (retry < 3) {
+                                await new Promise(r => setTimeout(r, 5000));
+                            }
+                        }
+
+                        // Capture Speed Desktop
+                        const captureRes = await fetch('/api/ntbc-capture?type=speed');
+                        const captureData = await captureRes.json();
+                        let desktopSpeedImg = null;
+                        if (captureData.success && captureData.image) {
+                            desktopSpeedImg = captureData.image;
+                            setCapturedSpeedImage(captureData.image);
+                            localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                        }
+
+                        // Capture Speed Mobile
+                        if (desktopSpeedImg) {
+                            const mobileClickRes = await fetch('/api/scrape', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    action: 'click-speed-mobile',
+                                    apiToken: currentUser?.cloudflare_api_token
+                                })
+                            });
+                            const mobileClickData = await mobileClickRes.json();
+                            if (mobileClickData.success) {
+                                const captureMobileRes = await fetch('/api/ntbc-capture?type=speed-mobile');
+                                const captureMobileData = await captureMobileRes.json();
+                                if (captureMobileData.success && captureMobileData.image) {
+                                    setCapturedSpeedMobileImage(captureMobileData.image);
+                                    localStorage.setItem('control_capturedSpeedMobileScreenshot', captureMobileData.image);
+                                }
+                            }
+                        }
+
+                        statusMap.speed = 'success';
+                    } else {
+                        // Fallback capture Speed Desktop
+                        const captureRes = await fetch('/api/ntbc-capture?type=speed');
+                        const captureData = await captureRes.json();
+                        if (captureData.success && captureData.image) {
+                            setCapturedSpeedImage(captureData.image);
+                            localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                            statusMap.speed = 'success';
+                        } else {
+                            statusMap.speed = 'warn';
+                        }
+                    }
+                } else {
+                    statusMap.speed = 'warn';
+                }
+            } catch (err) {
+                console.error('Speed test capture failed:', err);
+                statusMap.speed = 'warn';
+            }
+            updateProgress();
+
+            // Step 9: Fetch WAF Settings and Statistics
+            statusMap.stats = 'running';
+            updateProgress();
+            try {
+                // Fetch settings
+                const settingsResult = await callAPI('get-zone-settings', { zoneId: activeZoneId });
+                if (settingsResult && settingsResult.data) {
+                    setZoneSettings(settingsResult.data);
+                }
+                const dnsRes = await callAPI('get-dns-records', { zoneId: activeZoneId });
+                if (dnsRes && dnsRes.data) {
+                    setDnsRecords(dnsRes.data);
+                }
+
+                // Fetch statistics
+                await fetchAndApplyTrafficData(subdomainVal, activeZoneId, batchStartDate, batchEndDate);
+                statusMap.stats = 'success';
+            } catch (err) {
+                console.error('Fetch stats failed:', err);
+                statusMap.stats = 'error';
+            }
+            updateProgress();
+
+            // Step 10: Generate and download report
+            statusMap.report = 'running';
+            updateProgress();
+
+            // Load template
+            let loadedTmpl = '';
+            if (subdomainVal === 'ALL_SUBDOMAINS') {
+                loadedTmpl = await loadStaticTemplate(templateId);
+                if (loadedTmpl) {
+                    setStaticReportTemplate(loadedTmpl);
+                    setReportModalMode('static-template');
+                }
+            } else {
+                loadedTmpl = await loadTemplate(templateId);
+                if (loadedTmpl) {
+                    setReportTemplate(loadedTmpl);
+                    setReportModalMode('sub-template');
+                }
+            }
+
+            // Set autoDownloadReport to true and open modal
+            setAutoDownloadWord(true);
+            setIsReportModalOpen(true);
+
+            statusMap.report = 'success';
+            updateProgress();
+
+            // Close sweetalert after success
+            setTimeout(() => {
+                Swal.close();
+            }, 1000);
+
+        } catch (error) {
+            console.error('Workflow error:', error);
+            statusMap.report = 'error';
+            updateProgress();
+            Swal.fire({
+                title: 'Workflow Failed',
+                text: error.message || 'An error occurred during report generation.',
+                icon: 'error',
+                background: theme?.modalBg || '#111827',
+                color: theme?.text || '#fff'
+            });
+        }
     };
 
     // 2. Account Change -> Load Zones
@@ -4786,6 +5219,8 @@ export default function NTBCCFReportPage() {
                 currentUserId={currentUser?.id}
                 capturedDomainImage={capturedDomainImage}
                 onCaptureScreenshot={handleCaptureScreenshot}
+                autoDownloadWord={autoDownloadWord}
+                onAutoDownloadComplete={() => setAutoDownloadWord(false)}
             />
 
             <ScreenshotPreviewModal isOpen={showScreenshotModal} onClose={() => setShowScreenshotModal(false)} imgUrl={capturedDomainImage} theme={theme} />
