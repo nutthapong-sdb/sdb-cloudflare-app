@@ -329,21 +329,9 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@captured_argo_page': safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'
             ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_argo_page mockup]</span>',
-        '@captured_speed_page': (() => {
-            const desktopSrc = safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png';
-            const mobileSrc = safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page || '/captured-speed-mobile.png';
-            let htmlParts = [];
-            if (desktopSrc) {
-                htmlParts.push(`<div class="mb-6" style="text-align: center;"><img src="${desktopSrc}" alt="Captured Speed Test (Desktop)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`);
-            }
-            if (mobileSrc) {
-                htmlParts.push(`<div class="mb-6" style="text-align: center;"><img src="${mobileSrc}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`);
-            }
-            if (htmlParts.length > 0) {
-                return htmlParts.join('<br/>');
-            }
-            return '<span class="text-orange-500 font-bold">[captured_speed_page mockup]</span>';
-        })(),
+        '@captured_speed_page': safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'
+            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
+            : '<span class="text-orange-500 font-bold">[captured_speed_page mockup]</span>',
         '@captured_speed_mobile_page': safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page || '/captured-speed-mobile.png'
             ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page || '/captured-speed-mobile.png'}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
             : '<span class="text-orange-500 font-bold">[captured_speed_mobile_page mockup]</span>',
@@ -1517,8 +1505,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 '@captured_firewall_page',
                                                 '@captured_security_rules_page',
                                                 '@captured_argo_page',
-                                                '@captured_speed_page'
-                                            ].map((vName) => (
+                                                '@captured_speed_page',
+                                                 '@captured_speed_mobile_page'
+                                             ].map((vName) => (
                                                 <a
                                                     key={vName}
                                                     href="#"
