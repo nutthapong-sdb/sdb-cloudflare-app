@@ -42,6 +42,7 @@ export default function ControlPage() {
      const [capturedSecurityRulesScreenshot, setCapturedSecurityRulesScreenshot] = useState(null);
      const [capturedArgoScreenshot, setCapturedArgoScreenshot] = useState(null);
      const [capturedSpeedScreenshot, setCapturedSpeedScreenshot] = useState(null);
+     const [capturedSpeedMobileScreenshot, setCapturedSpeedMobileScreenshot] = useState(null);
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
      const [captureHttpTraffic, setCaptureHttpTraffic] = useState(true);
@@ -252,6 +253,10 @@ export default function ControlPage() {
             const savedSpeedScreenshot = localStorage.getItem('control_capturedSpeedScreenshot');
             if (savedSpeedScreenshot) {
                 setCapturedSpeedScreenshot(savedSpeedScreenshot);
+            }
+            const savedSpeedMobileScreenshot = localStorage.getItem('control_capturedSpeedMobileScreenshot');
+            if (savedSpeedMobileScreenshot) {
+                setCapturedSpeedMobileScreenshot(savedSpeedMobileScreenshot);
             }
             const savedCaptureDomains = localStorage.getItem('control_captureDomains');
             if (savedCaptureDomains !== null) {
@@ -471,6 +476,15 @@ export default function ControlPage() {
                         </div>
                     `;
                 }
+                const sms = localStorage.getItem('control_capturedSpeedMobileScreenshot');
+                if (sms) {
+                    htmlContent += `
+                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
+                            <span class="text-xs text-gray-400 mb-1">Speed Test (Mobile)</span>
+                            <img src="${sms}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Speed Test (Mobile)" />
+                        </div>
+                    `;
+                }
                 htmlContent += `</div>`;
             }
 
@@ -522,6 +536,7 @@ export default function ControlPage() {
                 let securityRulesImg = null;
                 let argoImg = null;
                 let speedImg = null;
+                let speedMobileImg = null;
 
                 // 1. Domains overview capture
                 if (captureDomains) {
@@ -554,7 +569,7 @@ export default function ControlPage() {
 
                 // 2. DNS records capture
                 if (captureDnsRecord) {
-                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const debugDomain = 'log.softdebut.online';
                     const targetDnsUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/dns/records`;
                     addLog(`Connecting to debug browser on port 9222 for DNS records...`, 'info');
                     addLog(`Redirecting active tab to DNS Records page: ${targetDnsUrl}`, 'info');
@@ -590,7 +605,7 @@ export default function ControlPage() {
 
                 // 3. HTTP Traffic overview capture
                 if (captureHttpTraffic) {
-                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const debugDomain = 'log.softdebut.online';
                     const targetTrafficUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/analytics/traffic`;
                     addLog(`Connecting to debug browser on port 9222 for HTTP Traffic...`, 'info');
                     addLog(`Redirecting active tab to Traffic Analytics page: ${targetTrafficUrl}`, 'info');
@@ -651,7 +666,7 @@ export default function ControlPage() {
 
                 // 4. Event Analytics (Firewall) capture
                 if (captureFirewall) {
-                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const debugDomain = 'log.softdebut.online';
                     const targetFirewallUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/security/analytics/events`;
                     addLog(`Connecting to debug browser on port 9222 for Firewall Events...`, 'info');
                     addLog(`Redirecting active tab to Firewall Analytics page: ${targetFirewallUrl}`, 'info');
@@ -682,7 +697,7 @@ export default function ControlPage() {
 
                 // 5. Security Rules capture
                 if (captureSecurityRules) {
-                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const debugDomain = 'log.softdebut.online';
                     const targetRulesUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/security/security-rules`;
                     addLog(`Connecting to debug browser on port 9222 for Security Rules...`, 'info');
                     addLog(`Redirecting active tab to Security Rules page: ${targetRulesUrl}`, 'info');
@@ -713,7 +728,7 @@ export default function ControlPage() {
 
                 // 6. Argo Smart Routing capture
                 if (captureArgo) {
-                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const debugDomain = 'log.softdebut.online';
                     const targetArgoUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/traffic`;
                     addLog(`Connecting to debug browser on port 9222 for Argo Smart Routing...`, 'info');
                     addLog(`Redirecting active tab to Argo page: ${targetArgoUrl}`, 'info');
@@ -744,7 +759,7 @@ export default function ControlPage() {
 
                 // 7. Speed Test capture
                 if (captureSpeed) {
-                    const debugDomain = zones.find(z => z.id === envZone)?.name || 'softdebut.online';
+                    const debugDomain = 'log.softdebut.online';
                     const targetSpeedUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/speed/test/browser`;
                     addLog(`Connecting to debug browser on port 9222 for Speed Test...`, 'info');
                     addLog(`Redirecting active tab to Speed Test page: ${targetSpeedUrl}`, 'info');
@@ -821,6 +836,37 @@ export default function ControlPage() {
                                     addLog('Speed Test fallback screenshot captured successfully.', 'success');
                                 }
                             }
+
+                            // Capture Speed Mobile
+                            if (speedImg) {
+                                addLog('Clicking Mobile speed test tab...', 'info');
+                                const mobileClickRes = await fetch('/api/scrape', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'click-speed-mobile',
+                                        apiToken: currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
+                                    })
+                                });
+                                const mobileClickData = await mobileClickRes.json();
+                                if (mobileClickData.success) {
+                                    addLog('Triggering mobile speed screenshot capture...', 'info');
+                                    const captureMobileRes = await fetch('/api/ntbc-capture?type=speed-mobile');
+                                    const captureMobileData = await captureMobileRes.json();
+                                    if (captureMobileData.success && captureMobileData.image) {
+                                        speedMobileImg = captureMobileData.image;
+                                        setCapturedSpeedMobileScreenshot(captureMobileData.image);
+                                        if (typeof window !== 'undefined') {
+                                            localStorage.setItem('control_capturedSpeedMobileScreenshot', captureMobileData.image);
+                                        }
+                                        addLog('Mobile Speed Test screenshot captured successfully.', 'success');
+                                    } else {
+                                        addLog(`Mobile Speed Test capture failed: ${captureMobileData.error || 'Failed to capture screenshot'}`, 'warn');
+                                    }
+                                } else {
+                                    addLog(`Failed to click Mobile speed tab: ${mobileClickData.error || 'Check active browser'}`, 'warn');
+                                }
+                            }
                         } else {
                             addLog(`Failed to run speed test form submission: ${runData.error || 'Check fields on screen'}`, 'error');
                         }
@@ -864,6 +910,7 @@ export default function ControlPage() {
         setCapturedSecurityRulesScreenshot(null);
         setCapturedArgoScreenshot(null);
         setCapturedSpeedScreenshot(null);
+        setCapturedSpeedMobileScreenshot(null);
         setCaptureDomains(false);
         setCaptureDnsRecord(false);
         setCaptureHttpTraffic(false);
@@ -885,6 +932,7 @@ export default function ControlPage() {
             localStorage.removeItem('control_capturedSecurityRulesScreenshot');
             localStorage.removeItem('control_capturedArgoScreenshot');
             localStorage.removeItem('control_capturedSpeedScreenshot');
+            localStorage.removeItem('control_capturedSpeedMobileScreenshot');
             localStorage.removeItem('control_captureDomains');
             localStorage.removeItem('control_captureDnsRecord');
             localStorage.removeItem('control_captureHttpTraffic');
@@ -1350,10 +1398,22 @@ export default function ControlPage() {
                         <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
                             <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Speed Test
+                                Captured Speed Test (Desktop)
                             </h4>
                             <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
                                 <img src={capturedSpeedScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Speed Test Overview" />
+                            </div>
+                        </div>
+                    )}
+
+                    {capturedSpeedMobileScreenshot && (
+                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
+                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Captured Speed Test (Mobile)
+                            </h4>
+                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
+                                <img src={capturedSpeedMobileScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Speed Test Mobile Overview" />
                             </div>
                         </div>
                     )}

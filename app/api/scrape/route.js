@@ -2486,20 +2486,9 @@ export async function POST(request) {
             // Bring to front
             await page.bringToFront();
 
-            // Wait for input selector
+            // Wait for input selector to ensure the page is loaded
             await page.waitForSelector('input[name="url"]', { timeout: 10000 });
 
-            // Update domain value in input attribute & trigger React events
-            await page.evaluate((val) => {
-                const input = document.querySelector('input[name="url"]');
-                if (input) {
-                    input.value = val;
-                    input.setAttribute('value', val);
-                    // Dispatch events so React picks it up
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }, domainVal);
 
             // Update this element to '<input name="region" type="hidden" value="asia-northeast1">'
             await page.evaluate(async () => {
@@ -2594,31 +2583,232 @@ export async function POST(request) {
                 }
             });
 
-            // Click the submit button
-            // Button class selector or general submit button under speed page
-            await page.evaluate(() => {
-                // First search via matching the exact class list or partial matches
-                let button = document.querySelector('button[type="submit"].c_mc') || 
-                             document.querySelector('button[type="submit"].c_mj') || 
-                             document.querySelector('button.c_mc.c_md.c_me') ||
-                             document.querySelector('button.c_mj.c_mk.c_ml');
-                             
-                if (!button) {
-                    button = Array.from(document.querySelectorAll('button')).find(btn => {
-                        const classText = btn.className || '';
-                        return classText.includes('c_mc') || classText.includes('c_mj') || btn.innerText.includes('Run test once') || btn.type === 'submit';
+            // Wait a moment for form validation and React state updates
+            console.log('Waiting 1500ms for form validation and state updates to settle...');
+            await new Promise(r => setTimeout(r, 1500));
+
+            // Log current button state from the DOM to help diagnose failures
+            try {
+                const buttonInfo = await page.evaluate(() => {
+                    const btn = document.querySelector('#add-url > div > div.c_ka.c_kb > button') ||
+                                document.querySelector('form button[type="submit"]') ||
+                                Array.from(document.querySelectorAll('button')).find(b => 
+                                    (b.textContent || '').toLowerCase().includes('run test once')
+                                );
+                    if (!btn) return { found: false };
+                    return {
+                        found: true,
+                        tagName: btn.tagName,
+                        type: btn.getAttribute('type'),
+                        disabled: btn.disabled || btn.hasAttribute('disabled'),
+                        className: btn.className,
+                        textContent: btn.textContent,
+                        visible: !!(btn.offsetWidth || btn.offsetHeight || btn.getClientRects().length),
+                        rect: btn.getBoundingClientRect() ? {
+                            x: btn.getBoundingClientRect().x,
+                            y: btn.getBoundingClientRect().y,
+                            width: btn.getBoundingClientRect().width,
+                            height: btn.getBoundingClientRect().height
+                        } : null
+                    };
+                });
+                console.log('🔍 Button status in DOM:', JSON.stringify(buttonInfo, null, 2));
+            } catch (err) {
+                console.warn('Could not read button status:', err.message);
+            }
+
+            // Click the submit button using 8 different sequential strategies
+            let clickSuccess = false;
+            
+            // Method 1: Precise CSS selector click via Puppeteer
+            try {
+                console.log('Attempting Method 1: Native Puppeteer CSS Selector click...');
+                const btnSelector = '#add-url > div > div.c_ka.c_kb > button';
+                await page.waitForSelector(btnSelector, { timeout: 3000 });
+                // Force remove disabled attribute if it exists, just in case
+                await page.evaluate((sel) => {
+                    const btn = document.querySelector(sel);
+                    if (btn && (btn.disabled || btn.hasAttribute('disabled'))) {
+                        console.log('Forcing button enabled in DOM prior to Puppeteer click...');
+                        btn.removeAttribute('disabled');
+                        btn.disabled = false;
+                    }
+                }, btnSelector);
+                await page.click(btnSelector);
+                console.log('Method 1 Success: Clicked via native selector.');
+                clickSuccess = true;
+            } catch (err) {
+                console.warn('Method 1 Failed:', err.message);
+            }
+
+            // Method 2: Pressing Enter on the input field (Form submission trigger)
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 2: Form submit via Enter key on input...');
+                    await page.focus('input[name="url"]');
+                    await page.keyboard.press('Enter');
+                    console.log('Method 2 Success: Dispatched Enter key.');
+                    clickSuccess = true;
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (err) {
+                    console.warn('Method 2 Failed:', err.message);
+                }
+            }
+
+            // Method 3: DOM level button.click() evaluation after forcing enabled
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 3: DOM evaluate button.click()...');
+                    const domSuccess = await page.evaluate(() => {
+                        const btn = document.querySelector('#add-url > div > div.c_ka.c_kb > button') ||
+                                    document.querySelector('form button[type="submit"]') ||
+                                    Array.from(document.querySelectorAll('button')).find(b => 
+                                        (b.textContent || '').toLowerCase().includes('run test once')
+                                    );
+                        if (btn) {
+                            btn.removeAttribute('disabled');
+                            btn.disabled = false;
+                            btn.click();
+                            return true;
+                        }
+                        return false;
                     });
+                    if (domSuccess) {
+                        console.log('Method 3 Success: Evaluated DOM button click.');
+                        clickSuccess = true;
+                    } else {
+                        console.warn('Method 3 Failed: Button not found in DOM.');
+                    }
+                } catch (err) {
+                    console.warn('Method 3 Failed with error:', err.message);
                 }
-                
-                if (button) {
-                    button.click();
-                } else {
-                    throw new Error('Run test once button not found');
+            }
+
+            // Method 4: DOM level form dispatchEvent submit
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 4: Form submit dispatchEvent...');
+                    const formSuccess = await page.evaluate(() => {
+                        const form = document.querySelector('form') || document.querySelector('input[name="url"]')?.closest('form');
+                        if (form) {
+                            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            try { form.submit(); } catch (e) {}
+                            return true;
+                        }
+                        return false;
+                    });
+                    if (formSuccess) {
+                        console.log('Method 4 Success: Submitted form container.');
+                        clickSuccess = true;
+                    } else {
+                        console.warn('Method 4 Failed: Form element not found.');
+                    }
+                } catch (err) {
+                    console.warn('Method 4 Failed with error:', err.message);
                 }
-            });
+            }
+
+            // Method 5: XPath text selector find & Puppeteer click (with forced enabled)
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 5: XPath text selection & click...');
+                    const buttons = await page.$$('button');
+                    for (const btn of buttons) {
+                        const text = await page.evaluate(el => el.textContent, btn);
+                        if (text && text.toLowerCase().includes('run test once')) {
+                            await page.evaluate(el => {
+                                el.removeAttribute('disabled');
+                                el.disabled = false;
+                            }, btn);
+                            await btn.click();
+                            console.log('Method 5 Success: Clicked button containing target text.');
+                            clickSuccess = true;
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Method 5 Failed:', err.message);
+                }
+            }
+
+            // Method 6: Click by coordinates / bounding box using Puppeteer mouse
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 6: Clicking at element coordinates...');
+                    const btnSelector = '#add-url > div > div.c_ka.c_kb > button';
+                    const buttonEl = await page.$(btnSelector);
+                    if (buttonEl) {
+                        const box = await buttonEl.boundingBox();
+                        if (box) {
+                            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+                            console.log('Method 6 Success: Clicked bounding box center.');
+                            clickSuccess = true;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Method 6 Failed:', err.message);
+                }
+            }
+
+            // Method 7: DOM dispatch mouse & pointer events directly to the button
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 7: DOM pointer/mouse events simulation...');
+                    const eventsSuccess = await page.evaluate(() => {
+                        const btn = document.querySelector('#add-url > div > div.c_ka.c_kb > button') ||
+                                    document.querySelector('form button[type="submit"]') ||
+                                    Array.from(document.querySelectorAll('button')).find(b => 
+                                        (b.textContent || '').toLowerCase().includes('run test once')
+                                    );
+                        if (btn) {
+                            btn.removeAttribute('disabled');
+                            btn.disabled = false;
+                            
+                            const dispatch = (type) => {
+                                const ev = new MouseEvent(type, { bubbles: true, cancelable: true, view: window });
+                                btn.dispatchEvent(ev);
+                            };
+                            
+                            dispatch('pointerdown');
+                            dispatch('mousedown');
+                            dispatch('pointerup');
+                            dispatch('mouseup');
+                            dispatch('click');
+                            return true;
+                        }
+                        return false;
+                    });
+                    if (eventsSuccess) {
+                        console.log('Method 7 Success: Dispatched DOM mouse events.');
+                        clickSuccess = true;
+                    }
+                } catch (err) {
+                    console.warn('Method 7 Failed:', err.message);
+                }
+            }
+
+            // Method 8: Focus button and press Enter/Space key
+            if (!clickSuccess) {
+                try {
+                    console.log('Attempting Method 8: Focus button and keyboard press Enter/Space...');
+                    const btnSelector = '#add-url > div > div.c_ka.c_kb > button';
+                    await page.focus(btnSelector);
+                    await page.keyboard.press('Enter');
+                    await new Promise(r => setTimeout(r, 200));
+                    await page.keyboard.press('Space');
+                    console.log('Method 8 Success: Focused and pressed Enter/Space.');
+                    clickSuccess = true;
+                } catch (err) {
+                    console.warn('Method 8 Failed:', err.message);
+                }
+            }
+
+            if (!clickSuccess) {
+                console.error('❌ ALL 8 CLICK METHODS FAILED.');
+            }
 
             await browser.disconnect();
-            return NextResponse.json({ success: true, message: 'Speed test started successfully' });
+            return NextResponse.json({ success: clickSuccess, message: clickSuccess ? 'Speed test started successfully' : 'Failed to click Run Test Once' });
         }
 
         else if (action === 'check-speed-results') {
@@ -2642,6 +2832,46 @@ export async function POST(request) {
 
             await browser.disconnect();
             return NextResponse.json({ success: true, found });
+        }
+
+        else if (action === 'click-speed-mobile') {
+            const puppeteer = require('puppeteer');
+            const browser = await puppeteer.connect({
+                browserURL: 'http://localhost:9222',
+                defaultViewport: null
+            });
+            const pages = await browser.pages();
+            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            if (!page) {
+                await browser.disconnect();
+                return NextResponse.json({ success: false, error: 'No active browser page found.' }, { status: 400 });
+            }
+
+            await page.bringToFront();
+
+            const selector = '#react-app > div > div > div > div.grid.grid-cols-1.content-start.min-h-screen.transition-\\[grid-template-columns\\].duration-250.ease-\\[cubic-bezier\\(0\\.77\\,0\\,0\\.175\\,1\\)\\].will-change-\\[grid-template-columns\\].grid-rows-1 > div > main > div > div > div:nth-child(4) > div.c_gv.c_rh.c_hi.c_ri.c_is.c_it.c_mm > a:nth-child(2)';
+            
+            try {
+                await page.waitForSelector(selector, { timeout: 10000 });
+                await page.click(selector);
+                console.log('Successfully clicked Mobile speed test tab.');
+            } catch (err) {
+                console.warn('Selector failed to click, falling back to document link lookup:', err.message);
+                await page.evaluate(() => {
+                    const links = Array.from(document.querySelectorAll('a'));
+                    const mobileLink = links.find(a => {
+                        const span = a.querySelector('span');
+                        return (span && span.textContent.trim() === 'Mobile') || a.textContent.trim() === 'Mobile';
+                    });
+                    if (mobileLink) {
+                        mobileLink.click();
+                    }
+                });
+            }
+
+            await new Promise(r => setTimeout(r, 3000));
+            await browser.disconnect();
+            return NextResponse.json({ success: true });
         }
 
         else {

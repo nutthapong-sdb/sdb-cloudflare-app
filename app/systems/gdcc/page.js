@@ -196,6 +196,48 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     const topUA = safeData.topUserAgents && safeData.topUserAgents.length > 0 ? safeData.topUserAgents[0] : { agent: '-', count: 0 };
     const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
+    const getActionCount = (actionName) => {
+        if (safeData.firewallActivity) {
+            const match = safeData.firewallActivity.filter(g => {
+                const act = (g.dimensions?.action || '').toLowerCase();
+                if (actionName === 'challenge') {
+                    return act.includes('challenge');
+                }
+                return act === actionName;
+            });
+            return match.reduce((acc, g) => acc + g.count, 0);
+        }
+        if (safeData.topFirewallActions) {
+            const match = safeData.topFirewallActions.find(item => {
+                const name = (item.name || '').toLowerCase();
+                if (actionName === 'challenge') {
+                    return name.includes('challenge');
+                }
+                return name === actionName;
+            });
+            return match ? match.count : 0;
+        }
+        return 0;
+    };
+
+    const getRuleCount = (keyword) => {
+        if (safeData.firewallRules) {
+            const match = safeData.firewallRules.find(g => 
+                (g.dimensions?.description || '').toLowerCase().includes(keyword.toLowerCase())
+            );
+            return match ? match.count : 0;
+        }
+        const allRules = [
+            ...(safeData.topCustomRules || []),
+            ...(safeData.topManagedRules || []),
+            ...(safeData.topRules || [])
+        ];
+        const match = allRules.find(item => 
+            (item.rule || '').toLowerCase().includes(keyword.toLowerCase())
+        );
+        return match ? match.count : 0;
+    };
+
     // 1. Simple Replacements
     const replacements = {
         '@TIME_RANGE': timeRangeStr,
@@ -225,6 +267,22 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@FULL_DATE': now.toLocaleString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
         '@ACCOUNT_NAME': safeData.accountName || '-',
         '@ZONE_NAME': safeData.zoneName || '-',
+        // Firewall Action Counts
+        '@FW_LOG_COUNT': formatEventCount(getActionCount('log')),
+        '@FW_SKIP_COUNT': formatEventCount(getActionCount('skip')),
+        '@FW_CHALLENGE_COUNT': formatEventCount(getActionCount('challenge') || getActionCount('managed_challenge') || getActionCount('jschallenge')),
+        '@FW_BLOCK_COUNT': formatEventCount(getActionCount('block') || getActionCount('connectionclose')),
+        // Firewall Rule Counts
+        '@FW_RULE_KNOWN_BOTS_COUNT': formatEventCount(getRuleCount('known bots')),
+        '@FW_RULE_DTT_COUNT': formatEventCount(getRuleCount('dtt skip') || getRuleCount('dtt_skip')),
+        '@FW_RULE_GIS_COUNT': formatEventCount(getRuleCount('gis skip') || getRuleCount('gis_skip')),
+        '@FW_RULE_NOT_THAI_COUNT': formatEventCount(getRuleCount('not thailand') || getRuleCount('not_thailand')),
+        '@FW_RULE_ALL_LOG_COUNT': formatEventCount(getRuleCount('all log') || getRuleCount('all_log')),
+        '@FW_RULE_SKIP_REGISTER_LOGIN_COUNT': formatEventCount(getRuleCount('skip register') || getRuleCount('skip_register')),
+        '@FW_RULE_SKIP_RATELIMIT_COUNT': formatEventCount(getRuleCount('skip ratelimit') || getRuleCount('skip_ratelimit')),
+        '@FW_RULE_SKIP_ATTACHMENT_COUNT': formatEventCount(getRuleCount('attachment') || getRuleCount('post /api/attachment')),
+        '@FW_RULE_SKIP_LICENSEFEE_COUNT': formatEventCount(getRuleCount('licensefee') || getRuleCount('upload licensefee')),
+        '@FW_RULE_RATELIMIT_300_COUNT': formatEventCount(getRuleCount('300req') || getRuleCount('300 req')),
         // Zone Settings (Security Level removed)
         '@BOT_MANAGEMENT_STATUS': safeData.botManagementEnabled || 'unknown',
         '@BLOCK_AI_BOTS': safeData.blockAiBots || 'unknown',
@@ -3763,7 +3821,9 @@ export default function GDCCPage() {
             zoneWideCacheDataTransfer: zCacheBytes,
             zoneWideTopCountriesReq: zTopReq,
             zoneWideTopCountriesBytes: zTopBytes,
-            fwEvents: { total: fwTotal, managed: fwManaged, custom: fwCustom, bic: fwBic, access: fwAccess }
+            fwEvents: { total: fwTotal, managed: fwManaged, custom: fwCustom, bic: fwBic, access: fwAccess },
+            firewallRules: firewallRulesData || [],
+            firewallActivity: firewallActivity || []
         };
 
         setLoadingStats(false);

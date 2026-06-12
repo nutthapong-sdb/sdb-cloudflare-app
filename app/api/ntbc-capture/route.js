@@ -62,10 +62,10 @@ export async function GET(request) {
                     );
 
                     // Ensure heading H1-H4 title is visible
-                    const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : (captureType === 'firewall' ? 'security' : (captureType === 'security-rules' ? 'rules' : (captureType === 'argo' ? 'argo' : (captureType === 'speed' ? 'speed' : 'domains')))));
+                    const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : (captureType === 'firewall' ? 'security' : (captureType === 'security-rules' ? 'rules' : (captureType === 'argo' ? 'argo' : (captureType === 'speed' || captureType === 'speed-mobile' ? 'speed' : 'domains')))));
                     const heading = findElementByText('h1, h2, h3, h4', headingText);
                     // Ensure table body, pagination footer, or traffic chart is loaded
-                    const tableOrFooter = (captureType === 'traffic' || captureType === 'argo' || captureType === 'speed')
+                    const tableOrFooter = (captureType === 'traffic' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile')
                         ? (findElementByText('div, span, button, p, td', 'requests') || findElementByText('div, span, h1, h2, h3, h4', 'traffic') || findElementByText('div, span, button, p, td', 'result') || document.querySelector('svg, canvas, button'))
                         : (findElementByText('div, span, button, p, td', 'of') || 
                            findElementByText('div, span, button, p, td', 'items') ||
@@ -103,14 +103,14 @@ export async function GET(request) {
                 };
 
                 // Look for visible headings containing target text
-                const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : (captureType === 'firewall' ? 'security' : (captureType === 'security-rules' ? 'rules' : (captureType === 'argo' ? 'argo' : (captureType === 'speed' ? 'speed' : 'domains')))));
+                const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : (captureType === 'firewall' ? 'security' : (captureType === 'security-rules' ? 'rules' : (captureType === 'argo' ? 'argo' : (captureType === 'speed' || captureType === 'speed-mobile' ? 'speed' : 'domains')))));
                 const heading = findElementByText('h1, h2, h3, h4', headingText) || 
                                 findElementByText('span, div', headingText);
                 // Look for visible pagination footer text containing item counts from the bottom-up
                 const footer = (captureType === 'dns' || captureType === 'firewall' || captureType === 'security-rules')
                     ? (findLastElementByText('div, span, button, p, td', 'records added') || 
                        findLastElementByText('div, span, button, p, td', 'of'))
-                    : ((captureType === 'traffic' || captureType === 'argo' || captureType === 'speed')
+                    : ((captureType === 'traffic' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile')
                         ? null
                         : (findLastElementByText('div, span, button, p, td', '1 - 5 of 5') || 
                            findLastElementByText('div, span, button, p, td', 'items') ||
@@ -169,7 +169,7 @@ export async function GET(request) {
                     if (siteFooter) {
                         absoluteBottom = siteFooter.getBoundingClientRect().top + scrollY - 10;
                     }
-                } else if (captureType === 'argo' || captureType === 'speed') {
+                } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                     // Yend -10% of window.innerHeight from siteFooter top
                     if (siteFooter) {
                         absoluteBottom = siteFooter.getBoundingClientRect().top + scrollY - 10 - Math.round(window.innerHeight * 0.10);
@@ -179,7 +179,7 @@ export async function GET(request) {
                 }
 
                 let yOffset = -20;
-                if (captureType === 'dns' || captureType === 'argo' || captureType === 'speed') {
+                if (captureType === 'dns' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                     // Ystart -2%
                     yOffset = -20 - Math.round(window.innerHeight * 0.02);
                 } else if (captureType === 'traffic') {
@@ -197,7 +197,7 @@ export async function GET(request) {
                     startX = Math.round(window.innerWidth * 0.22);
                 } else if (captureType === 'firewall' || captureType === 'security-rules') {
                     startX = Math.round(window.innerWidth * 0.15);
-                } else if (captureType === 'argo' || captureType === 'speed') {
+                } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                     // Xstart +10% (from 15% to 25%)
                     startX = Math.round(window.innerWidth * 0.25);
                 }
@@ -214,7 +214,7 @@ export async function GET(request) {
                 } else if (captureType === 'security-rules') {
                     // endX shifted to the right by 10% total (from 90% to 100%)
                     endX = Math.round(window.innerWidth * 1.00);
-                } else if (captureType === 'argo' || captureType === 'speed') {
+                } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                     // Xend -15% (from 100% to 85%)
                     endX = Math.round(window.innerWidth * 0.85);
                 }
@@ -230,7 +230,7 @@ export async function GET(request) {
                     targetHeight = 900;
                 } else if (captureType === 'firewall') {
                     targetHeight = 700;
-                } else if (captureType === 'security-rules' || captureType === 'argo' || captureType === 'speed') {
+                } else if (captureType === 'security-rules' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                     targetHeight = Math.max(150, (absoluteBottom - startY));
                 }
 
@@ -534,7 +534,7 @@ export async function GET(request) {
             }
         }
 
-        const fileName = type === 'dns' ? 'captured-dns.png' : (type === 'traffic' ? 'captured-traffic.png' : (type === 'firewall' ? 'captured-firewall.png' : (type === 'security-rules' ? 'captured-security-rules.png' : (type === 'argo' ? 'captured-argo.png' : (type === 'speed' ? 'captured-speed.png' : 'captured-domains.png')))));
+        const fileName = type === 'dns' ? 'captured-dns.png' : (type === 'traffic' ? 'captured-traffic.png' : (type === 'firewall' ? 'captured-firewall.png' : (type === 'security-rules' ? 'captured-security-rules.png' : (type === 'argo' ? 'captured-argo.png' : (type === 'speed' ? 'captured-speed.png' : (type === 'speed-mobile' ? 'captured-speed-mobile.png' : 'captured-domains.png'))))));
         const filePath = path.join(publicDir, fileName);
         fs.writeFileSync(filePath, finalBuffer);
         console.log(`Screenshot saved to ${filePath}`);
