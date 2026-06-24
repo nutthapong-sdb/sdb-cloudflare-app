@@ -1221,50 +1221,20 @@ export default function ControlPage() {
                     </button>
                 </div>
             </div>
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-                {/* Monitor 1: Proxy */}
+            <div className="grid grid-cols-1 gap-3">
+                {/* Live Browser Monitor */}
                 <div className="rounded-xl overflow-hidden bg-black aspect-video relative border border-gray-800 shadow-inner">
-                    <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (/vnc/)</div>
+                    <div className="absolute top-0 left-0 bg-rose-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Live Browser Monitor</div>
                     {mounted && vncUrl ? (
                         <iframe 
                             ref={vncIframeRef}
                             src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`}
                             allowFullScreen
                             className="w-full h-full border-none min-h-[250px]"
-                            title="Live Browser Monitor 1"
+                            title="Live Browser Monitor"
                         />
                     ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs font-mono">Initializing M1...</div>
-                    )}
-                </div>
-
-                {/* Monitor 2: Hostname 5800 */}
-                <div className="rounded-xl overflow-hidden bg-black aspect-video relative border border-gray-800 shadow-inner">
-                    <div className="absolute top-0 left-0 bg-blue-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 2: Hostname:5800</div>
-                    {mounted ? (
-                        <iframe 
-                            src={`http://${window.location.hostname}:5800/?autoconnect=1&resize=scale`}
-                            allowFullScreen
-                            className="w-full h-full border-none min-h-[250px]"
-                            title="Live Browser Monitor 2"
-                        />
-                    ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs font-mono">Initializing M2...</div>
-                    )}
-                </div>
-
-                {/* Monitor 3: Direct IP 5800 */}
-                <div className="rounded-xl overflow-hidden bg-black aspect-video relative border border-gray-800 shadow-inner">
-                    <div className="absolute top-0 left-0 bg-green-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 3: Direct IP:5800</div>
-                    {mounted ? (
-                        <iframe 
-                            src={`http://172.19.0.2:5800/?autoconnect=1&resize=scale`}
-                            allowFullScreen
-                            className="w-full h-full border-none min-h-[250px]"
-                            title="Live Browser Monitor 3"
-                        />
-                    ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs font-mono">Initializing M3...</div>
+                        <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs font-mono">Initializing Browser...</div>
                     )}
                 </div>
             </div>
