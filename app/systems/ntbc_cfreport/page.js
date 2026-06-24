@@ -843,9 +843,9 @@ const VncModal = ({ isOpen, onClose, theme }) => {
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 h-full">
                         {/* Monitor 1: Proxy */}
                         <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
-                            <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (/vnc/)</div>
+                            <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (index.html)</div>
                             {vncUrl ? (
-                                <iframe src={vncUrl} className="w-full flex-1 border-none" title="Live Browser Monitor 1" />
+                                <iframe src={`${window.location.origin}/vnc/index.html?autoconnect=1&resize=scale&path=vnc/websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor 1" />
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Loading M1...</div>
                             )}
@@ -4075,8 +4075,8 @@ export default function NTBCCFReportPage() {
                     </style>
                     <div style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
                         <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
-                            <div style="position: absolute; top: 0; left: 0; background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 1: Proxy (/vnc/)</div>
-                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none;" title="M1"></iframe>
+                            <div style="position: absolute; top: 0; left: 0; background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 1: Proxy (index.html)</div>
+                            <iframe src="${window.location.origin}/vnc/index.html?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none;" title="M1"></iframe>
                         </div>
                         <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
                             <div style="position: absolute; top: 0; left: 0; background: #2563eb; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 2: Hostname 5800</div>

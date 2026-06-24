@@ -1218,11 +1218,11 @@ export default function ControlPage() {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 {/* Monitor 1: Proxy */}
                 <div className="rounded-xl overflow-hidden bg-black aspect-video relative border border-gray-800 shadow-inner">
-                    <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (/vnc/)</div>
+                    <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (index.html)</div>
                     {mounted && vncUrl ? (
                         <iframe 
                             ref={vncIframeRef}
-                            src={vncUrl}
+                            src={`${window.location.origin}/vnc/index.html?autoconnect=1&resize=scale&path=vnc/websockify`}
                             allowFullScreen
                             className="w-full h-full border-none min-h-[250px]"
                             title="Live Browser Monitor 1"
