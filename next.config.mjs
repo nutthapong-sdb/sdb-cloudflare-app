@@ -10,15 +10,6 @@ const nextConfig = {
         source: '/systems/tinymce/:path*',
         destination: '/tinymce/:path*',
       },
-      // Proxy VNC traffic internally so it works through Cloudflare Tunnel without exposing external ports
-      {
-        source: '/vnc',
-        destination: `http://chrome-browser:5800/`,
-      },
-      {
-        source: '/vnc/:path*',
-        destination: `http://chrome-browser:5800/:path*`,
-      },
     ];
   },
 };
