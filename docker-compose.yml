@@ -12,9 +12,9 @@ services:
       - NODE_ENV=production
       - CHROME_HOST=chrome-browser
     volumes:
-      - ./db:/app/db
-      - ./app/data:/app/app/data
-    restart: always
+      - sdb-cloudflare-db:/app/db
+      - sdb-cloudflare-data:/app/app/data
+    restart: unless-stopped
     depends_on:
       - chrome-browser
 
@@ -29,8 +29,11 @@ services:
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
     volumes:
-      - ./chrome-config:/config
+      - sdb-chrome-config:/config
     shm_size: 2gb
-    restart: always
+    restart: unless-stopped
 
-
+volumes:
+  sdb-cloudflare-db:
+  sdb-cloudflare-data:
+  sdb-chrome-config:
