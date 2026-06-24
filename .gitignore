@@ -62,5 +62,4 @@ next-env.d.ts
 # Chrome Debug Profile
 .chrome-debug-profile/
 /chrome-config
-/public
-/public
+/public/captured-*.png
