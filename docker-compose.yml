@@ -6,8 +6,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8002:8002"
-    env_file:
-      - .env.local
+
     environment:
       - NODE_ENV=production
       - CHROME_HOST=chrome-browser
