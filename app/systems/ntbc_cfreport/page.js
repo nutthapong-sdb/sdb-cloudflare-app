@@ -843,9 +843,9 @@ const VncModal = ({ isOpen, onClose, theme }) => {
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 h-full">
                         {/* Monitor 1: Proxy */}
                         <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
-                            <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (index.html)</div>
+                            <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (/vnc/)</div>
                             {vncUrl ? (
-                                <iframe src={`${window.location.origin}/vnc/index.html?autoconnect=1&resize=scale&path=vnc/websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor 1" />
+                                <iframe src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor 1" />
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Loading M1...</div>
                             )}
