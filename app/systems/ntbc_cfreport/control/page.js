@@ -978,6 +978,12 @@ export default function ControlPage() {
                                 });
                                 const mobileClickData = await mobileClickRes.json();
                                 if (mobileClickData.success) {
+                                    addLog(`Waiting ${DELAY_CONFIG.DELAY_BEFORE_SPEED_TEST_MOBILE_MS}ms before Mobile Speed Test begins...`, 'info');
+                                    await new Promise(r => setTimeout(r, DELAY_CONFIG.DELAY_BEFORE_SPEED_TEST_MOBILE_MS));
+
+                                    addLog(`Waiting ${DELAY_CONFIG.SPEED_TEST_MOBILE_WAIT_MS}ms for Mobile Speed Test to finish...`, 'info');
+                                    await new Promise(r => setTimeout(r, DELAY_CONFIG.SPEED_TEST_MOBILE_WAIT_MS));
+
                                     addLog('Triggering mobile speed screenshot capture...', 'info');
                                     const captureMobileRes = await fetch(getCaptureUrl('speed', 'speed-mobile'));
                                     const captureMobileData = await captureMobileRes.json();
