@@ -839,18 +839,30 @@ const VncModal = ({ isOpen, onClose, theme }) => {
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="flex-1 overflow-hidden rounded border border-gray-700/60 bg-black relative">
-                    {vncUrl ? (
-                        <iframe 
-                            src={vncUrl} 
-                            className="w-full h-full border-none"
-                            title="Live Browser Monitor (VNC)"
-                        />
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-gray-500 italic text-sm">
-                            Loading stream...
+                <div className="flex-1 overflow-hidden relative">
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 h-full">
+                        {/* Monitor 1: Proxy */}
+                        <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
+                            <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (/vnc/)</div>
+                            {vncUrl ? (
+                                <iframe src={vncUrl} className="w-full flex-1 border-none" title="Live Browser Monitor 1" />
+                            ) : (
+                                <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Loading M1...</div>
+                            )}
                         </div>
-                    )}
+
+                        {/* Monitor 2: Hostname */}
+                        <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
+                            <div className="absolute top-0 left-0 bg-blue-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 2: Hostname:5800</div>
+                            <iframe src={`http://${window.location.hostname}:5800/?autoconnect=1&resize=scale`} className="w-full flex-1 border-none" title="Live Browser Monitor 2" />
+                        </div>
+
+                        {/* Monitor 3: Direct IP */}
+                        <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
+                            <div className="absolute top-0 left-0 bg-green-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 3: Direct IP:5800</div>
+                            <iframe src={`http://172.19.0.2:5800/?autoconnect=1&resize=scale`} className="w-full flex-1 border-none" title="Live Browser Monitor 3" />
+                        </div>
+                    </div>
                 </div>
                 <div className="flex justify-between items-center mt-4">
                     <span className="text-xs text-gray-400">
@@ -4061,8 +4073,19 @@ export default function NTBCCFReportPage() {
                     <style>
                         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
-                    <div style="flex: 3; border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 650px; background: #000;">
-                        <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none; transform: scale(1.0); transform-origin: top left;" title="Live Monitor"></iframe>
+                    <div style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
+                            <div style="position: absolute; top: 0; left: 0; background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 1: Proxy (/vnc/)</div>
+                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none;" title="M1"></iframe>
+                        </div>
+                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
+                            <div style="position: absolute; top: 0; left: 0; background: #2563eb; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 2: Hostname 5800</div>
+                            <iframe src="http://${window.location.hostname}:5800/?autoconnect=1&resize=scale" style="width: 100%; height: 100%; border: none;" title="M2"></iframe>
+                        </div>
+                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
+                            <div style="position: absolute; top: 0; left: 0; background: #16a34a; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 3: Direct IP 5800</div>
+                            <iframe src="http://172.19.0.2:5800/?autoconnect=1&resize=scale" style="width: 100%; height: 100%; border: none;" title="M3"></iframe>
+                        </div>
                     </div>
                     <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #374151; padding-left: 20px;">
                         <p style="margin: 0 0 10px 0;">${getIcon(statusMap.launch)} Start debug browser</p>
