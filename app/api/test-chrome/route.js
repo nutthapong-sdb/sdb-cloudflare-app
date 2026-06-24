@@ -20,15 +20,33 @@ export async function GET() {
         host_configured: process.env.CHROME_HOST || '127.0.0.1',
         host_resolved: host,
         vnc_port_5800: null,
+        vnc_file_vnchtml: null,
+        vnc_file_indexhtml: null,
         debug_port_9222: null
     };
 
-    // Test VNC Port
+    // Test VNC Port Base
     try {
         const res5800 = await axios.get(`http://${host}:5800/`, { timeout: 5000 });
         results.vnc_port_5800 = { success: true, status: res5800.status };
     } catch (e) {
-        results.vnc_port_5800 = { success: false, error: e.message };
+        results.vnc_port_5800 = { success: false, error: e.message, status: e.response?.status };
+    }
+
+    // Test VNC vnc.html
+    try {
+        const resVncHtml = await axios.get(`http://${host}:5800/vnc.html`, { timeout: 5000 });
+        results.vnc_file_vnchtml = { success: true, status: resVncHtml.status };
+    } catch (e) {
+        results.vnc_file_vnchtml = { success: false, error: e.message, status: e.response?.status };
+    }
+
+    // Test VNC index.html
+    try {
+        const resIndexHtml = await axios.get(`http://${host}:5800/index.html`, { timeout: 5000 });
+        results.vnc_file_indexhtml = { success: true, status: resIndexHtml.status };
+    } catch (e) {
+        results.vnc_file_indexhtml = { success: false, error: e.message, status: e.response?.status };
     }
 
     // Test Debugging Port

@@ -13,11 +13,11 @@ const nextConfig = {
       // Proxy VNC traffic internally so it works through Cloudflare Tunnel without exposing external ports
       {
         source: '/vnc',
-        destination: `http://${process.env.CHROME_HOST || '127.0.0.1'}:5800/`,
+        destination: `http://chrome-browser:5800/`,
       },
       {
         source: '/vnc/:path*',
-        destination: `http://${process.env.CHROME_HOST || '127.0.0.1'}:5800/:path*`,
+        destination: `http://chrome-browser:5800/:path*`,
       },
     ];
   },
