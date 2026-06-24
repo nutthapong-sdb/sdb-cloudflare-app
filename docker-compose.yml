@@ -30,6 +30,10 @@ services:
     volumes:
       - sdb-chrome-config:/config
     shm_size: 2gb
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
     restart: unless-stopped
 
 volumes:
