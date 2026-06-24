@@ -2,10 +2,23 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 
 export async function GET() {
-    const host = process.env.CHROME_HOST || '127.0.0.1';
+    let host = process.env.CHROME_HOST || '127.0.0.1';
     
+    // Resolve hostname to IP to bypass Chromium's DNS Rebinding protection
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+        try {
+            const dns = await import('dns');
+            host = await new Promise((resolve, reject) => {
+                dns.lookup(host, (err, address) => err ? reject(err) : resolve(address));
+            });
+        } catch (e) {
+            console.warn(`Could not resolve CHROME_HOST ${host}`);
+        }
+    }
+
     const results = {
-        host_configured: host,
+        host_configured: process.env.CHROME_HOST || '127.0.0.1',
+        host_resolved: host,
         vnc_port_5800: null,
         debug_port_9222: null
     };
@@ -20,7 +33,10 @@ export async function GET() {
 
     // Test Debugging Port
     try {
-        const res9222 = await axios.get(`http://${host}:9222/json/version`, { timeout: 5000 });
+        const res9222 = await axios.get(`http://${host}:9222/json/version`, { 
+            headers: { 'Host': 'localhost' }, 
+            timeout: 5000 
+        });
         results.debug_port_9222 = { success: true, status: res9222.status, browser: res9222.data.Browser };
     } catch (e) {
         results.debug_port_9222 = { success: false, error: e.message };

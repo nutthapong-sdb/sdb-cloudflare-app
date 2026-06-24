@@ -9,9 +9,21 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url || '');
         const checkOnly = searchParams.get('check') === 'true';
 
+        let host = process.env.CHROME_HOST || 'localhost';
+        if (host !== 'localhost' && host !== '127.0.0.1') {
+            try {
+                const dns = await import('dns');
+                host = await new Promise((resolve, reject) => {
+                    dns.lookup(host, (err, address) => err ? reject(err) : resolve(address));
+                });
+            } catch (e) {
+                console.warn(`Could not resolve CHROME_HOST ${host}`);
+            }
+        }
+
         // Check if Chrome debugging is already active and running
         try {
-            const checkRes = await axios.get(`http://${process.env.CHROME_HOST || 'localhost'}:9222/json`, {
+            const checkRes = await axios.get(`http://${host}:9222/json`, {
                 headers: {
                     'Host': 'localhost'
                 }
@@ -50,14 +62,8 @@ export async function GET(request) {
             return Response.json({ success: false, error: `Chrome container at ${process.env.CHROME_HOST} is not running. Please verify that the sdb-chrome-browser container is active.` }, { status: 500 });
         }
 
-        console.log('Launching Chrome on port 9222 with custom profile in full screen...');
-        // Open Google Chrome on macOS with port 9222 debugging, clean temporary profile, and full screen
-        const cmd = `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="/Users/litarcopperkaikem/Documents/Repositiry/sdb-cf-get-data/.chrome-debug-profile" --start-fullscreen "https://dash.cloudflare.com/" > /dev/null 2>&1 &`;
-        exec(cmd, (error) => {
-            if (error) {
-                console.error('Failed to launch Chrome:', error);
-            }
-        });
+        console.log('Spawning standalone Chrome is disabled in container mode. Please ensure docker-compose provides the chrome-browser container.');
+        return Response.json({ success: false, error: 'Chrome is not running in the container. Please restart the Chrome container.' }, { status: 500 });
         return Response.json({ success: true, reused: false });
     } catch (e) {
         console.error('Launch Chrome API error:', e);
