@@ -4075,8 +4075,8 @@ export default function NTBCCFReportPage() {
                     </style>
                     <div style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
                         <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
-                            <div style="position: absolute; top: 0; left: 0; background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 1: Proxy (index.html)</div>
-                            <iframe src="${window.location.origin}/vnc/index.html?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none;" title="M1"></iframe>
+                            <div style="position: absolute; top: 0; left: 0; background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 1: Proxy (/vnc/)</div>
+                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none;" title="M1"></iframe>
                         </div>
                         <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
                             <div style="position: absolute; top: 0; left: 0; background: #2563eb; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 2: Hostname 5800</div>
