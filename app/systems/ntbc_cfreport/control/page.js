@@ -506,7 +506,7 @@ export default function ControlPage() {
         // Initialize logs with first entry containing client-side timestamp
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'System initialized and ready.', type: 'info' }]);
         if (typeof window !== 'undefined') {
-            setVncUrl(`http://${window.location.hostname}:5800/?autoconnect=1&resize=scale`);
+            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`);
         }
         setMounted(true);
         init();

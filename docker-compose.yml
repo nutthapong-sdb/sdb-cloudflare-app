@@ -20,10 +20,6 @@ services:
   chrome-browser:
     image: maelp/docker-vnc-chromium:latest
     container_name: sdb-chrome-browser
-    ports:
-      - "5800:5800"
-      - "5900:5900"
-      - "9222:9222"
     environment:
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
