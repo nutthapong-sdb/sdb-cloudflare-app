@@ -820,7 +820,7 @@ const VncModal = ({ isOpen, onClose, theme }) => {
     
     useEffect(() => {
         if (isOpen && typeof window !== 'undefined') {
-            setVncUrl(`${window.location.origin}/vnc/vnc.html?autoconnect=1&resize=scale&path=vnc/websockify`);
+            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`);
         }
     }, [isOpen]);
 
@@ -4062,7 +4062,7 @@ export default function NTBCCFReportPage() {
                         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
                     <div style="flex: 3; border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 650px; background: #000;">
-                        <iframe src="${window.location.origin}/vnc/vnc.html?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none; transform: scale(1.0); transform-origin: top left;" title="Live Monitor"></iframe>
+                        <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none; transform: scale(1.0); transform-origin: top left;" title="Live Monitor"></iframe>
                     </div>
                     <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #374151; padding-left: 20px;">
                         <p style="margin: 0 0 10px 0;">${getIcon(statusMap.launch)} Start debug browser</p>
