@@ -919,8 +919,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     };
 
     const getProcessedHtml = (isForExport = false) => {
+        const baseTmpl = isEditing ? localTemplate : (template ?? DEFAULT_TEMPLATE);
         // Even for static template, we want to process date variables
-        let html = processTemplate(localTemplate, safeData, new Date(), dashboardImage);
+        let html = processTemplate(baseTmpl, safeData, new Date(), dashboardImage);
         const hasTOCPlaceholder = html.includes('@TOC@');
         if (useAutoTOC || hasTOCPlaceholder) {
             html = addAutomaticTOC(html, isForExport);

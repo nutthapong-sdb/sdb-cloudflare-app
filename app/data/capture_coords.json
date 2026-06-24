@@ -1,0 +1,50 @@
+{
+  "domains": {
+    "xStart": "395",
+    "xEnd": "1785",
+    "yStart": "85",
+    "yEnd": ""
+  },
+  "dns": {
+    "xStart": "365",
+    "xEnd": "1843",
+    "yStart": "95",
+    "yEnd": ""
+  },
+  "traffic": {
+    "xStart": "422",
+    "xEnd": "1766",
+    "yStart": "105",
+    "yEnd": "1005"
+  },
+  "firewall": {
+    "xStart": "288",
+    "xEnd": "1728",
+    "yStart": "115",
+    "yEnd": "980"
+  },
+  "securityRules": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "85",
+    "yEnd": ""
+  },
+  "argo": {
+    "xStart": "520",
+    "xEnd": "1632",
+    "yStart": "90",
+    "yEnd": "600"
+  },
+  "speed": {
+    "xStart": "480",
+    "xEnd": "1632",
+    "yStart": "115",
+    "yEnd": "870"
+  },
+  "speedMobile": {
+    "xStart": "480",
+    "xEnd": "1632",
+    "yStart": "95",
+    "yEnd": "850"
+  }
+}

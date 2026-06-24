@@ -450,98 +450,145 @@ async function clickGenerateDashboard(page) {
  * @param {string} subdomain - config.subdomain (to decide whether to click No Subdomain or Select All)
  */
 async function generateBatchReport(page, reportDateStr, subdomain = 'ALL_SUBDOMAINS') {
-    // Open Create Report modal
-    await new Promise(r => setTimeout(r, 1000));
-    const btns = await page.$$('button');
-    let createBtn = null;
-    for (const btn of btns) {
-        const txt = await btn.evaluate(el => el.textContent?.trim() || '');
-        const disabled = await btn.evaluate(el => el.disabled);
-        if (txt === 'Create Report' && !disabled) { createBtn = btn; break; }
+    // Open Create Report modal with retry for context reloads
+    let opened = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            await new Promise(r => setTimeout(r, 1000));
+            const btns = await page.$$('button');
+            let createBtn = null;
+            for (const btn of btns) {
+                const txt = await btn.evaluate(el => el.textContent?.trim() || '');
+                const disabled = await btn.evaluate(el => el.disabled);
+                if (txt === 'Create Report' && !disabled) { createBtn = btn; break; }
+            }
+            if (!createBtn) {
+                throw new Error('"Create Report" button not found or disabled');
+            }
+            await createBtn.click();
+            opened = true;
+            break;
+        } catch (e) {
+            log(`⚠️ Attempt ${attempt} to click "Create Report" failed: ${e.message}. Retrying...`, colors.yellow);
+            await new Promise(r => setTimeout(r, 2000));
+        }
     }
-    if (!createBtn) throw new Error('"Create Report" button not found or disabled');
-    await createBtn.click();
+    if (!opened) throw new Error('Failed to open "Create Report" modal after retries');
+
     log('📋 Batch Report modal opened.', colors.blue);
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 2000));
 
     // Set date range
-    const batchDateInputs = await page.$$('input[type="date"]');
-    if (batchDateInputs.length >= 2) {
-        for (const di of [batchDateInputs[0], batchDateInputs[1]]) {
-            await page.evaluate((el, val) => {
-                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                setter.call(el, val);
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            }, di, reportDateStr);
+    let dateSet = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const batchDateInputs = await page.$$('input[type="date"]');
+            if (batchDateInputs.length >= 2) {
+                for (const di of [batchDateInputs[0], batchDateInputs[1]]) {
+                    await page.evaluate((el, val) => {
+                        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                        setter.call(el, val);
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }, di, reportDateStr);
+                }
+                log(`📅 Date range set to ${reportDateStr}`, colors.gray);
+                dateSet = true;
+                break;
+            } else {
+                throw new Error('Could not find both start and end date inputs');
+            }
+        } catch (e) {
+            log(`⚠️ Attempt ${attempt} to set date range failed: ${e.message}. Retrying...`, colors.yellow);
+            await new Promise(r => setTimeout(r, 1500));
         }
-        log(`📅 Date range set to ${reportDateStr}`, colors.gray);
     }
+    if (!dateSet) throw new Error('Failed to set date range in modal');
 
     // Select host(s)
     await new Promise(r => setTimeout(r, 500));
-    if (subdomain === 'ALL_SUBDOMAINS') {
-        // Zone has no real subdomains → click "No Subdomain (Full Domain Report)" to generate Domain Report
-        const labels = await page.$$('label');
-        let noSubLabel = null;
-        for (const lbl of labels) {
-            const txt = await lbl.evaluate(el => el.textContent?.trim() || '');
-            if (txt.includes('No Subdomain')) { noSubLabel = lbl; break; }
+    let hostsSelected = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            if (subdomain === 'ALL_SUBDOMAINS') {
+                // Zone has no real subdomains → click "No Subdomain (Full Domain Report)" to generate Domain Report
+                const labels = await page.$$('label');
+                let noSubLabel = null;
+                for (const lbl of labels) {
+                    const txt = await lbl.evaluate(el => el.textContent?.trim() || '');
+                    if (txt.includes('No Subdomain')) { noSubLabel = lbl; break; }
+                }
+                if (noSubLabel) {
+                    // Click via evaluate to avoid overlay/visibility issues in headless.
+                    await page.evaluate((el) => {
+                        el.scrollIntoView({ block: 'center', inline: 'center' });
+                        el.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+                        el.click();
+                    }, noSubLabel);
+                    log('☑️ Selected "No Subdomain" (Domain Report mode).', colors.gray);
+                } else {
+                    log('⚠️ "No Subdomain" label not found. Trying Select All fallback.', colors.yellow);
+                    const clickedSelectAll = await page.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button'));
+                        const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
+                        if (!btn) return false;
+                        btn.scrollIntoView({ block: 'center', inline: 'center' });
+                        btn.click();
+                        return true;
+                    });
+                    if (!clickedSelectAll) log('⚠️ Select All button not found in modal.', colors.yellow);
+                }
+            } else {
+                const clickedSelectAll = await page.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button'));
+                    const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
+                    if (!btn) return false;
+                    btn.scrollIntoView({ block: 'center', inline: 'center' });
+                    btn.click();
+                    return true;
+                });
+                if (!clickedSelectAll) throw new Error('Select All button not found in modal');
+                log('☑️ Selected all hosts.', colors.gray);
+            }
+            hostsSelected = true;
+            break;
+        } catch (e) {
+            log(`⚠️ Attempt ${attempt} to select hosts failed: ${e.message}. Retrying...`, colors.yellow);
+            await new Promise(r => setTimeout(r, 1500));
         }
-        if (noSubLabel) {
-            // Click via evaluate to avoid overlay/visibility issues in headless.
-            await page.evaluate((el) => {
-                el.scrollIntoView({ block: 'center', inline: 'center' });
-                el.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
-                el.click();
-            }, noSubLabel);
-            log('☑️ Selected "No Subdomain" (Domain Report mode).', colors.gray);
-        } else {
-            log('⚠️ "No Subdomain" label not found. Trying Select All fallback.', colors.yellow);
-            const clickedSelectAll = await page.evaluate(() => {
+    }
+    if (!hostsSelected) throw new Error('Failed to select hosts in modal');
+
+    // Click Generate (avoid accidentally clicking "Generate Dashboard")
+    await new Promise(r => setTimeout(r, 1000));
+    let clickedGenerate = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            clickedGenerate = await page.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button'));
-                const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
+                const candidates = btns.filter(b => {
+                    const txt = (b.textContent || '').trim();
+                    if (!txt) return false;
+                    if (txt === 'Generate Dashboard') return false;
+                    if (!txt.startsWith('Generate')) return false;
+                    if (b.disabled) return false;
+                    return true;
+                });
+
+                // Prefer the last matching button (modal footer tends to be later in DOM)
+                const btn = candidates[candidates.length - 1];
                 if (!btn) return false;
                 btn.scrollIntoView({ block: 'center', inline: 'center' });
+                btn.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
                 btn.click();
                 return true;
             });
-            if (!clickedSelectAll) log('⚠️ Select All button not found in modal.', colors.yellow);
+            if (clickedGenerate) break;
+        } catch (e) {
+            log(`⚠️ Attempt ${attempt} to click Generate failed: ${e.message}. Retrying...`, colors.yellow);
+            await new Promise(r => setTimeout(r, 1500));
         }
-    } else {
-        const clickedSelectAll = await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('button'));
-            const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
-            if (!btn) return false;
-            btn.scrollIntoView({ block: 'center', inline: 'center' });
-            btn.click();
-            return true;
-        });
-        if (!clickedSelectAll) throw new Error('Select All button not found in modal');
-        log('☑️ Selected all hosts.', colors.gray);
     }
-
-    // Click Generate (avoid accidentally clicking "Generate Dashboard")
-    await new Promise(r => setTimeout(r, 500));
-    const clickedGenerate = await page.evaluate(() => {
-        const btns = Array.from(document.querySelectorAll('button'));
-        const candidates = btns.filter(b => {
-            const txt = (b.textContent || '').trim();
-            if (!txt) return false;
-            if (txt === 'Generate Dashboard') return false;
-            if (!txt.startsWith('Generate')) return false;
-            if (b.disabled) return false;
-            return true;
-        });
-
-        // Prefer the last matching button (modal footer tends to be later in DOM)
-        const btn = candidates[candidates.length - 1];
-        if (!btn) return false;
-        btn.scrollIntoView({ block: 'center', inline: 'center' });
-        btn.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
-        btn.click();
-        return true;
-    });
     if (!clickedGenerate) throw new Error('Generate button not found/clickable (modal)');
     log('⏳ Report generation started...', colors.blue);
 }

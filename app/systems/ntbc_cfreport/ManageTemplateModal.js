@@ -317,7 +317,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                 title: 'Import Template Bundle',
                 html: `
                     <div style="text-align:left">
-                      <div style="font-size:12px; opacity:0.85">This will create a new template and import Sub + Middle + Domain reports.</div>
+                      <div style="font-size:12px; opacity:0.85">This will create a new template and import the report structure.</div>
                       <div style="margin-top:10px">
                         <div style="font-size:12px; margin-bottom:6px">Template name</div>
                         <input id="swal-import-name" class="swal2-input" value="${suggestedName.replace(/"/g, '&quot;')}" />
@@ -524,41 +524,21 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                             Set as default
                                         </button>
 
-                                         {/* Edit Content Buttons */}
-                                         <div className={`flex ${t.sectionHeader || 'bg-gray-900 border-gray-700'} rounded-lg p-1 border`}>
-                                            <button
-                                                onClick={() => onEditDomain(tmp.id, tmp.name)}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
-                                                title="Edit Domain Summary Report Structure"
-                                            >
-                                                <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
-                                                Domain Report
-                                            </button>
-                                            <div className={`w-px ${t.modalBorder} my-1`}></div>
-                                            <button
-                                                onClick={() => onEditMiddle(tmp.id, tmp.name)}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
-                                                title="Edit Middle Report Header Structure"
-                                            >
-                                                <FileText className="w-3.5 h-3.5 text-blue-400" />
-                                                Middle Report
-                                            </button>
-                                            <div className={`w-px ${t.modalBorder} my-1`}></div>
-                                            <button
-                                                onClick={() => onEditSub(tmp.id, tmp.name)}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} transition-colors`}
-                                                title="Edit Sub-domain Report Structure"
-                                            >
-                                                <FileText className="w-3.5 h-3.5 text-orange-400" />
-                                                Sub Report
-                                            </button>
-                                         </div>
-
-                                         {/* Export bundle (sub + middle + domain) */}
+                                         {/* Edit Content Button */}
+                                         <button
+                                             onClick={() => onEditDomain(tmp.id, tmp.name)}
+                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} border ${t.modalBorder} ${t.sectionHeader || 'bg-gray-900 border-gray-700'} transition-colors`}
+                                             title="Edit Domain Summary Report Structure"
+                                         >
+                                             <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
+                                             Edit Template
+                                         </button>
+ 
+                                         {/* Export bundle */}
                                          <button
                                              onClick={() => handleExportBundle(tmp.id, tmp.name)}
                                              className={`p-2 ${t.subText} hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors`}
-                                             title="Export template bundle (Sub + Middle + Domain)"
+                                             title="Export template bundle"
                                              aria-label="Export template bundle"
                                          >
                                              <Download className="w-4 h-4" />

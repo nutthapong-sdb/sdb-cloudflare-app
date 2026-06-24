@@ -42,7 +42,7 @@ COPY --from=builder /app/public ./public
 
 # Set the correct permission for prerender cache and data
 RUN mkdir -p .next app/data db
-RUN chown -R nextjs:nodejs .next app/data db
+RUN chown -R nextjs:nodejs .next app/data db public
 
 # Ensure the app directory itself is owned by nextjs so it can create the DB if it doesn't exist
 RUN chown nextjs:nodejs /app

@@ -1,7 +1,7 @@
 /**
- * Test: NTBC CFReport - Capture Screenshot Sequential Workflow & Generation
+ * Test: NTBC CFReport - Generate Report Sequential Workflow & Generation
  * 1. Navigate to NTBC CFReport
- * 2. Click "Capture Screenshot" Workspace Card
+ * 2. Click "Generate Report" Workspace Card
  * 3. Select Account "Softdebut POC"
  * 4. Select Zone "log.softdebut.online"
  * 5. Set Date Range: 2026-07-10 to 2026-07-12 (Gregorian equivalent of Buddhist Era 10 ก.ค. 69 - 12 ก.ค. 69)
@@ -12,11 +12,12 @@
 
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
 const { setupBrowser, setupPage, login, log, colors, TMP_DOWNLOAD_DIR, BASE_URL } = require('../libs/ui-helper');
 const { selectDropdown } = require('../libs/gdcc-helper');
 
 (async () => {
-    log('🚀 Starting Test: NTBC CFReport Capture Screenshot Sequential Workflow & Generation...', colors.cyan);
+    log('🚀 Starting Test: NTBC CFReport Generate Report Sequential Workflow & Generation...', colors.cyan);
     const browser = await setupBrowser();
     let page;
     try {
@@ -38,10 +39,10 @@ const { selectDropdown } = require('../libs/gdcc-helper');
         log('   ✅ NTBC CFReport page loaded.', colors.green);
         await new Promise(r => setTimeout(r, 6000));
 
-        log('\n🔹 Step 2: Opening Capture Screenshot batch modal...', colors.blue);
+        log('\n🔹 Step 2: Opening Generate Report batch modal...', colors.blue);
         await page.evaluate(() => {
             const cards = Array.from(document.querySelectorAll('h3'));
-            const captureCard = cards.find(c => c.textContent.trim() === 'Capture Screenshot');
+            const captureCard = cards.find(c => c.textContent.trim() === 'Generate Report');
             if (captureCard) {
                 const parent = captureCard.closest('div');
                 if (parent) parent.click();
@@ -93,22 +94,8 @@ const { selectDropdown } = require('../libs/gdcc-helper');
             throw new Error('Could not find date input fields in modal');
         }
 
-        log('\n🔹 Step 5: Selecting "No Subdomain (Full Domain Report)"...', colors.blue);
-        await page.evaluate(() => {
-            const labels = Array.from(document.querySelectorAll('label'));
-            const noSubLabel = labels.find(lbl => lbl.textContent.includes('No Subdomain'));
-            if (noSubLabel) {
-                const input = noSubLabel.querySelector('input[type="checkbox"]');
-                if (input) {
-                    input.click();
-                } else {
-                    noSubLabel.click();
-                }
-            } else {
-                throw new Error('"No Subdomain" label not found');
-            }
-        });
-        await new Promise(r => setTimeout(r, 1500));
+        log('\n🔹 Step 5: Skipping subdomain selection (selection UI was removed)...', colors.blue);
+        await new Promise(r => setTimeout(r, 500));
 
         log('\n🔹 Step 6: Clicking "Generate Domain Report" button...', colors.blue);
         const clickedGenerate = await page.evaluate(() => {
@@ -144,11 +131,21 @@ const { selectDropdown } = require('../libs/gdcc-helper');
 
         if (!downloadedFile) throw new Error('Timeout: No report file downloaded within 5 minutes');
 
-        const fileSize = fs.statSync(path.join(TMP_DOWNLOAD_DIR, downloadedFile)).size;
+        const filePath = path.join(TMP_DOWNLOAD_DIR, downloadedFile);
+        const fileSize = fs.statSync(filePath).size;
         log(`✅ Downloaded successfully: ${downloadedFile} (${fileSize.toLocaleString()} bytes)`, colors.green);
 
-        // Cleanup
-        try { fs.unlinkSync(path.join(TMP_DOWNLOAD_DIR, downloadedFile)); } catch (e) { }
+        log(`\n🔹 Step 8: Opening downloaded Word file...`, colors.blue);
+        exec(`open "${filePath}"`, (err) => {
+            if (err) {
+                log(`⚠️ Failed to open file: ${err.message}`, colors.red);
+            } else {
+                log(`✅ File opened successfully: ${filePath}`, colors.green);
+            }
+        });
+
+        // Skip automatic cleanup so the file remains open and available to the user
+        log(`📌 Note: Downloaded file kept at ${filePath}`, colors.gray);
 
         log('\n✅ NTBC CFReport Capture Test PASSED!', colors.green);
 

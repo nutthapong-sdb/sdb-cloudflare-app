@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { connectChrome } from '@/lib/chrome-helper';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -9,18 +9,47 @@ export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
         const type = searchParams.get('type') || 'domains';
+        const qXStart = searchParams.get('xStart');
+        const qXEnd = searchParams.get('xEnd');
+        const qYStart = searchParams.get('yStart');
+        const qYEnd = searchParams.get('yEnd');
 
         console.log(`Connecting to Chrome on port 9222 for ${type} screenshot capture...`);
-        const browser = await puppeteer.connect({
-            browserURL: 'http://localhost:9222',
-            defaultViewport: null
-        });
+        const browser = await connectChrome();
         const pages = await browser.pages();
         // Find page with cloudflare, otherwise use the first page
         const page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
 
         if (!page) {
             return Response.json({ success: false, error: 'No active browser page found' }, { status: 400 });
+        }
+
+        // Wait up to 3 seconds for either the login page to appear or the dashboard to load
+        try {
+            await page.waitForFunction(() => {
+                const url = window.location.href;
+                const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
+                const isLoginPage = url.includes('/login') || url.includes('/sign-in') || hasLoginElement;
+                const hasDashboardElement = !!(document.querySelector('#react-app') || document.querySelector('[data-testid="zone-card"]') || document.querySelector('main'));
+                return isLoginPage || hasDashboardElement;
+            }, { timeout: 3000 });
+        } catch (e) {
+            console.log('Timeout waiting for page load state, checking current state...');
+        }
+
+        const isUnauthenticated = await page.evaluate(() => {
+            const url = window.location.href;
+            const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
+            return url.includes('/login') || url.includes('/sign-in') || hasLoginElement;
+        });
+
+        if (isUnauthenticated) {
+            await browser.disconnect();
+            return Response.json({ 
+                success: false, 
+                error: 'Cloudflare session is not authenticated. Please open the "Live Browser Monitor" (noVNC) from the Actions menu and log in to Cloudflare first.',
+                errorType: 'unauthenticated'
+            }, { status: 401 });
         }
 
         // 1. First wait exactly 3 seconds to allow initial scripts/redirect to stabilize
@@ -65,11 +94,14 @@ export async function GET(request) {
                     const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : (captureType === 'firewall' ? 'security' : (captureType === 'security-rules' ? 'rules' : (captureType === 'argo' ? 'argo' : (captureType === 'speed' || captureType === 'speed-mobile' ? 'speed' : 'domains')))));
                     const heading = findElementByText('h1, h2, h3, h4', headingText);
                     // Ensure table body, pagination footer, or traffic chart is loaded
-                    const tableOrFooter = (captureType === 'traffic' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile')
-                        ? (findElementByText('div, span, button, p, td', 'requests') || findElementByText('div, span, h1, h2, h3, h4', 'traffic') || findElementByText('div, span, button, p, td', 'result') || document.querySelector('svg, canvas, button'))
-                        : (findElementByText('div, span, button, p, td', 'of') || 
-                           findElementByText('div, span, button, p, td', 'items') ||
-                           document.querySelector('table'));
+                    let tableOrFooter;
+                    if (captureType === 'traffic' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                        tableOrFooter = findElementByText('div, span, button, p, td', 'requests') || findElementByText('div, span, h1, h2, h3, h4', 'traffic') || findElementByText('div, span, button, p, td', 'result') || document.querySelector('svg, canvas, button');
+                    } else if (captureType === 'domains') {
+                        tableOrFooter = document.querySelector('[data-testid="zone-card"]') || findElementByText('div, span, h1, h2, h3, p', 'sites') || document.querySelector('table');
+                    } else {
+                        tableOrFooter = findElementByText('div, span, button, p, td', 'of') || findElementByText('div, span, button, p, td', 'items') || document.querySelector('table');
+                    }
                                           
                     // Complete if heading and footer/table exist AND no loading placeholders are active
                     return !!(heading && tableOrFooter && !isLoaderActive);
@@ -83,7 +115,25 @@ export async function GET(request) {
 
             // Evaluate coordinates for post-capture cropping (no viewport clipping)
             console.log('Calculating bounding box coordinates on active page...');
-            const cropCoords = await page.evaluate((captureType) => {
+            let cropCoords = null;
+            if (qXStart && qXEnd && qYStart && qYEnd && type !== 'domains' && type !== 'dns') {
+                const xs = parseInt(qXStart, 10);
+                const xe = parseInt(qXEnd, 10);
+                const ys = parseInt(qYStart, 10);
+                const ye = parseInt(qYEnd, 10);
+                if (!isNaN(xs) && !isNaN(xe) && !isNaN(ys) && !isNaN(ye)) {
+                    cropCoords = {
+                        x: xs,
+                        y: ys,
+                        width: Math.max(10, xe - xs),
+                        height: Math.max(10, ye - ys)
+                    };
+                    console.log('Using query custom crop coords:', cropCoords);
+                }
+            }
+
+            if (!cropCoords) {
+                cropCoords = await page.evaluate((captureType, qXS, qXE, qYS, qYE) => {
                 const findLastElementByText = (selector, text) => {
                     const elements = Array.from(document.querySelectorAll(selector));
                     return elements.reverse().find(el => {
@@ -109,6 +159,7 @@ export async function GET(request) {
                 // Look for visible pagination footer text containing item counts from the bottom-up
                 const footer = (captureType === 'dns' || captureType === 'firewall' || captureType === 'security-rules')
                     ? (findLastElementByText('div, span, button, p, td', 'records added') || 
+                       findLastElementByText('div, span, button, p, td', 'records') || 
                        findLastElementByText('div, span, button, p, td', 'of'))
                     : ((captureType === 'traffic' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile')
                         ? null
@@ -129,21 +180,23 @@ export async function GET(request) {
 
                 const siteFooter = document.querySelector('#site-footer') || document.querySelector('footer');
                 if (captureType === 'dns') {
-                    const dnsRows = document.querySelectorAll('tr[data-testid="dns-table-row"]');
-                    if (dnsRows && dnsRows.length > 0) {
-                        const lastRow = dnsRows[dnsRows.length - 1];
-                        const lastRowRect = lastRow.getBoundingClientRect();
-                        absoluteBottom = lastRowRect.bottom + scrollY + 15;
+                    if (footer) {
+                        const footerRect = footer.getBoundingClientRect();
+                        absoluteBottom = footerRect.bottom + scrollY + 15;
                     } else {
-                        const dnsTable = document.querySelector('table');
-                        if (dnsTable) {
-                            const tableRect = dnsTable.getBoundingClientRect();
-                            absoluteBottom = tableRect.bottom + scrollY + 15;
-                        } else if (footer) {
-                            const footerRect = footer.getBoundingClientRect();
-                            absoluteBottom = footerRect.bottom + scrollY;
-                        } else if (siteFooter) {
-                            absoluteBottom = siteFooter.getBoundingClientRect().top + scrollY - 10;
+                        const dnsRows = document.querySelectorAll('tr[data-testid="dns-table-row"]');
+                        if (dnsRows && dnsRows.length > 0) {
+                            const lastRow = dnsRows[dnsRows.length - 1];
+                            const lastRowRect = lastRow.getBoundingClientRect();
+                            absoluteBottom = lastRowRect.bottom + scrollY + 15;
+                        } else {
+                            const dnsTable = document.querySelector('table');
+                            if (dnsTable) {
+                                const tableRect = dnsTable.getBoundingClientRect();
+                                absoluteBottom = tableRect.bottom + scrollY + 15;
+                            } else if (siteFooter) {
+                                absoluteBottom = siteFooter.getBoundingClientRect().top + scrollY - 10;
+                            }
                         }
                     }
                 } else if (footer) {
@@ -178,60 +231,93 @@ export async function GET(request) {
                     }
                 }
 
-                let yOffset = -20;
-                if (captureType === 'dns' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
-                    // Ystart -2%
-                    yOffset = -20 - Math.round(window.innerHeight * 0.02);
-                } else if (captureType === 'traffic') {
-                    yOffset = -20 - Math.round(window.innerHeight * 0.01);
-                } else if (captureType === 'firewall' || captureType === 'security-rules') {
-                    yOffset = -20;
-                }
-
-                let startX = Math.round(window.innerWidth * 0.15);
-                if (captureType === 'domains') {
-                    startX = Math.round(window.innerWidth * 0.18) + 50;
-                } else if (captureType === 'dns') {
-                    startX = Math.round(window.innerWidth * 0.19);
-                } else if (captureType === 'traffic') {
-                    startX = Math.round(window.innerWidth * 0.22);
-                } else if (captureType === 'firewall' || captureType === 'security-rules') {
+                let startX;
+                const parsedXS = parseInt(qXS, 10);
+                if (!isNaN(parsedXS)) {
+                    startX = parsedXS;
+                } else {
                     startX = Math.round(window.innerWidth * 0.15);
-                } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
-                    // Xstart +10% (from 15% to 25%)
-                    startX = Math.round(window.innerWidth * 0.25);
+                    if (captureType === 'domains') {
+                        startX = Math.round(window.innerWidth * 0.18) + 50;
+                    } else if (captureType === 'dns') {
+                        startX = Math.round(window.innerWidth * 0.19);
+                    } else if (captureType === 'traffic') {
+                        startX = Math.round(window.innerWidth * 0.22);
+                    } else if (captureType === 'firewall' || captureType === 'security-rules') {
+                        startX = Math.round(window.innerWidth * 0.15);
+                    } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                        startX = Math.round(window.innerWidth * 0.25);
+                    }
                 }
 
-                let endX = Math.round(window.innerWidth * 0.90);
-                if (captureType === 'domains') {
-                    endX = Math.round(window.innerWidth * 0.93);
-                } else if (captureType === 'dns') {
-                    endX = Math.round(window.innerWidth * 0.96);
-                } else if (captureType === 'traffic') {
-                    endX = Math.round(window.innerWidth * 0.92);
-                } else if (captureType === 'firewall') {
+                let endX;
+                const parsedXE = parseInt(qXE, 10);
+                if (!isNaN(parsedXE)) {
+                    endX = parsedXE;
+                } else {
                     endX = Math.round(window.innerWidth * 0.90);
-                } else if (captureType === 'security-rules') {
-                    // endX shifted to the right by 10% total (from 90% to 100%)
-                    endX = Math.round(window.innerWidth * 1.00);
-                } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
-                    // Xend -15% (from 100% to 85%)
-                    endX = Math.round(window.innerWidth * 0.85);
+                    if (captureType === 'domains') {
+                        endX = Math.round(window.innerWidth * 0.93);
+                    } else if (captureType === 'dns') {
+                        endX = Math.round(window.innerWidth * 0.96);
+                    } else if (captureType === 'traffic') {
+                        endX = Math.round(window.innerWidth * 0.92);
+                    } else if (captureType === 'firewall') {
+                        endX = Math.round(window.innerWidth * 0.90);
+                    } else if (captureType === 'security-rules') {
+                        endX = Math.round(window.innerWidth * 1.00);
+                    } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                        endX = Math.round(window.innerWidth * 0.85);
+                    }
                 }
 
-                const startY = Math.max(0, headingTop + yOffset);
+                let startY;
+                const parsedYS = parseInt(qYS, 10);
+                if (!isNaN(parsedYS)) {
+                    startY = parsedYS;
+                } else {
+                    let yOffset = -20;
+                    if (captureType === 'dns' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                        yOffset = -20 - Math.round(window.innerHeight * 0.02);
+                    } else if (captureType === 'traffic') {
+                        yOffset = -20 - Math.round(window.innerHeight * 0.01);
+                    } else if (captureType === 'firewall' || captureType === 'security-rules') {
+                        yOffset = -20;
+                    }
+                    startY = Math.max(0, headingTop + yOffset);
+                }
 
-                let targetHeight = Math.max(150, (absoluteBottom - startY));
-                if (captureType === 'domains') {
-                    targetHeight = Math.max(150, (absoluteBottom - startY) - 250);
-                } else if (captureType === 'dns') {
-                    targetHeight = Math.max(150, (absoluteBottom - startY) + 15);
-                } else if (captureType === 'traffic') {
-                    targetHeight = 900;
-                } else if (captureType === 'firewall') {
-                    targetHeight = 700;
-                } else if (captureType === 'security-rules' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
-                    targetHeight = Math.max(150, (absoluteBottom - startY));
+                let targetHeight;
+                if (captureType === 'domains' || captureType === 'dns') {
+                    // Treat qYE as the offset to add to absoluteBottom height
+                    // Positive adds height (extends downwards), negative reduces height (cuts upwards)
+                    const parsedYE = parseInt(qYE, 10);
+                    let offsetVal;
+                    if (!isNaN(parsedYE)) {
+                        offsetVal = parsedYE;
+                    } else {
+                        if (captureType === 'domains') {
+                            offsetVal = footer ? 15 : -250;
+                        } else {
+                            // captureType === 'dns'
+                            offsetVal = 15;
+                        }
+                    }
+                    targetHeight = Math.max(150, (absoluteBottom - startY) + offsetVal);
+                } else {
+                    const parsedYE = parseInt(qYE, 10);
+                    if (!isNaN(parsedYE)) {
+                        targetHeight = Math.max(10, parsedYE - startY);
+                    } else {
+                        targetHeight = Math.max(150, (absoluteBottom - startY));
+                        if (captureType === 'traffic') {
+                            targetHeight = 900;
+                        } else if (captureType === 'firewall') {
+                            targetHeight = 700;
+                        } else if (captureType === 'security-rules' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                            targetHeight = Math.max(150, (absoluteBottom - startY));
+                        }
+                    }
                 }
 
                 return {
@@ -240,7 +326,8 @@ export async function GET(request) {
                     width: endX - startX,
                     height: targetHeight
                 };
-            }, type);
+            }, type, qXStart, qXEnd, qYStart, qYEnd);
+            }
 
             // Retrieve document height to expand the viewport temporarily and prevent visual flickering from fullPage: true
             const originalViewportSize = await page.evaluate(() => {

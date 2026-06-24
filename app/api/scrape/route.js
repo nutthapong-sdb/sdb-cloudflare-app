@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { connectChrome } from '@/lib/chrome-helper';
 import axios from 'axios';
 import {
     getLatestSyncDate,
@@ -2471,11 +2472,7 @@ export async function POST(request) {
         else if (action === 'run-speed-test') {
             const domainVal = body.domainVal || 'nbtc.go.th';
             console.log(`Running speed test for domainVal: ${domainVal}`);
-            const puppeteer = require('puppeteer');
-            const browser = await puppeteer.connect({
-                browserURL: 'http://localhost:9222',
-                defaultViewport: null
-            });
+            const browser = await connectChrome();
             const pages = await browser.pages();
             let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
             if (!page) {
@@ -2812,11 +2809,7 @@ export async function POST(request) {
         }
 
         else if (action === 'check-speed-results') {
-            const puppeteer = require('puppeteer');
-            const browser = await puppeteer.connect({
-                browserURL: 'http://localhost:9222',
-                defaultViewport: null
-            });
+            const browser = await connectChrome();
             const pages = await browser.pages();
             let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
             if (!page) {
@@ -2835,11 +2828,7 @@ export async function POST(request) {
         }
 
         else if (action === 'click-speed-mobile') {
-            const puppeteer = require('puppeteer');
-            const browser = await puppeteer.connect({
-                browserURL: 'http://localhost:9222',
-                defaultViewport: null
-            });
+            const browser = await connectChrome();
             const pages = await browser.pages();
             let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
             if (!page) {

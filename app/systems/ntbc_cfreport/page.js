@@ -17,7 +17,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal, Monitor
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -25,6 +25,7 @@ import Swal from 'sweetalert2';
 import { THEMES } from '@/app/utils/themes';
 import { Editor } from '@tinymce/tinymce-react';
 import { REPORT_VARIABLES, STATIC_VARIABLES } from './variableDefinitions';
+import { DELAY_CONFIG } from '@/lib/delay-config';
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
@@ -186,6 +187,11 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Mode check removed here as we pass safeData specifically for processing
     let html = tmpl;
 
+    const cleanImageSrc = (val, fallback) => {
+        if (!val || val === 'null' || val === 'undefined') return fallback;
+        return val;
+    };
+
     const startDate = safeData.startDate ? new Date(safeData.startDate + 'T00:00:00.000Z') : new Date(now.getTime() - 1440 * 60 * 1000);
     const endDate = safeData.endDate ? new Date(Math.min(new Date(safeData.endDate + 'T23:59:59.999Z').getTime(), now.getTime())) : now;
     const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
@@ -302,39 +308,23 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@LEAKED_CREDENTIALS': safeData.leakedCredentials || 'unknown',
         '@BROWSER_INTEGRITY_CHECK': safeData.browserIntegrityCheck || 'unknown',
         '@HOTLINK_PROTECTION': safeData.hotlinkProtection || 'unknown',
-        '@captured_domain_page': safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedDomainImage || safeData.captured_domains_page || '/captured-domains.png'}" alt="Captured Domain Page" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_domain_page mockup]</span>',
+        '@captured_domain_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedDomainImage || safeData.captured_domains_page, '/captured-domains.png')}" alt="Captured Domain Page" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_dns_page': (() => {
             const pages = safeData.capturedDnsPages || [];
             if (pages.length > 0) {
                 return pages.map((pageSrc, idx) => 
-                    `<div class="mb-6" style="text-align: center;"><img src="${pageSrc}" alt="Captured DNS Records Page ${idx + 1}" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
+                    `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(pageSrc, '/captured-dns.png')}" alt="Captured DNS Records Page ${idx + 1}" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
                 ).join('<br/>');
             }
-            const fallbackSrc = safeData.capturedDnsImage || safeData.captured_dns_page || '/captured-dns.png';
-            return fallbackSrc 
-                ? `<div class="mb-6" style="text-align: center;"><img src="${fallbackSrc}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-                : '<span class="text-orange-500 font-bold">[captured_dns_page mockup]</span>';
+            const fallbackSrc = cleanImageSrc(safeData.capturedDnsImage || safeData.captured_dns_page, '/captured-dns.png');
+            return `<div class="mb-6" style="text-align: center;"><img src="${fallbackSrc}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`;
         })(),
-        '@captured_traffic_page': safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedTrafficImage || safeData.captured_traffic_page || '/captured-traffic.png'}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_traffic_page mockup]</span>',
-        '@captured_firewall_page': safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedFirewallImage || safeData.captured_firewall_page || '/captured-firewall.png'}" alt="Captured Firewall Overview" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_firewall_page mockup]</span>',
-        '@captured_security_rules_page': safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page || '/captured-security-rules.png'}" alt="Captured Security Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_security_rules_page mockup]</span>',
-        '@captured_argo_page': safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedArgoImage || safeData.captured_argo_page || '/captured-argo.png'}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_argo_page mockup]</span>',
-        '@captured_speed_page': safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSpeedImage || safeData.captured_speed_page || '/captured-speed.png'}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_speed_page mockup]</span>',
-        '@captured_speed_mobile_page': safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page || '/captured-speed-mobile.png'
-            ? `<div class="mb-6" style="text-align: center;"><img src="${safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page || '/captured-speed-mobile.png'}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
-            : '<span class="text-orange-500 font-bold">[captured_speed_mobile_page mockup]</span>',
+        '@captured_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImage || safeData.captured_traffic_page, '/captured-traffic.png')}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_firewall_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedFirewallImage || safeData.captured_firewall_page, '/captured-firewall.png')}" alt="Captured Firewall Overview" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_security_rules_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page, '/captured-security-rules.png')}" alt="Captured Security Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_argo_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedArgoImage || safeData.captured_argo_page, '/captured-argo.png')}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_speed_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedImage || safeData.captured_speed_page, '/captured-speed.png')}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_speed_mobile_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page, '/captured-speed-mobile.png')}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
 
 
         // DDoS Protection - individual protections (convert Always On to Enable)
@@ -824,6 +814,57 @@ const ControlStepsModal = ({ isOpen, onClose, theme }) => {
     );
 };
 
+// VNC Viewer Modal Component
+const VncModal = ({ isOpen, onClose, theme }) => {
+    const [vncUrl, setVncUrl] = useState('');
+    
+    useEffect(() => {
+        if (isOpen && typeof window !== 'undefined') {
+            setVncUrl(`http://${window.location.hostname}:5800/?autoconnect=1&resize=scale`);
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+    const t = theme || {};
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+            <div className={`${t.modalBg || 'bg-gray-900'} border ${t.modalBorder || 'border-gray-800'} rounded-xl w-full max-w-5xl shadow-2xl p-6 relative flex flex-col animate-scale-up`} style={{ height: '80vh' }}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Monitor className="w-5 h-5 text-blue-500" />
+                        Live Debug Browser (VNC)
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-hidden rounded border border-gray-700/60 bg-black relative">
+                    {vncUrl ? (
+                        <iframe 
+                            src={vncUrl} 
+                            className="w-full h-full border-none"
+                            title="Live Browser Monitor (VNC)"
+                        />
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-gray-500 italic text-sm">
+                            Loading stream...
+                        </div>
+                    )}
+                </div>
+                <div className="flex justify-between items-center mt-4">
+                    <span className="text-xs text-gray-400">
+                        Connecting to: <code className="bg-gray-800 px-1 py-0.5 rounded">{vncUrl}</code>
+                    </span>
+                    <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded transition-colors shadow-lg">
+                        Close Monitor
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // 1. Report Modal Component
 const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot, autoDownloadWord = false, onAutoDownloadComplete }) => {
     // mode: 'report' | 'sub-template' | 'static-template' | 'middle-template'
@@ -842,6 +883,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [mounted, setMounted] = useState(false);
     // Local states and handleCaptureScreenshot removed (lifted to parent NTBCCFReportPage)
 
+    const downloadWordRef = useRef(null);
+    useEffect(() => {
+        downloadWordRef.current = handleDownloadWord;
+    });
+
     useEffect(() => {
         setMounted(true);
     }, []);
@@ -850,7 +896,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         if (isOpen && autoDownloadWord && mounted) {
             console.log('⚡ Triggering automatic Word document download...');
             const timer = setTimeout(() => {
-                handleDownloadWord();
+                if (downloadWordRef.current) {
+                    downloadWordRef.current();
+                }
                 if (onAutoDownloadComplete) {
                     onAutoDownloadComplete();
                 }
@@ -1068,8 +1116,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     };
 
     const getProcessedHtml = (isForExport = false) => {
+        const baseTmpl = isEditing ? localTemplate : (template ?? DEFAULT_TEMPLATE);
+        console.log('DEBUG getProcessedHtml: baseTmpl length =', baseTmpl?.length, 'localTemplate length =', localTemplate?.length, 'template length =', template?.length);
         // Even for static template, we want to process date variables
-        let html = processTemplate(localTemplate, { ...safeData, capturedDomainImage }, new Date(), dashboardImage);
+        let html = processTemplate(baseTmpl, { ...safeData, capturedDomainImage }, new Date(), dashboardImage);
+        console.log('DEBUG getProcessedHtml: processed html length =', html?.length);
         const hasTOCPlaceholder = html.includes('@TOC@');
         if (useAutoTOC || hasTOCPlaceholder) {
             html = addAutomaticTOC(html, isForExport);
@@ -1130,7 +1181,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     };
 
     // --- DOWNLOAD WORD FUNCTION ---
-    const handleDownloadWord = async () => {
+    async function handleDownloadWord() {
         if (!reportContentRef.current) return;
 
         const filename = isTemplateMode ? `template.docx` : `report_${safeData.domain || 'report'}.doc`.replace('.doc', '.docx');
@@ -1171,17 +1222,16 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         let cleanHTML = "";
 
+        const tempDiv = document.createElement('div');
         if (isEditing) {
             // Stored templates stay Arabic; only convert for output.
             let baseHtml = localTemplate;
             if (useAutoTOC) {
                 baseHtml = addAutomaticTOC(baseHtml, true);
             }
-            cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(baseHtml) : baseHtml;
+            tempDiv.innerHTML = baseHtml;
         } else {
             let cloneHtml = getProcessedHtml(true); // Generates processed template with the black TOC at the correct @TOC@ placeholder location!
-
-            const tempDiv = document.createElement('div');
             tempDiv.innerHTML = cloneHtml;
 
             const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
@@ -1191,9 +1241,45 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     node.nodeValue = node.nodeValue.replace(/ (?= )/g, '\u00A0');
                 }
             }
+        }
 
-            cleanHTML = tempDiv.innerHTML;
-            cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(cleanHTML) : cleanHTML;
+        // Inline relative images to ensure fallback/offline screenshots render correctly in Word
+        try {
+            const imgs = Array.from(tempDiv.querySelectorAll('img'));
+            console.log(`🔍 handleDownloadWord: Found ${imgs.length} images for potential client-side inlining.`);
+            for (const img of imgs) {
+                const src = img.getAttribute('src');
+                if (src && !src.startsWith('data:') && !src.startsWith('http:') && !src.startsWith('https:')) {
+                    console.log(`   Inlining relative image: "${src}"`);
+                    try {
+                        const cleanSrc = src.startsWith('/') ? src : '/' + src;
+                        const res = await fetch(cleanSrc);
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const base64 = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(blob);
+                            });
+                            img.setAttribute('src', base64);
+                            console.log(`   ✅ Inlined successfully: "${src}"`);
+                        } else {
+                            console.warn(`   ❌ Failed to fetch: "${src}", status: ${res.status}`);
+                        }
+                    } catch (err) {
+                        console.warn(`   ❌ Error fetching relative image: "${src}"`, err);
+                    }
+                }
+            }
+        } catch (inlineErr) {
+            console.error('Failed to inline images client-side:', inlineErr);
+        }
+
+        cleanHTML = tempDiv.innerHTML;
+        cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(cleanHTML) : cleanHTML;
+
+        if (!isEditing) {
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
 
@@ -1260,7 +1346,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         try {
             // Template editing exports can be large (embedded base64 images).
             // Prefer fast .doc download in that case to avoid long server conversion.
-            if (isTemplateMode) {
+            if (isTemplateMode || mode === 'report') {
                 downloadHtmlAsDoc(sourceHTML);
                 return;
             }
@@ -1573,9 +1659,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                             >
                                 {useThaiDigits ? 'Thai digits' : 'Arabic digits'}
                             </button>
-                            <button onClick={() => setIsEditing(true)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
-                                <Edit3 className="w-3 h-3" /> Edit Template
-                            </button>
+                            {mode !== 'report' && (
+                                <button onClick={() => setIsEditing(true)} className={`px-4 py-2 ${t.button} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
+                                    <Edit3 className="w-3 h-3" /> Edit Template
+                                </button>
+                            )}
                             <button onClick={handleDownloadWord} className={`px-4 py-2 ${t.buttonPrimary} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
                                 <FileType className="w-3 h-3" /> Download Word
                             </button>
@@ -1595,26 +1683,20 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 // Batch Report Modal Component
 const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, theme, selectedZone: initialZoneId, selectedAccount: initialAccountId, accounts = [], currentUser }) => {
-    const [selected, setSelected] = useState(new Set());
-    const [promotedHosts, setPromotedHosts] = useState(new Set());
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
-    const [searchTerm, setSearchTerm] = useState('');
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
-    const [mode, setMode] = useState('standard'); // 'standard' or 'department'
-    const [departments, setDepartments] = useState([]);
-    const [selectedDeptIds, setSelectedDeptIds] = useState(new Set());
-    const [deptMemberHosts, setDeptMemberHosts] = useState([]);
-
+    
+    // Global Queue State
+    const [batchQueue, setBatchQueue] = useState([]);
+    
     // Internal selection states
     const [selectedAccountId, setSelectedAccountId] = useState('');
     const [zones, setZones] = useState([]);
     const [loadingZones, setLoadingZones] = useState(false);
-    const [internalZoneId, setInternalZoneId] = useState('');
-    const [internalSubdomains, setInternalSubdomains] = useState([]);
-    const [loadingSubdomains, setLoadingSubdomains] = useState(false);
-
+    const [selectedZones, setSelectedZones] = useState(new Set()); // Used for selecting multiple zones in UI
+    
     const callScrapeApi = async (action, bodyData = {}) => {
         try {
             const res = await fetch('/api/scrape', {
@@ -1634,576 +1716,196 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
     useEffect(() => {
         if (isOpen) {
-            // Reset selection states for fresh open
-            setSelected(new Set());
-            setPromotedHosts(new Set());
-            setSelectedDeptIds(new Set());
-            setDeptMemberHosts([]);
-            setSearchTerm('');
-            setMode('standard');
+            setBatchQueue([]);
+            setSelectedZones(new Set());
+            const savedAccount = typeof window !== 'undefined' ? localStorage.getItem('ntbc:default:accountId') : '';
 
-            // Initialize from dashboard state
-            setSelectedAccountId(initialAccountId || '');
-            setInternalZoneId(initialZoneId || '');
-            setInternalSubdomains(dashboardHosts || []);
+            setSelectedAccountId(initialAccountId || savedAccount || '');
 
             listTemplates().then(list => {
-                if (typeof window === 'undefined') {
-                    setTemplates(list);
-                    return;
-                }
+                if (typeof window === 'undefined') { setTemplates(list); return; }
                 const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
                 const keyDefault = `ntbc:templates:${userKey}:defaultTemplateId`;
                 const keyHidden = `ntbc:templates:${userKey}:hiddenTemplateIds`;
-
+                
                 let hidden = [];
-                try { hidden = JSON.parse(localStorage.getItem(keyHidden) || '[]'); } catch (_) { hidden = []; }
-                if (!Array.isArray(hidden)) hidden = [];
+                try { hidden = JSON.parse(localStorage.getItem(keyHidden) || '[]'); } catch (_) {}
                 hidden = hidden.map(String);
-
                 let filtered = list.filter(t => !hidden.includes(String(t.id)));
-                if (filtered.length === 0 && list.length > 0) {
-                    filtered = list;
-                    try { localStorage.setItem(keyHidden, '[]'); } catch (_) {}
-                }
-
+                if (filtered.length === 0 && list.length > 0) filtered = list;
                 setTemplates(filtered);
 
-                const storedDefault = localStorage.getItem(keyDefault) || 'default';
-                const ids = new Set(filtered.map(t => String(t.id)));
-                if (ids.has(String(storedDefault))) {
+                const storedDefault = localStorage.getItem('ntbc:default:templateId') || localStorage.getItem(keyDefault) || 'default';
+                if (filtered.find(t => String(t.id) === String(storedDefault))) {
                     setSelectedTemplateId(String(storedDefault));
-                } else if (filtered.length > 0 && !ids.has(String(selectedTemplateId))) {
+                } else if (filtered.length > 0) {
                     setSelectedTemplateId(String(filtered[0].id));
                 }
             });
         }
-    }, [isOpen, initialZoneId, initialAccountId, dashboardHosts]);
+    }, [isOpen, initialAccountId]);
 
-    // Fetch departments when account or zone changes
-    useEffect(() => {
-        if (isOpen && (selectedAccountId || internalZoneId)) {
-            const fetchDepts = async () => {
-                const url = selectedAccountId ? `/api/departments?account_id=${selectedAccountId}` : `/api/departments`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.departments) setDepartments(data.departments);
-            };
-            fetchDepts();
-        }
-    }, [isOpen, selectedAccountId, internalZoneId]);
-
-    // Handle Account Change -> Fetch Zones
     useEffect(() => {
         if (!isOpen || !selectedAccountId) return;
-        if (selectedAccountId === initialAccountId && zones.length > 0) return;
-
         let isMounted = true;
         const fetchZones = async () => {
             setLoadingZones(true);
             const result = await callScrapeApi('list-zones', { accountId: selectedAccountId });
             if (isMounted) {
-                if (result.success && result.data) {
-                    setZones(result.data);
-                } else {
-                    setZones([]);
-                }
+                if (result.success && result.data) setZones(result.data);
+                else setZones([]);
                 setLoadingZones(false);
-                if (selectedAccountId !== initialAccountId) {
-                    setInternalZoneId('');
-                    setInternalSubdomains([]);
-                    setSelected(new Set());
-                    setSelectedDeptIds(new Set());
-                    setDeptMemberHosts([]);
-                }
+                setSelectedZones(new Set()); // Reset selected zones when account changes
             }
         };
         fetchZones();
         return () => { isMounted = false; };
-    }, [selectedAccountId, isOpen, initialAccountId]);
+    }, [selectedAccountId, isOpen]);
 
-    // Handle Zone Change -> Fetch Subdomains
-    useEffect(() => {
-        if (!isOpen || !internalZoneId) return;
-        if (internalZoneId === initialZoneId && internalSubdomains.length > 0) return;
+    const handleSetDefaultAccount = () => { if(selectedAccountId) localStorage.setItem('ntbc:default:accountId', selectedAccountId); };
 
-        let isMounted = true;
-        const fetchDns = async () => {
-            setLoadingSubdomains(true);
-            const result = await callScrapeApi('get-dns-records', { zoneId: internalZoneId });
-            if (isMounted) {
-                if (result.success && result.data) {
-                    const hostSet = new Set(
-                        result.data
-                            .filter(r => ['A', 'AAAA', 'CNAME'].includes(r.type))
-                            .map(r => r.name)
-                            .filter(Boolean)
-                    );
-                    const zoneObj = zones.find(z => z.id === internalZoneId);
-                    if (zoneObj && zoneObj.name) hostSet.delete(zoneObj.name);
+    const toggleZone = (zoneId) => {
+        const next = new Set(selectedZones);
+        if (next.has(zoneId)) next.delete(zoneId);
+        else next.add(zoneId);
+        setSelectedZones(next);
+    };
 
-                    setInternalSubdomains(Array.from(hostSet).filter(Boolean));
-                } else {
-                    setInternalSubdomains([]);
+    const toggleAllZones = () => {
+        if (selectedZones.size === zones.length) {
+            setSelectedZones(new Set());
+        } else {
+            setSelectedZones(new Set(zones.map(z => z.id)));
+        }
+    };
+
+    const addToQueue = () => {
+        if (!selectedAccountId || selectedZones.size === 0) return;
+        const accountObj = accounts.find(a => a.id === selectedAccountId);
+        
+        const newItems = Array.from(selectedZones).map(zoneId => {
+            const zoneObj = zones.find(z => z.id === zoneId);
+            return {
+                accountId: selectedAccountId,
+                accountName: accountObj ? accountObj.name : selectedAccountId,
+                zoneId: zoneId,
+                zoneName: zoneObj ? zoneObj.name : zoneId,
+                domain: '__ALL_SUBDOMAINS__'
+            };
+        });
+        
+        setBatchQueue(prev => {
+            const next = [...prev];
+            newItems.forEach(item => {
+                if (!next.find(i => i.zoneId === item.zoneId)) {
+                    next.push(item);
                 }
-                setLoadingSubdomains(false);
-                setSelected(new Set());
-                setSelectedDeptIds(new Set());
-                setDeptMemberHosts([]);
-            }
-        };
-        fetchDns();
-        return () => { isMounted = false; };
-    }, [internalZoneId, isOpen, zones, initialZoneId]);
-
-    // Use internal subdomains if available, otherwise dashboard hosts
-    const hosts = internalSubdomains.length > 0 ? internalSubdomains : dashboardHosts;
-
-    // Handle department selection
-    useEffect(() => {
-        if (mode === 'department' && selectedDeptIds.size > 0) {
-            const allDeptHosts = [];
-            const fetchPromises = Array.from(selectedDeptIds).map(deptId => 
-                fetch(`/api/department-domains?department_id=${deptId}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.domains) {
-                            data.domains.forEach(d => {
-                                if (!allDeptHosts.some(existing => existing.domain === d.domain && existing.zone_id === d.zone_id)) {
-                                    allDeptHosts.push({ domain: d.domain, zone_id: d.zone_id });
-                                }
-                            });
-                        }
-                    })
-            );
-
-            Promise.all(fetchPromises).then(() => {
-                setDeptMemberHosts(allDeptHosts);
-                const newSelected = new Set();
-                allDeptHosts.forEach(h => newSelected.add(h.domain));
-                setSelected(newSelected);
             });
-        } else if (mode === 'department' && selectedDeptIds.size === 0) {
-            setDeptMemberHosts([]);
-            setSelected(new Set());
-        }
-    }, [selectedDeptIds, mode]); // Ignore hosts dependency in department mode
-
-    const toggleDept = (deptId) => {
-        const newSet = new Set(selectedDeptIds);
-        if (newSet.has(deptId)) {
-            newSet.delete(deptId);
-        } else {
-            newSet.add(deptId);
-        }
-        setSelectedDeptIds(newSet);
+            return next;
+        });
+        setSelectedZones(new Set());
     };
 
-    // ESC key to close modal
-    useEffect(() => {
-        const handleEscape = (event) => {
-            if (event.key === 'Escape' && isOpen) {
-                onClose();
-            }
-        };
-
-        if (isOpen) {
-            document.addEventListener('keydown', handleEscape);
-        }
-
-        return () => {
-            document.removeEventListener('keydown', handleEscape);
-        };
-    }, [isOpen, onClose]);
-
-
-
-    // FILTER LOGIC & DEBUGGING
-    const NO_SUBDOMAIN = '__NO_SUBDOMAIN__'; // Special identifier
-
-    const filteredHosts = (mode === 'department' ? deptMemberHosts.map(dm => dm.domain) : hosts).filter(h => {
-        const hStr = String(h || '');
-        return hStr.toLowerCase().includes(searchTerm.toLowerCase());
-    });
-
-    // Always prepend "No Subdomain" option at the beginning (except in department mode or if no zone selected)
-    const displayHosts = (mode === 'department' || !internalZoneId) ? filteredHosts : [NO_SUBDOMAIN, ...filteredHosts];
-
-    // console.log('🔍 Modal Render:', { term: searchTerm, total: hosts.length, visible: filteredHosts.length });
-
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-    };
-
-    const toggleAll = () => {
-        // Toggle ALL hosts (excluding NO_SUBDOMAIN)
-        const allRealHostsSelected = filteredHosts.every(h => selected.has(h));
-
-        const newSet = new Set(selected);
-        // Remove NO_SUBDOMAIN if present
-        newSet.delete(NO_SUBDOMAIN);
-
-        if (allRealHostsSelected) {
-            filteredHosts.forEach(h => newSet.delete(h));
-        } else {
-            filteredHosts.forEach(h => newSet.add(h));
-        }
-        setSelected(newSet);
-    };
-
-    const toggleOne = (host) => {
-        const newSet = new Set(selected);
-
-        // If selecting NO_SUBDOMAIN, clear all others
-        if (host === NO_SUBDOMAIN) {
-            newSet.clear();
-            if (!selected.has(NO_SUBDOMAIN)) {
-                newSet.add(NO_SUBDOMAIN);
-            }
-        } else {
-            // If selecting a real host, remove NO_SUBDOMAIN
-            newSet.delete(NO_SUBDOMAIN);
-            if (newSet.has(host)) {
-                newSet.delete(host);
-                // Also remove it from promotedHosts if unchecked
-                const newPromoted = new Set(promotedHosts);
-                if (newPromoted.has(host)) {
-                    newPromoted.delete(host);
-                    setPromotedHosts(newPromoted);
-                }
-            } else {
-                newSet.add(host);
-            }
-        }
-        setSelected(newSet);
-    };
-
-    const togglePromoteOne = (e, host) => {
-        // e.stopPropagation() prevents the click from bubbling up to the row label
-        const newPromoted = new Set(promotedHosts);
-        if (newPromoted.has(host)) {
-            newPromoted.delete(host);
-        } else {
-            newPromoted.add(host);
-        }
-        setPromotedHosts(newPromoted);
+    const removeFromQueue = (index) => {
+        setBatchQueue(prev => prev.filter((_, i) => i !== index));
     };
 
     if (!isOpen) return null;
-
-    // Default theme fallback
     const t = theme || THEMES.dark;
 
     return (
-        <div
-            className={`fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in ${t.modalOverlay}`}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
-        >
-            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl`}>
-                {/* Header */}
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in ${t.modalOverlay}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl`}>
                 <div className={`p-4 border-b ${t.modalBorder} ${t.modalHeaderBg} flex justify-between items-center`}>
                     <h3 className={`text-lg font-bold ${t.modalTitle} flex items-center gap-2`}>
                         <List className={`w-5 h-5 ${t.iconAccent || 'text-purple-400'}`} />
-                        Create Report
+                        Batch Generate Reports (Zone Level)
                     </h3>
-                    <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}>
-                        <X className="w-5 h-5" />
-                    </button>
+                    <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}><X className="w-5 h-5" /></button>
                 </div>
 
-                {/* Body */}
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    {/* Left Column (40%) */}
-                    <div className={`w-full md:w-[40%] p-6 overflow-y-auto border-r ${t.modalBorder} space-y-6`}>
-                        {/* Account & Zone Selectors */}
-                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} grid grid-cols-1 gap-4 bg-gray-800/20`}>
-                            <SearchableDropdown
-                                theme={theme}
-                                icon={<Key className="w-3.5 h-3.5 text-blue-400" />}
-                                label="Cloudflare Account"
-                                placeholder="Choose an account..."
-                                options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
-                                value={selectedAccountId}
-                                onChange={setSelectedAccountId}
-                            />
-
-                            <SearchableDropdown
-                                theme={theme}
-                                icon={<Server className="w-3.5 h-3.5 text-green-400" />}
-                                label="Zone (Domain)"
-                                placeholder={!selectedAccountId ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."}
-                                options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))}
-                                value={internalZoneId}
-                                onChange={setInternalZoneId}
-                                loading={loadingZones}
-                            />
-                        </div>
-
-                        {/* Selection Mode Selector */}
-                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
-                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Selection Mode</label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setMode('standard')}
-                                    className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'standard' ? t.buttonPrimary : t.button}`}
-                                >
-                                    Standard
-                                </button>
-                                <button
-                                    onClick={() => setMode('department')}
-                                    className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${mode === 'department' ? t.buttonPrimary : t.button}`}
-                                >
-                                    Department
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Department Selector */}
-                        {mode === 'department' && (
-                            <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} animate-fade-in-up`}>
-                                <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide flex items-center gap-2`}>
-                                    <Users className="w-3.5 h-3.5" /> Select Departments
-                                </label>
-                                <div className={`max-h-40 overflow-y-auto space-y-1 p-2 bg-black/20 rounded border ${t.modalBorder}`}>
-                                    {departments.length === 0 ? (
-                                        <p className="text-xs text-gray-500 italic text-center py-2">No departments found for this zone.</p>
-                                    ) : (
-                                        departments.map(d => (
-                                            <label key={d.id} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer transition-colors group">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={selectedDeptIds.has(d.id)}
-                                                    onChange={() => toggleDept(d.id)}
-                                                    className="hidden"
-                                                />
-                                                <div 
-                                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selectedDeptIds.has(d.id) ? t.dropdown.active : 'border-gray-600'}`}
-                                                >
-                                                    {selectedDeptIds.has(d.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                                </div>
-                                                <span className={`text-xs ${selectedDeptIds.has(d.id) ? 'text-white' : 'text-gray-400'}`}>{d.name}</span>
-                                            </label>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Template Selector */}
-                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
-                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Report Template</label>
-                            <select
-                                value={selectedTemplateId}
-                                onChange={e => setSelectedTemplateId(e.target.value)}
-                                className={`${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none focus:border-blue-500 transition-colors appearance-none`}
-                            >
-                                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                        </div>
-
-                        {/* Time Range Selector */}
-                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
-                            <label className={`block text-xs font-bold ${t.subText} mb-2 uppercase tracking-wide`}>Time Range</label>
-                            <div className="flex flex-col gap-4">
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-xs ${t.subText} w-12`}>Start:</span>
-                                    <input
-                                        type="date"
-                                        value={batchStartDate}
-                                        max={new Date().toISOString().split('T')[0]}
-                                        onChange={(e) => setBatchStartDate(e.target.value)}
-                                        className={`flex-1 px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
-                                    />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-xs ${t.subText} w-12`}>End:</span>
-                                    <input
-                                        type="date"
-                                        value={batchEndDate}
-                                        max={new Date().toISOString().split('T')[0]}
-                                        onChange={(e) => setBatchEndDate(e.target.value)}
-                                        className={`flex-1 px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Column (60%) */}
-                    <div className="w-full md:w-[60%] p-6 overflow-hidden flex flex-col">
-                        {/* Live Search Input (New) */}
-                        <div className="mb-4">
-                            <div className="relative">
-                                <Search className={`absolute left-3 top-2.5 w-4 h-4 ${t.subText}`} />
-                                <input
-                                    type="text"
-                                    placeholder="Filter sub-domains..."
-                                    value={searchTerm}
-                                    onChange={handleSearchChange}
-                                    className={`w-full ${t.dropdown.bg} border ${t.dropdown.border} ${t.dropdown.inputText} rounded-lg pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-${t.dropdown.placeholder ? t.dropdown.placeholder.replace('text-', '') : 'gray-600'}`}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between mb-4">
-                            <span className={`${t.subText} text-sm font-bold uppercase tracking-wider`}>Sub-domains selection:</span>
-                            <button
-                                onClick={() => mode === 'standard' && toggleAll()}
-                                className={`text-xs ${t.iconAccent || 'text-blue-400'} ${mode === 'department' ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 font-bold transition-colors uppercase tracking-wider'}`}
-                            >
-                                {filteredHosts.length > 0 && filteredHosts.every(h => selected.has(h)) ? 'Deselect All' : 'Select All'}
-                            </button>
+                <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column: Selection */}
+                    <div className="space-y-4">
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} grid grid-cols-1 gap-4`}>
+                            <SearchableDropdown theme={theme} icon={<Key className="w-3.5 h-3.5 text-blue-400" />} label="1. Select Account" placeholder="Choose an account..." options={accounts.map(acc => ({ value: acc.id, label: acc.name }))} value={selectedAccountId} onChange={setSelectedAccountId} rightAction={<button onClick={handleSetDefaultAccount} className="text-[10px] text-purple-400 uppercase">Set Default</button>} />
                         </div>
                         
-                        <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                            {displayHosts.length === 0 ? (
-                                <div className={`text-center ${t.subText || 'text-gray-500'} py-12 text-sm italic`}>
-                                    No sub-domains available.
-                                </div>
-                            ) : (
-                                displayHosts.map(host => {
-                                    const isNoSubdomain = host === NO_SUBDOMAIN;
-                                    const displayName = isNoSubdomain ? 'No Subdomain (Full Domain Report)' : host;
-
-                                    // Determine styles based on theme
-                                    const isLight = t.id === 'pastel';
-
-                                    // Yellow style for No Subdomain
-                                    const yellowBg = isLight ? 'bg-yellow-50 hover:bg-yellow-100' : 'bg-yellow-900/20 hover:bg-yellow-900/30';
-                                    const yellowBorder = isLight ? 'border-yellow-200 hover:border-yellow-300' : 'border-yellow-700/50 hover:border-yellow-600';
-                                    const yellowText = isLight ? 'text-yellow-700 font-bold' : 'text-yellow-400';
-                                    const yellowCheckBg = isLight ? 'bg-yellow-500 border-yellow-500' : 'bg-yellow-600 border-yellow-600';
-                                    const yellowCheckBorder = isLight ? 'border-yellow-300 group-hover:border-yellow-400' : 'border-yellow-700 group-hover:border-yellow-600';
-
-                                    // Regular host style
-                                    const regularBg = t.card || (isLight ? 'bg-white' : 'bg-gray-800/50');
-                                    const regularBorder = t.dropdown?.border || (isLight ? 'border-pink-200' : 'border-transparent');
-                                    const regularSubText = t.subText;
-                                    const regularCheckBg = t.dropdown?.active || 'bg-blue-600';
-                                    const regularCheckBorder = t.dropdown?.border || 'border-gray-600';
-
-                                    return (
-                                        <div key={host} className={`flex items-center justify-between p-3 rounded-lg transition-colors border ${isNoSubdomain ? `${yellowBg} ${yellowBorder}` : `${regularBg} ${regularBorder}`} group`}>
-                                            <label className={`flex flex-1 items-center gap-3 ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(host) ? (isNoSubdomain ? yellowCheckBg : regularCheckBg) : (isNoSubdomain ? yellowCheckBorder : regularCheckBorder)}`}>
-                                                    {selected.has(host) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selected.has(host)}
-                                                    disabled={mode === 'department'}
-                                                    onChange={() => mode === 'standard' && toggleOne(host)}
-                                                    className="hidden"
-                                                />
-                                                <span className={`text-sm ${selected.has(host) ? (isLight ? 'text-pink-900 font-bold' : 'text-white font-medium') : (isNoSubdomain ? yellowText : regularSubText)}`}>{displayName}</span>
-                                            </label>
-
-                                            {/* Toggle for Promoting to Domain */}
-                                            {!isNoSubdomain && selected.has(host) && (
-                                                <div className={`flex items-center gap-2 ${mode === 'department' ? 'opacity-50' : ''}`} onClick={(e) => e.stopPropagation()}>
-                                                    <label className={`flex items-center ${mode === 'department' ? 'cursor-not-allowed' : 'cursor-pointer'} relative`} title="Use staticReportTemplate.json for this subdomain instead of the sub-report template">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="sr-only peer"
-                                                            checked={promotedHosts.has(host)}
-                                                            disabled={mode === 'department'}
-                                                            onChange={(e) => mode === 'standard' && togglePromoteOne(e, host)}
-                                                        />
-                                                        <div className={`w-9 h-5 rounded-full peer ${promotedHosts.has(host) ? 'bg-indigo-600' : 'bg-gray-600'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 transition-colors`}></div>
-                                                        <div className={`absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${promotedHosts.has(host) ? 'translate-x-full' : ''}`}></div>
-                                                    </label>
-                                                    <span className={`text-xs ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>Use Domain Template</span>
-                                                </div>
-                                            )}
+                        {/* Zones List */}
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} flex flex-col max-h-80`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className={`block text-xs font-bold ${t.subText} uppercase tracking-wide`}>2. Select Zones</label>
+                                <button onClick={toggleAllZones} className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold uppercase tracking-wide transition-colors">Select All</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto space-y-1 mt-2 pr-2">
+                                {loadingZones && <div className="text-xs text-gray-500 py-2">Loading zones...</div>}
+                                {!loadingZones && zones.length === 0 && <div className="text-xs text-gray-500 py-2">No zones found or select an account first.</div>}
+                                {!loadingZones && zones.map(zone => (
+                                    <div key={zone.id} onClick={() => toggleZone(zone.id)} className={`cursor-pointer flex items-center justify-between p-2 rounded text-xs transition-colors ${selectedZones.has(zone.id) ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-gray-800 text-gray-300'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedZones.has(zone.id) ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}>
+                                                {selectedZones.has(zone.id) && <Check className="w-3 h-3 text-white" />}
+                                            </div>
+                                            <span>{zone.name}</span>
                                         </div>
-                                    );
-                                })
-                            )}
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={addToQueue} disabled={selectedZones.size === 0} className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded">
+                                Add to Batch Queue
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Right Column: Queue & Settings */}
+                    <div className="space-y-4">
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                            <label className={`block text-xs font-bold ${t.subText} uppercase tracking-wide mb-2`}>Settings</label>
+                            <select value={selectedTemplateId} onChange={e => setSelectedTemplateId(e.target.value)} className={`mb-3 ${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none`}>
+                                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-xs ${t.subText} w-10`}>Start:</span>
+                                <input type="date" value={batchStartDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchStartDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-xs ${t.subText} w-10`}>End:</span>
+                                <input type="date" value={batchEndDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchEndDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
+                            </div>
+                        </div>
+
+                        <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} flex-1 flex flex-col min-h-[250px]`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className={`block text-xs font-bold ${t.subText} uppercase tracking-wide`}>Batch Queue ({batchQueue.length})</label>
+                                {batchQueue.length > 0 && <button onClick={() => setBatchQueue([])} className="text-[10px] text-red-400 hover:text-red-300 uppercase font-semibold">Clear</button>}
+                            </div>
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                                {batchQueue.length === 0 && <div className="text-xs text-gray-500 py-4 text-center">Queue is empty</div>}
+                                {batchQueue.map((item, idx) => (
+                                    <div key={idx} className="bg-gray-800/50 rounded p-2 text-xs flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <span className="text-gray-200 font-semibold">{item.zoneName}</span>
+                                            <span className="text-[9px] text-gray-500">{item.accountName}</span>
+                                        </div>
+                                        <button onClick={() => removeFromQueue(idx)} className="text-gray-500 hover:text-red-400 p-1"><X className="w-3 h-3" /></button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-between items-center gap-3`}>
-                    <div>
-                        <a href="/tools/word-converter.zip" download className={`text-xs ${t.iconAccent || 'text-purple-400'} hover:opacity-80 underline flex items-center gap-1`}>
-                            <Download className="w-3 h-3" />
-                            เครื่องมือแปลงไฟล์ .docx (Mac/Win)
-                        </a>
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
-
-                        <button
-                            title="จะแยกรายการ sub domain ที่เลือกมาออกเป็นไฟล์แยกกัน โดยแต่ละไฟล์จะมี หน้าปก + รายละเอียด zone + subdomain"
-                            onClick={() => {
-                                if (selected.size === 0) {
-                                    Swal.fire('Error', 'Please select at least one sub-domain.', 'error');
-                                    return;
-                                }
-
-                                // Separated files only makes sense for sub-domain selections
-                                if (mode !== 'department' && selected.has(NO_SUBDOMAIN)) {
-                                    Swal.fire('Error', 'Separated export is not available for Domain-only report.', 'error');
-                                    return;
-                                }
-
-                                let hostsToGenerate;
-                                if (mode === 'department') {
-                                    hostsToGenerate = Array.from(selected).map(hostName => {
-                                        const mapping = deptMemberHosts.find(dm => dm.domain === hostName);
-                                        return { name: hostName, zoneId: mapping ? mapping.zone_id : internalZoneId };
-                                    });
-                                } else {
-                                    hostsToGenerate = Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
-                                }
-
-                                const promotedArray = Array.from(promotedHosts);
-                                // extra final arg: exportSeparated
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, selectedAccountId);
-                            }}
-                            disabled={selected.size === 0}
-                            className={`px-4 py-2 rounded ${t.button} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
-                        >
-                            Export as separated files
-                        </button>
-
-                        <button
-                            onClick={() => {
-                                if (selected.size === 0) {
-                                    Swal.fire('Error', 'Please select at least one sub-domain.', 'error');
-                                    return;
-                                }
-                                
-                                let hostsToGenerate;
-                                if (mode === 'department') {
-                                    // Map selected domain names to objects with their zone IDs
-                                    hostsToGenerate = Array.from(selected).map(hostName => {
-                                        const mapping = deptMemberHosts.find(dm => dm.domain === hostName);
-                                        return { name: hostName, zoneId: mapping ? mapping.zone_id : internalZoneId };
-                                    });
-                                } else {
-                                    // Standard mode: If NO_SUBDOMAIN is selected, send empty array
-                                    hostsToGenerate = selected.has(NO_SUBDOMAIN) ? [] : Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
-                                }
-
-                                const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, selectedAccountId);
-                            }}
-                            disabled={selected.size === 0}
-                            className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
-                        >
-                            <FileText className="w-3 h-3" />
-                            {(mode !== 'department' && selected.has(NO_SUBDOMAIN)) ? 'Generate Domain Report' : (selected.size === 0 ? 'Generate Report' : `Generate ${selected.size} Report${selected.size > 1 ? 's' : ''}`)}
-                        </button>
-                    </div>
+                <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
+                    <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
+                    <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
+                        <FileText className="w-3 h-3" /> Start Processing Queue
+                    </button>
                 </div>
             </div>
         </div>
     );
 };
+
 
 const ZoneRow = ({ zoneId, zoneData, fetchSyncStatus, apiToken, isManageMode }) => {
     const [expanded, setExpanded] = useState(false);
@@ -3292,6 +2994,7 @@ export default function NTBCCFReportPage() {
     const [isReportMenuOpen, setIsReportMenuOpen] = useState(false); // Dropdown State
     const [isTemplateSubmenuOpen, setIsTemplateSubmenuOpen] = useState(false); // Submenu State
     const [isThemeSubmenuOpen, setIsThemeSubmenuOpen] = useState(false); // Submenu State
+    const [isVncModalOpen, setIsVncModalOpen] = useState(false);
 
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -3304,6 +3007,9 @@ export default function NTBCCFReportPage() {
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
     const [autoDownloadWord, setAutoDownloadWord] = useState(false);
+    const [chromeRunning, setChromeRunning] = useState(false);
+    const [checkingChrome, setCheckingChrome] = useState(true);
+    const [launchingChrome, setLaunchingChrome] = useState(false);
     const dashboardRef = useRef(null);
     const [capturedDomainImage, setCapturedDomainImage] = useState(null);
     const [capturedDnsImage, setCapturedDnsImage] = useState(null);
@@ -3353,6 +3059,41 @@ export default function NTBCCFReportPage() {
                 window.dispatchEvent(new CustomEvent('theme-change', { detail: stored }));
             }
         }
+    }, []);
+
+    const checkChromeStatus = async () => {
+        try {
+            const res = await fetch('/api/ntbc-launch-chrome?check=true');
+            const data = await res.json();
+            if (data && data.success) {
+                setChromeRunning(!!data.running);
+            }
+        } catch (err) {
+            console.error('Failed to check chrome status:', err);
+        } finally {
+            setCheckingChrome(false);
+        }
+    };
+
+    const handleLaunchChrome = async () => {
+        setLaunchingChrome(true);
+        try {
+            const res = await fetch('/api/ntbc-launch-chrome');
+            const data = await res.json();
+            if (data && data.success) {
+                setTimeout(checkChromeStatus, 2000);
+            }
+        } catch (err) {
+            console.error('Failed to launch Chrome:', err);
+        } finally {
+            setLaunchingChrome(false);
+        }
+    };
+
+    useEffect(() => {
+        checkChromeStatus();
+        const interval = setInterval(checkChromeStatus, 5000);
+        return () => clearInterval(interval);
     }, []);
 
     // Force scroll to top on mount/refresh
@@ -4055,83 +3796,7 @@ export default function NTBCCFReportPage() {
     };
 
     const handleQuickLaunchDebug = async () => {
-        try {
-            // Show loading status
-            Swal.fire({
-                title: 'Initializing Quick Debug...',
-                text: 'Setting up GDCC environment...',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                },
-                background: theme?.modalBg || '#111827',
-                color: theme?.text || '#fff'
-            });
-
-            // 1. Ensure accounts are loaded
-            let currentAccounts = accounts;
-            if (!currentAccounts || currentAccounts.length === 0) {
-                console.log('Accounts not loaded yet, fetching...');
-                const result = await callAPI('get-account-info', {}, currentUser?.cloudflare_api_token);
-                if (result && result.data) {
-                    setAccounts(result.data);
-                    currentAccounts = result.data;
-                }
-            }
-
-            // 2. Find target account "GDCC"
-            const targetAccount = currentAccounts.find(a => {
-                const n = (a.name || '').toLowerCase();
-                return n.includes('government data center') || n.includes('gdcc');
-            });
-
-            if (targetAccount) {
-                setSelectedAccount(targetAccount.id);
-                // Fetch zones using the correct 'list-zones' action
-                const zonesRes = await callAPI('list-zones', { accountId: targetAccount.id });
-                if (zonesRes && zonesRes.data) {
-                    setZones(zonesRes.data);
-                    const targetZone = zonesRes.data.find(z => z.name.toLowerCase().trim() === 'sesalpglpn.go.th');
-                    if (targetZone) {
-                        // Mutate default config to allow automatic subdomain auto-selection during useEffect load
-                        DEFAULT_CONFIG.zoneName = 'sesalpglpn.go.th';
-                        DEFAULT_CONFIG.subDomain = 'www.sesalpglnp.go.th';
-                        
-                        setSelectedZone(targetZone.id);
-                        setSelectedSubDomain('www.sesalpglnp.go.th');
-                    } else {
-                        console.warn('Zone sesalpglpn.go.th not found in GDCC account');
-                    }
-                }
-            } else {
-                console.warn('GDCC Account not found in Cloudflare account list');
-            }
-
-            // Configure other requested inputs
-            setStartDate('2026-05-30');
-            setEndDate('2026-06-04');
-            setTemplateToEditId('default');
-
-            // 3. Launch debug browser on port 9222
-            try {
-                await fetch('/api/ntbc-launch-chrome');
-            } catch (err) {
-                console.error('Launch Chrome failed:', err);
-            }
-
-            // Close loading status and redirect to the control page with accountId
-            Swal.close();
-            router.push(`/systems/ntbc_cfreport/control?accountId=${targetAccount?.id || ''}`);
-        } catch (error) {
-            console.error('handleQuickLaunchDebug failed:', error);
-            Swal.fire({
-                title: 'Quick Debug Setup Error',
-                text: error.message || error.toString(),
-                icon: 'error',
-                background: theme?.modalBg || '#111827',
-                color: theme?.text || '#fff'
-            });
-        }
+        router.push('/systems/ntbc_cfreport/control');
     };
 
     // Helper to get unique hosts for Batch Modal (filter out the "ALL_SUBDOMAINS" option if needed, or keep it)
@@ -4290,12 +3955,47 @@ export default function NTBCCFReportPage() {
         }
     };
 
-    const handleCaptureScreenshotConfirm = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, accountId = null) => {
+    const handleCaptureScreenshotConfirm = async (batchQueue, batchStartDate, batchEndDate, templateId = 'default') => {
         setIsBatchModalOpen(false);
+        if(!batchQueue || batchQueue.length === 0) return;
+        
+        // Group queue by Zone to process efficiently
+        const groupedByZone = {};
+        batchQueue.forEach(item => {
+            if(!groupedByZone[item.zoneId]) {
+                groupedByZone[item.zoneId] = {
+                    accountId: item.accountId,
+                    zoneId: item.zoneId,
+                    hosts: []
+                };
+            }
+            groupedByZone[item.zoneId].hosts.push(item.domain === '__ALL_SUBDOMAINS__' ? 'ALL_SUBDOMAINS' : item.domain);
+        });
 
-        // Find domain name from selected zoneId
-        const activeAccountId = accountId || selectedAccount;
-        const activeZoneId = zoneId || selectedZone;
+        const zonesToProcess = Object.values(groupedByZone);
+        
+        for (let i = 0; i < zonesToProcess.length; i++) {
+            const currentZone = zonesToProcess[i];
+            // Pass the grouped hosts for this zone
+            await processSingleZoneCapture(currentZone.zoneId, currentZone.accountId, currentZone.hosts, batchStartDate, batchEndDate, templateId, [], false, i, zonesToProcess.length);
+            
+            // Wait for download to finish
+            await new Promise(resolve => {
+                window.__batchNext = resolve;
+                // fallback resolve after 25 seconds in case something goes wrong
+                setTimeout(resolve, 25000); 
+            });
+        }
+    };
+
+    const processSingleZoneCapture = async (activeZoneId, activeAccountId, selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], exportSeparated = false, currentIndex = 0, totalZones = 1) => {
+        let isCancelled = false;
+        let isFinished = false;
+        const checkCancelled = () => {
+            if (isCancelled) {
+                throw new Error('Force stopped by user');
+            }
+        };
 
         let activeZones = zones;
         if (!activeZones || activeZones.length === 0 || !activeZones.find(z => z.id === activeZoneId)) {
@@ -4337,6 +4037,7 @@ export default function NTBCCFReportPage() {
             rules: 'pending',
             argo: 'pending',
             speed: 'pending',
+            speedMobile: 'pending',
             stats: 'pending',
             report: 'pending'
         };
@@ -4351,43 +4052,107 @@ export default function NTBCCFReportPage() {
             };
 
             return `
-                <div style="text-align: left; font-size: 14px; color: #d1d5db; line-height: 1.6; margin-top: 15px;">
+                <div style="margin-bottom: 10px; background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 10px; border-radius: 6px; text-align: center;">
+                    <p style="color: #60a5fa; font-size: 14px; font-weight: bold; margin: 0;">
+                        ℹ️ You can safely minimize this browser tab or switch to another window. The process will continue in the background.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 20px; text-align: left; font-size: 14px; color: #d1d5db; line-height: 1.6; margin-top: 10px;">
                     <style>
                         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
-                    <p>${getIcon(statusMap.launch)} Start debug browser on port 9222</p>
-                    <p>${getIcon(statusMap.domains)} Capture Domains Overview</p>
-                    <p>${getIcon(statusMap.dns)} Capture DNS Records</p>
-                    <p>${getIcon(statusMap.traffic)} Capture HTTP Traffic</p>
-                    <p>${getIcon(statusMap.firewall)} Capture Firewall Events</p>
-                    <p>${getIcon(statusMap.rules)} Capture Security Rules</p>
-                    <p>${getIcon(statusMap.argo)} Capture Argo Routing</p>
-                    <p>${getIcon(statusMap.speed)} Trigger & Capture Speed Test (Desktop + Mobile)</p>
-                    <p>${getIcon(statusMap.stats)} Fetch Cloudflare Statistics</p>
-                    <p>${getIcon(statusMap.report)} Generate & Download Report</p>
+                    <div style="flex: 3; border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 650px; background: #000;">
+                        <iframe src="http://${window.location.hostname}:5800" style="width: 100%; height: 100%; border: none; transform: scale(1.0); transform-origin: top left;" title="Live Monitor"></iframe>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #374151; padding-left: 20px;">
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.launch)} Start debug browser</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.domains)} Capture Domains Overview</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.dns)} Capture DNS Records</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.traffic)} Capture HTTP Traffic</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.firewall)} Capture Firewall Events</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.rules)} Capture Security Rules</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.argo)} Capture Argo Routing</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.speed)} Capture Speed Test</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.stats)} Fetch CF Statistics</p>
+                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.report)} Generate & Download Report</p>
+                        <div style="text-align: left; margin-top: 10px;">
+                            <button id="force-stop-btn" style="background-color: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; width: 100%;">
+                                Force Stop
+                            </button>
+                        </div>
+                    </div>
                 </div>
             `;
         };
 
         Swal.fire({
-            title: 'Generating Report & Capturing Screenshots...',
+            title: totalZones > 1 ? `Generating Report... (${currentIndex + 1}/${totalZones}) [${domainName}]` : 'Generating Report & Capturing Screenshots...',
             html: renderHtml(),
+            width: '1200px',
             allowOutsideClick: false,
             allowEscapeKey: false,
+            showConfirmButton: false,
             didOpen: () => {
                 Swal.showLoading();
+                const btn = Swal.getHtmlContainer()?.querySelector('#force-stop-btn');
+                if (btn) {
+                    btn.onclick = () => {
+                        isCancelled = true;
+                        Swal.close();
+                    };
+                }
+            },
+            didClose: () => {
+                if (!isFinished) {
+                    isCancelled = true;
+                }
             },
             background: theme?.modalBg || '#111827',
             color: theme?.text || '#fff'
         });
 
         const updateProgress = () => {
+            if (isCancelled) return;
             Swal.update({
+                title: totalZones > 1 ? `Generating Report... (${currentIndex + 1}/${totalZones}) [${domainName}]` : 'Generating Report & Capturing Screenshots...',
                 html: renderHtml()
             });
+            const btn = Swal.getHtmlContainer()?.querySelector('#force-stop-btn');
+            if (btn) {
+                btn.onclick = () => {
+                    isCancelled = true;
+                    Swal.close();
+                };
+            }
         };
 
         try {
+            // Fetch global coordinates for cropping
+            let globalCoords = null;
+            try {
+                const resCoords = await fetch('/api/ntbc-capture-coords');
+                globalCoords = await resCoords.json();
+            } catch (err) {
+                console.error('Failed to load global coords:', err);
+            }
+
+            const getCoordParams = (type) => {
+                if (!globalCoords) return '';
+                let key = type;
+                if (type === 'speed-mobile') key = 'speedMobile';
+                if (type === 'rules') key = 'securityRules';
+                const c = globalCoords[key];
+                if (c) {
+                    let params = '';
+                    if (c.xStart) params += `&xStart=${c.xStart}`;
+                    if (c.xEnd) params += `&xEnd=${c.xEnd}`;
+                    if (c.yStart) params += `&yStart=${c.yStart}`;
+                    if (c.yEnd) params += `&yEnd=${c.yEnd}`;
+                    return params;
+                }
+                return '';
+            };
+
             // Set states on main page
             setSelectedAccount(activeAccountId);
             setSelectedZone(activeZoneId);
@@ -4396,263 +4161,326 @@ export default function NTBCCFReportPage() {
             setStartDate(batchStartDate);
             setEndDate(batchEndDate);
 
-            // Step 1: Ensure Chrome is running
-            try {
-                const launchRes = await fetch('/api/ntbc-launch-chrome');
-                const launchData = await launchRes.json();
-                if (launchData.success) {
-                    statusMap.launch = 'success';
-                } else {
+            const skipCaptures = false;
+            if (!skipCaptures) {
+                // Step 1: Ensure Chrome is running
+                checkCancelled();
+                try {
+                    const launchRes = await fetch('/api/ntbc-launch-chrome');
+                    const launchData = await launchRes.json();
+                    if (launchData.success) {
+                        statusMap.launch = 'success';
+                    } else {
+                        statusMap.launch = 'warn';
+                    }
+                } catch (err) {
+                    if (err.message === 'Force stopped by user') throw err;
+                    console.error('Launch Chrome failed:', err);
                     statusMap.launch = 'warn';
                 }
-            } catch (err) {
-                console.error('Launch Chrome failed:', err);
-                statusMap.launch = 'warn';
-            }
-            updateProgress();
+                updateProgress();
 
-            // Stabilize wait
-            await new Promise(r => setTimeout(r, 1000));
+                // Stabilize wait
+                for (let i = 0; i < 10; i++) {
+                    checkCancelled();
+                    await new Promise(r => setTimeout(r, 100));
+                }
 
-            // Helper to handle navigation and screenshot
-            const controlAndCapture = async (url, type, statusKey) => {
-                statusMap[statusKey] = 'running';
+                // Helper to handle navigation and screenshot
+                const controlAndCapture = async (url, type, statusKey) => {
+                    checkCancelled();
+                    statusMap[statusKey] = 'running';
+                    updateProgress();
+                    try {
+                        checkCancelled();
+                        const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(url)}`);
+                        const data = await res.json();
+                        checkCancelled();
+                        if (res.status === 401 || data.errorType === 'unauthenticated') {
+                            throw new Error('UNAUTHENTICATED_CLOUDFLARE');
+                        }
+                        if (data.success) {
+                            const loops = Math.ceil(DELAY_CONFIG.NAV_STABILIZE_MS / DELAY_CONFIG.SHORT_RETRY_MS);
+                            for (let i = 0; i < loops; i++) {
+                                checkCancelled();
+                                await new Promise(r => setTimeout(r, DELAY_CONFIG.SHORT_RETRY_MS));
+                            }
+                            checkCancelled();
+                            const captureRes = await fetch(`/api/ntbc-capture?type=${type}${getCoordParams(type)}`);
+                            const captureData = await captureRes.json();
+                            if (captureRes.status === 401 || captureData.errorType === 'unauthenticated') {
+                                throw new Error('UNAUTHENTICATED_CLOUDFLARE');
+                            }
+                            if (captureData.success && captureData.image) {
+                                statusMap[statusKey] = 'success';
+                                updateProgress();
+                                return captureData;
+                            }
+                        }
+                        statusMap[statusKey] = 'warn';
+                    } catch (err) {
+                        if (err.message === 'UNAUTHENTICATED_CLOUDFLARE' || err.message === 'Force stopped by user') throw err;
+                        console.error(`Capture ${type} failed:`, err);
+                        statusMap[statusKey] = 'warn';
+                    }
+                    updateProgress();
+                    return null;
+                };
+
+                // Step 2: Domains Overview
+                checkCancelled();
+                statusMap.domains = 'running';
                 updateProgress();
                 try {
-                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(url)}`);
+                    const targetDomainsUrl = `https://dash.cloudflare.com/${activeAccountId}/domains/overview`;
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetDomainsUrl)}`);
                     const data = await res.json();
-                    if (data.success) {
-                        await new Promise(r => setTimeout(r, 500));
-                        const captureRes = await fetch(`/api/ntbc-capture?type=${type}`);
-                        const captureData = await captureRes.json();
-                        if (captureData.success && captureData.image) {
-                            statusMap[statusKey] = 'success';
-                            updateProgress();
-                            return captureData;
-                        }
+                    checkCancelled();
+                    if (res.status === 401 || data.errorType === 'unauthenticated') {
+                        throw new Error('UNAUTHENTICATED_CLOUDFLARE');
                     }
-                    statusMap[statusKey] = 'warn';
-                } catch (err) {
-                    console.error(`Capture ${type} failed:`, err);
-                    statusMap[statusKey] = 'warn';
-                }
-                updateProgress();
-                return null;
-            };
-
-            // Step 2: Domains Overview
-            statusMap.domains = 'running';
-            updateProgress();
-            try {
-                const targetDomainsUrl = `https://dash.cloudflare.com/${activeAccountId}/domains/overview`;
-                const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetDomainsUrl)}`);
-                const data = await res.json();
-                if (data.success) {
-                    await new Promise(r => setTimeout(r, 500));
-                    const captureRes = await fetch('/api/ntbc-capture?type=domains');
-                    const captureData = await captureRes.json();
-                    if (captureData.success && captureData.image) {
-                        setCapturedDomainImage(captureData.image);
-                        localStorage.setItem('control_capturedScreenshot', captureData.image);
-                        statusMap.domains = 'success';
+                    if (data.success) {
+                        const loops = Math.ceil(DELAY_CONFIG.NAV_STABILIZE_MS / DELAY_CONFIG.SHORT_RETRY_MS);
+                        for (let i = 0; i < loops; i++) {
+                            checkCancelled();
+                            await new Promise(r => setTimeout(r, DELAY_CONFIG.SHORT_RETRY_MS));
+                        }
+                        checkCancelled();
+                        const captureRes = await fetch(`/api/ntbc-capture?type=domains${getCoordParams('domains')}`);
+                        const captureData = await captureRes.json();
+                        if (captureRes.status === 401 || captureData.errorType === 'unauthenticated') {
+                            throw new Error('UNAUTHENTICATED_CLOUDFLARE');
+                        }
+                        if (captureData.success && captureData.image) {
+                            setCapturedDomainImage(captureData.image);
+                            localStorage.setItem('control_capturedScreenshot', captureData.image);
+                            statusMap.domains = 'success';
+                        } else {
+                            statusMap.domains = 'warn';
+                        }
                     } else {
                         statusMap.domains = 'warn';
                     }
-                } else {
+                } catch (err) {
+                    if (err.message === 'UNAUTHENTICATED_CLOUDFLARE' || err.message === 'Force stopped by user') throw err;
+                    console.error('Capture domains failed:', err);
                     statusMap.domains = 'warn';
                 }
-            } catch (err) {
-                console.error('Capture domains failed:', err);
-                statusMap.domains = 'warn';
-            }
-            updateProgress();
+                updateProgress();
 
-            // Step 3: DNS Records
-            const dnsData = await controlAndCapture(
-                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/dns/records`,
-                'dns',
-                'dns'
-            );
-            if (dnsData) {
-                setCapturedDnsImage(dnsData.image);
-                localStorage.setItem('control_capturedDnsScreenshot', dnsData.image);
-                if (dnsData.dnsPages) {
-                    setCapturedDnsPages(dnsData.dnsPages);
-                    localStorage.setItem('control_capturedDnsPages', JSON.stringify(dnsData.dnsPages));
-                } else {
-                    setCapturedDnsPages([]);
-                    localStorage.removeItem('control_capturedDnsPages');
+                // Step 3: DNS Records
+                const dnsData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/dns/records`,
+                    'dns',
+                    'dns'
+                );
+                if (dnsData) {
+                    setCapturedDnsImage(dnsData.image);
+                    localStorage.setItem('control_capturedDnsScreenshot', dnsData.image);
+                    if (dnsData.dnsPages) {
+                        setCapturedDnsPages(dnsData.dnsPages);
+                        localStorage.setItem('control_capturedDnsPages', JSON.stringify(dnsData.dnsPages));
+                    } else {
+                        setCapturedDnsPages([]);
+                        localStorage.removeItem('control_capturedDnsPages');
+                    }
                 }
-            }
 
-            // Step 4: HTTP Traffic
-            const trafficData = await controlAndCapture(
-                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/analytics/traffic`,
-                'traffic',
-                'traffic'
-            );
-            if (trafficData) {
-                setCapturedTrafficImage(trafficData.image);
-                localStorage.setItem('control_capturedHttpTrafficScreenshot', trafficData.image);
-                if (trafficData.imageSub1) {
-                    localStorage.setItem('control_capturedHttpTrafficScreenshot1', trafficData.imageSub1);
+                // Step 4: HTTP Traffic
+                const trafficData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/analytics/traffic`,
+                    'traffic',
+                    'traffic'
+                );
+                if (trafficData) {
+                    setCapturedTrafficImage(trafficData.image);
+                    localStorage.setItem('control_capturedHttpTrafficScreenshot', trafficData.image);
+                    if (trafficData.imageSub1) {
+                        localStorage.setItem('control_capturedHttpTrafficScreenshot1', trafficData.imageSub1);
+                    }
+                    if (trafficData.imageSub2) {
+                        localStorage.setItem('control_capturedHttpTrafficScreenshot2', trafficData.imageSub2);
+                    }
+                    if (trafficData.imageSub3) {
+                        localStorage.setItem('control_capturedHttpTrafficScreenshot3', trafficData.imageSub3);
+                    }
+                    if (trafficData.imageSub4) {
+                        localStorage.setItem('control_capturedHttpTrafficScreenshot4', trafficData.imageSub4);
+                    }
+                    if (trafficData.imageSub5) {
+                        localStorage.setItem('control_capturedHttpTrafficScreenshot5', trafficData.imageSub5);
+                    }
                 }
-                if (trafficData.imageSub2) {
-                    localStorage.setItem('control_capturedHttpTrafficScreenshot2', trafficData.imageSub2);
-                }
-                if (trafficData.imageSub3) {
-                    localStorage.setItem('control_capturedHttpTrafficScreenshot3', trafficData.imageSub3);
-                }
-                if (trafficData.imageSub4) {
-                    localStorage.setItem('control_capturedHttpTrafficScreenshot4', trafficData.imageSub4);
-                }
-                if (trafficData.imageSub5) {
-                    localStorage.setItem('control_capturedHttpTrafficScreenshot5', trafficData.imageSub5);
-                }
-            }
 
-            // Step 5: Firewall Events
-            const firewallData = await controlAndCapture(
-                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/analytics/events`,
-                'firewall',
-                'firewall'
-            );
-            if (firewallData) {
-                setCapturedFirewallImage(firewallData.image);
-                localStorage.setItem('control_capturedFirewallScreenshot', firewallData.image);
-            }
+                // Step 5: Firewall Events
+                const firewallData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/analytics/events`,
+                    'firewall',
+                    'firewall'
+                );
+                if (firewallData) {
+                    setCapturedFirewallImage(firewallData.image);
+                    localStorage.setItem('control_capturedFirewallScreenshot', firewallData.image);
+                }
 
-            // Step 6: Security Rules
-            const rulesData = await controlAndCapture(
-                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
-                'security-rules',
-                'rules'
-            );
-            if (rulesData) {
-                setCapturedSecurityRulesImage(rulesData.image);
-                localStorage.setItem('control_capturedSecurityRulesScreenshot', rulesData.image);
-            }
+                // Step 6: Security Rules
+                const rulesData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
+                    'security-rules',
+                    'rules'
+                );
+                if (rulesData) {
+                    setCapturedSecurityRulesImage(rulesData.image);
+                    localStorage.setItem('control_capturedSecurityRulesScreenshot', rulesData.image);
+                }
 
-            // Step 7: Argo Routing
-            const argoData = await controlAndCapture(
-                `https://dash.cloudflare.com/${activeAccountId}/${domainName}/traffic`,
-                'argo',
-                'argo'
-            );
-            if (argoData) {
-                setCapturedArgoImage(argoData.image);
-                localStorage.setItem('control_capturedArgoScreenshot', argoData.image);
-            }
+                // Step 7: Argo Routing
+                const argoData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/traffic`,
+                    'argo',
+                    'argo'
+                );
+                if (argoData) {
+                    setCapturedArgoImage(argoData.image);
+                    localStorage.setItem('control_capturedArgoScreenshot', argoData.image);
+                }
 
-            // Step 8: Speed Test Desktop + Mobile
-            statusMap.speed = 'running';
-            updateProgress();
-            try {
-                const targetSpeedUrl = `https://dash.cloudflare.com/${activeAccountId}/${domainName}/speed/test/browser`;
-                const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetSpeedUrl)}`);
-                const data = await res.json();
-                if (data.success) {
-                    await new Promise(r => setTimeout(r, 500));
-                    
-                    // Trigger speed test run
-                    const runRes = await fetch('/api/scrape', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            action: 'run-speed-test',
-                            apiToken: currentUser?.cloudflare_api_token,
-                            domainVal: domainName
-                        })
-                    });
-                    const runData = await runRes.json();
-                    if (runData.success) {
-                        // Wait 60 seconds
-                        await new Promise(r => setTimeout(r, 60000));
+                // Step 8: Speed Test Desktop + Mobile
+                checkCancelled();
+                statusMap.speed = 'running';
+                updateProgress();
+                try {
+                    const targetSpeedUrl = `https://dash.cloudflare.com/${activeAccountId}/${domainName}/speed/test/browser`;
+                    const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetSpeedUrl)}`);
+                    const data = await res.json();
+                    checkCancelled();
+                    if (data.success) {
+                        const loops = Math.ceil(DELAY_CONFIG.NAV_STABILIZE_MS / DELAY_CONFIG.SHORT_RETRY_MS);
+                        for (let i = 0; i < loops; i++) {
+                            checkCancelled();
+                            await new Promise(r => setTimeout(r, DELAY_CONFIG.SHORT_RETRY_MS));
+                        }
                         
-                        // Check loop
-                        let isSuccess = false;
-                        for (let retry = 1; retry <= 3; retry++) {
-                            const checkRes = await fetch('/api/scrape', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    action: 'check-speed-results',
-                                    apiToken: currentUser?.cloudflare_api_token
-                                })
-                            });
-                            const checkData = await checkRes.json();
-                            if (checkData.success && checkData.found) {
-                                isSuccess = true;
-                                break;
-                            }
-                            if (retry < 3) {
-                                await new Promise(r => setTimeout(r, 5000));
-                            }
-                        }
-
-                        // Capture Speed Desktop
-                        const captureRes = await fetch('/api/ntbc-capture?type=speed');
-                        const captureData = await captureRes.json();
-                        let desktopSpeedImg = null;
-                        if (captureData.success && captureData.image) {
-                            desktopSpeedImg = captureData.image;
-                            setCapturedSpeedImage(captureData.image);
-                            localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
-                        }
-
-                        // Capture Speed Mobile
-                        if (desktopSpeedImg) {
-                            const mobileClickRes = await fetch('/api/scrape', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    action: 'click-speed-mobile',
-                                    apiToken: currentUser?.cloudflare_api_token
-                                })
-                            });
-                            const mobileClickData = await mobileClickRes.json();
-                            if (mobileClickData.success) {
-                                const captureMobileRes = await fetch('/api/ntbc-capture?type=speed-mobile');
-                                const captureMobileData = await captureMobileRes.json();
-                                if (captureMobileData.success && captureMobileData.image) {
-                                    setCapturedSpeedMobileImage(captureMobileData.image);
-                                    localStorage.setItem('control_capturedSpeedMobileScreenshot', captureMobileData.image);
+                        // Trigger speed test run
+                        const runRes = await fetch('/api/scrape', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: 'run-speed-test',
+                                apiToken: currentUser?.cloudflare_api_token,
+                                domainVal: domainName
+                            })
+                        });
+                        const runData = await runRes.json();
+                        checkCancelled();
+                        if (runData.success) {
+                            // Fast Polling loop (Max 60 seconds, check every 3 seconds)
+                            let isSuccess = false;
+                            const maxAttempts = DELAY_CONFIG.SPEED_TEST_MAX_ATTEMPTS;
+                            for (let retry = 0; retry < maxAttempts; retry++) {
+                                checkCancelled();
+                                const checkRes = await fetch('/api/scrape', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'check-speed-results',
+                                        apiToken: currentUser?.cloudflare_api_token
+                                    })
+                                });
+                                const checkData = await checkRes.json();
+                                if (checkData.success && checkData.found) {
+                                    isSuccess = true;
+                                    break;
+                                }
+                                // Wait 3 seconds before next check
+                                for (let s = 0; s < 3; s++) {
+                                    checkCancelled();
+                                    await new Promise(r => setTimeout(r, 1000));
                                 }
                             }
-                        }
 
-                        statusMap.speed = 'success';
-                    } else {
-                        // Fallback capture Speed Desktop
-                        const captureRes = await fetch('/api/ntbc-capture?type=speed');
-                        const captureData = await captureRes.json();
-                        if (captureData.success && captureData.image) {
-                            setCapturedSpeedImage(captureData.image);
-                            localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                            // Capture Speed Desktop
+                            checkCancelled();
+                            const captureRes = await fetch(`/api/ntbc-capture?type=speed${getCoordParams('speed')}`);
+                            const captureData = await captureRes.json();
+                            let desktopSpeedImg = null;
+                            if (captureData.success && captureData.image) {
+                                desktopSpeedImg = captureData.image;
+                                setCapturedSpeedImage(captureData.image);
+                                localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                            }
+
+                            // Capture Speed Mobile
+                            if (desktopSpeedImg) {
+                                checkCancelled();
+                                const mobileClickRes = await fetch('/api/scrape', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'click-speed-mobile',
+                                        apiToken: currentUser?.cloudflare_api_token
+                                    })
+                                });
+                                const mobileClickData = await mobileClickRes.json();
+                                checkCancelled();
+                                if (mobileClickData.success) {
+                                    const captureMobileRes = await fetch(`/api/ntbc-capture?type=speed-mobile${getCoordParams('speed-mobile')}`);
+                                    const captureMobileData = await captureMobileRes.json();
+                                    if (captureMobileData.success && captureMobileData.image) {
+                                        setCapturedSpeedMobileImage(captureMobileData.image);
+                                        localStorage.setItem('control_capturedSpeedMobileScreenshot', captureMobileData.image);
+                                    }
+                                }
+                            }
+
                             statusMap.speed = 'success';
                         } else {
-                            statusMap.speed = 'warn';
+                            // Fallback capture Speed Desktop
+                            checkCancelled();
+                            const captureRes = await fetch(`/api/ntbc-capture?type=speed${getCoordParams('speed')}`);
+                            const captureData = await captureRes.json();
+                            if (captureData.success && captureData.image) {
+                                setCapturedSpeedImage(captureData.image);
+                                localStorage.setItem('control_capturedSpeedScreenshot', captureData.image);
+                                statusMap.speed = 'success';
+                            } else {
+                                statusMap.speed = 'warn';
+                            }
                         }
+                    } else {
+                        statusMap.speed = 'warn';
                     }
-                } else {
+                } catch (err) {
+                    if (err.message === 'Force stopped by user') throw err;
+                    console.error('Speed test capture failed:', err);
                     statusMap.speed = 'warn';
                 }
-            } catch (err) {
-                console.error('Speed test capture failed:', err);
-                statusMap.speed = 'warn';
+                updateProgress();
+            } else {
+                statusMap.launch = 'success';
+                statusMap.domains = 'success';
+                statusMap.dns = 'success';
+                statusMap.traffic = 'success';
+                statusMap.firewall = 'success';
+                statusMap.rules = 'success';
+                statusMap.argo = 'success';
+                statusMap.speed = 'success';
+                updateProgress();
             }
-            updateProgress();
 
             // Step 9: Fetch WAF Settings and Statistics
+            checkCancelled();
             statusMap.stats = 'running';
             updateProgress();
             try {
                 // Fetch settings
                 const settingsResult = await callAPI('get-zone-settings', { zoneId: activeZoneId });
+                checkCancelled();
                 if (settingsResult && settingsResult.data) {
                     setZoneSettings(settingsResult.data);
                 }
                 const dnsRes = await callAPI('get-dns-records', { zoneId: activeZoneId });
+                checkCancelled();
                 if (dnsRes && dnsRes.data) {
                     setDnsRecords(dnsRes.data);
                 }
@@ -4661,30 +4489,28 @@ export default function NTBCCFReportPage() {
                 await fetchAndApplyTrafficData(subdomainVal, activeZoneId, batchStartDate, batchEndDate);
                 statusMap.stats = 'success';
             } catch (err) {
+                if (err.message === 'Force stopped by user') throw err;
                 console.error('Fetch stats failed:', err);
                 statusMap.stats = 'error';
             }
             updateProgress();
 
             // Step 10: Generate and download report
+            checkCancelled();
             statusMap.report = 'running';
             updateProgress();
 
             // Load template
-            let loadedTmpl = '';
-            if (subdomainVal === 'ALL_SUBDOMAINS') {
-                loadedTmpl = await loadStaticTemplate(templateId);
-                if (loadedTmpl) {
-                    setStaticReportTemplate(loadedTmpl);
-                    setReportModalMode('static-template');
-                }
-            } else {
-                loadedTmpl = await loadTemplate(templateId);
-                if (loadedTmpl) {
-                    setReportTemplate(loadedTmpl);
-                    setReportModalMode('sub-template');
-                }
-            }
+            const domainTmpl = await loadStaticTemplate(templateId);
+            checkCancelled();
+            
+            console.log('DEBUG handleCaptureScreenshotConfirm: loaded template parts:', {
+                domainTmplLength: domainTmpl?.length
+            });
+            const combinedTmpl = domainTmpl || '';
+            console.log('DEBUG handleCaptureScreenshotConfirm: combinedTmpl length =', combinedTmpl.length);
+            setReportTemplate(combinedTmpl);
+            setReportModalMode('report');
 
             // Set autoDownloadReport to true and open modal
             setAutoDownloadWord(true);
@@ -4693,12 +4519,39 @@ export default function NTBCCFReportPage() {
             statusMap.report = 'success';
             updateProgress();
 
+            isFinished = true;
+
             // Close sweetalert after success
             setTimeout(() => {
                 Swal.close();
             }, 1000);
 
         } catch (error) {
+            if (error.message === 'UNAUTHENTICATED_CLOUDFLARE') {
+                Swal.fire({
+                    title: 'Cloudflare Login Required',
+                    text: 'เซสชัน Cloudflare หมดอายุหรือไม่ได้รับสิทธิ์ในการเข้าถึง กรุณาเปิดหน้าจอ "Live Browser Monitor" (noVNC) จากเมนู Actions ด้านบนเพื่อล็อกอินเข้าสู่ระบบ Cloudflare ก่อนใช้งาน',
+                    icon: 'warning',
+                    confirmButtonText: 'ตกลง',
+                    confirmButtonColor: '#3b82f6',
+                    background: theme?.modalBg || '#111827',
+                    color: theme?.text || '#fff'
+                });
+                return;
+            }
+            if (error.message === 'Force stopped by user') {
+                console.log('Workflow force stopped by user.');
+                Swal.fire({
+                    title: 'Cancelled',
+                    text: 'Report generation was stopped.',
+                    icon: 'info',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    background: theme?.modalBg || '#111827',
+                    color: theme?.text || '#fff'
+                });
+                return;
+            }
             console.error('Workflow error:', error);
             statusMap.report = 'error';
             updateProgress();
@@ -5088,6 +4941,28 @@ export default function NTBCCFReportPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
+                        {/* BROWSER STATUS INDICATOR / BUTTON */}
+                        {checkingChrome ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-gray-800/40 border border-gray-700/50 text-gray-400 text-xs font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+                                Checking browser...
+                            </div>
+                        ) : chromeRunning ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                Browser Debugging Active (Port 9222)
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleLaunchChrome}
+                                disabled={launchingChrome}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 text-xs font-medium transition-all duration-200 cursor-pointer disabled:opacity-50"
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                {launchingChrome ? 'Launching...' : 'Launch Debug Browser'}
+                            </button>
+                        )}
+
                         {/* ACTIONS DROPDOWN */}
                         <div className="relative">
                             <button
@@ -5108,10 +4983,24 @@ export default function NTBCCFReportPage() {
                                             <FileText className="w-3 h-3" /> Manage Template
                                         </button>
                                         <button
-                                            onClick={() => { setIsReportMenuOpen(false); setIsTemplateSubmenuOpen(false); setIsAutoReportModalOpen(true); }}
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                handleQuickLaunchDebug(); 
+                                            }}
                                             className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
                                         >
-                                            <Calendar className="w-3 h-3" /> Auto Gen Report
+                                            <Terminal className="w-3 h-3" /> Quick Debug Session
+                                        </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsVncModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
+                                        >
+                                            <Monitor className="w-3 h-3" /> Live Browser Monitor
                                         </button>
                                         <button
                                             onClick={() => { 
@@ -5220,10 +5109,18 @@ export default function NTBCCFReportPage() {
                 capturedDomainImage={capturedDomainImage}
                 onCaptureScreenshot={handleCaptureScreenshot}
                 autoDownloadWord={autoDownloadWord}
-                onAutoDownloadComplete={() => setAutoDownloadWord(false)}
+                onAutoDownloadComplete={() => {
+                    setAutoDownloadWord(false);
+                    if (window.__batchNext) {
+                        window.__batchNext();
+                        window.__batchNext = null;
+                    }
+                }}
             />
 
             <ScreenshotPreviewModal isOpen={showScreenshotModal} onClose={() => setShowScreenshotModal(false)} imgUrl={capturedDomainImage} theme={theme} />
+
+            <VncModal isOpen={isVncModalOpen} onClose={() => setIsVncModalOpen(false)} theme={theme} />
 
             <ManageTemplateModal
                 isOpen={isManageTemplateModalOpen}
@@ -5279,7 +5176,7 @@ export default function NTBCCFReportPage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto w-full">
                     {/* WORKSPACE CARD 1: TEMPLATE CREATION & MANAGEMENT */}
                     <div 
                         onClick={() => setIsManageTemplateModalOpen(true)}
@@ -5312,47 +5209,11 @@ export default function NTBCCFReportPage() {
                         <div className="bg-purple-500/10 w-fit p-4 rounded-xl mb-6 border border-purple-500/20 group-hover:scale-110 transition-transform duration-300">
                             <Camera className="w-8 h-8 text-purple-400" />
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">Capture Screenshot</h3>
+                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">Generate Report</h3>
                         <p className="text-gray-400 text-sm leading-relaxed mb-6">
                             Select Cloudflare domains/subdomains and capture screenshots directly from the active dashboard session.
                         </p>
                         <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider group-hover:text-purple-300">Select & Capture &rarr;</span>
-                    </div>
-
-                    {/* WORKSPACE CARD 3: QUICK DEBUG SESSION */}
-                    <div 
-                        onClick={handleQuickLaunchDebug}
-                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-red-900/30 hover:to-rose-900/30 border border-gray-700/60 hover:border-red-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
-                            <Terminal className="w-40 h-40 text-white" />
-                        </div>
-                        <div className="bg-red-500/10 w-fit p-4 rounded-xl mb-6 border border-red-500/20 group-hover:scale-110 transition-transform duration-300">
-                            <Terminal className="w-8 h-8 text-red-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-red-300 transition-colors">Quick Debug Session</h3>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                            Configure preset parameters, launch Google Chrome on port 9222 to Cloudflare, and open steps control modal.
-                        </p>
-                        <span className="text-red-400 text-xs font-semibold uppercase tracking-wider group-hover:text-red-300">Launch Debug &rarr;</span>
-                    </div>
-
-                    {/* WORKSPACE CARD 4: AUTO GEN REPORT CONFIGURATION */}
-                    <div 
-                        onClick={() => setIsAutoReportModalOpen(true)}
-                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-pink-900/30 hover:to-rose-900/30 border border-gray-700/60 hover:border-pink-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
-                            <Calendar className="w-40 h-40 text-white" />
-                        </div>
-                        <div className="bg-pink-500/10 w-fit p-4 rounded-xl mb-6 border border-pink-500/20 group-hover:scale-110 transition-transform duration-300">
-                            <Calendar className="w-8 h-8 text-pink-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-pink-300 transition-colors">Auto Gen Report</h3>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                            Configure automated scheduling rules to generate and email reports based on selected templates and criteria.
-                        </p>
-                        <span className="text-pink-400 text-xs font-semibold uppercase tracking-wider group-hover:text-pink-300">Configure Schedules &rarr;</span>
                     </div>
                 </div>
             </main>

@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
     CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
     Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { Editor } from '@tinymce/tinymce-react';
+import { REPORT_VARIABLES, STATIC_VARIABLES } from '../variableDefinitions';
+import { DELAY_CONFIG } from '@/lib/delay-config';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
 import SearchableDropdown from '../SearchableDropdown';
@@ -14,12 +17,28 @@ import SearchableDropdown from '../SearchableDropdown';
 export default function ControlPage() {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
-    const [stepStatus, setStepStatus] = useState(Array(10).fill('pending')); // 'pending' | 'running' | 'completed'
+    const [stepStatus, setStepStatus] = useState(Array(2).fill('pending')); // 'pending' | 'running' | 'completed'
     const [activeStep, setActiveStep] = useState(0);
     const [logs, setLogs] = useState([]);
+    const [activeCaptureTab, setActiveCaptureTab] = useState('domains');
+    const vncIframeRef = useRef(null);
+    const [isVncMaximized, setIsVncMaximized] = useState(false);
+
+    const requestVncFullscreen = () => {
+        if (vncIframeRef.current) {
+            if (vncIframeRef.current.requestFullscreen) {
+                vncIframeRef.current.requestFullscreen();
+            } else if (vncIframeRef.current.webkitRequestFullscreen) {
+                vncIframeRef.current.webkitRequestFullscreen();
+            } else if (vncIframeRef.current.msRequestFullscreen) {
+                vncIframeRef.current.msRequestFullscreen();
+            }
+        }
+    };
  
      // Dropdown Data States
      const [currentUser, setCurrentUser] = useState(null);
+     const [vncUrl, setVncUrl] = useState('');
      const [accounts, setAccounts] = useState([]);
      const [zones, setZones] = useState([]);
      const [subdomains, setSubdomains] = useState([]);
@@ -51,7 +70,146 @@ export default function ControlPage() {
      const [captureArgo, setCaptureArgo] = useState(true);
      const [captureSpeed, setCaptureSpeed] = useState(true);
 
-    const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+     const [coords, setCoords] = useState({
+         domains: { xStart: '395', xEnd: '1785', yStart: '115', yEnd: '' },
+         dns: { xStart: '365', xEnd: '1843', yStart: '95', yEnd: '' },
+         traffic: { xStart: '422', xEnd: '1766', yStart: '105', yEnd: '1005' },
+         firewall: { xStart: '288', xEnd: '1728', yStart: '115', yEnd: '815' },
+         securityRules: { xStart: '288', xEnd: '1920', yStart: '115', yEnd: '815' },
+         argo: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' },
+         speed: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' }
+     });
+
+     const handleCoordChange = (key, coord, val) => {
+        setCoords(prev => {
+            const updated = {
+                ...prev,
+                [key]: {
+                    ...prev[key],
+                    [coord]: val
+                }
+            };
+            return updated;
+        });
+    };
+
+    const saveCoordsToDatabase = async (e) => {
+        if (e) e.stopPropagation();
+        try {
+            const res = await fetch('/api/ntbc-capture-coords', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(coords)
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire({ icon: 'success', title: 'Saved!', text: 'Coordinates have been updated in the central database.', timer: 1500, showConfirmButton: false, background: '#111827', color: '#fff' });
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (e) {
+            console.error(e);
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save coordinates.', background: '#111827', color: '#fff' });
+        }
+    };
+
+     const openImageInNewTab = (base64Data) => {
+         if (!base64Data) return;
+         try {
+             const w = window.open("");
+             if (w) {
+                 w.document.write(
+                     `<html><head><title>Captured Screenshot</title><style>body{margin:0;background:#030712;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;max-height:100vh;object-fit:contain;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5)}</style></head><body><img src="${base64Data}"/></body></html>`
+                 );
+                 w.document.close();
+             } else {
+                 Swal.fire({
+                     title: 'Pop-up Blocked',
+                     text: 'Please allow pop-ups for this site to view full images.',
+                     icon: 'warning',
+                     background: '#111827',
+                     color: '#fff'
+                 });
+             }
+         } catch (err) {
+             console.error('Failed to open image in new tab:', err);
+         }
+     };
+
+
+      const renderCoordsInput = (key) => {
+          return (
+              <div className="flex flex-col gap-1.5 max-w-md pb-3 border-b border-gray-800/30" onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-2 ml-6 grid grid-cols-4 gap-3">
+                      <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
+                          <input 
+                              type="number"
+                              placeholder="Auto"
+                              value={coords[key]?.xStart || ''}
+                              onChange={(e) => handleCoordChange(key, 'xStart', e.target.value)}
+                              className="bg-gray-950/80 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full"
+                          />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-gray-400 font-mono font-medium">Xend</span>
+                          <input 
+                              type="number"
+                              placeholder="Auto"
+                              value={coords[key]?.xEnd || ''}
+                              onChange={(e) => handleCoordChange(key, 'xEnd', e.target.value)}
+                              className="bg-gray-950/80 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full"
+                          />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-gray-400 font-mono font-medium">Ystart</span>
+                          <input 
+                              type="number"
+                              placeholder="Auto"
+                              value={coords[key]?.yStart || ''}
+                              onChange={(e) => handleCoordChange(key, 'yStart', e.target.value)}
+                              className="bg-gray-950/80 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full"
+                          />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-gray-400 font-mono font-medium">Yend</span>
+                          <input 
+                              type="text"
+                              placeholder="Auto"
+                              value={coords[key]?.yEnd || ''}
+                              onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (/^-?\d*$/.test(val)) {
+                                      handleCoordChange(key, 'yEnd', val);
+                                  }
+                              }}
+                              className="bg-gray-950/80 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full"
+                          />
+                      </div>
+                  </div>
+                  <div className="ml-6 mt-2 flex justify-end">
+                      <button 
+                          onClick={saveCoordsToDatabase}
+                          className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-medium rounded transition-colors"
+                      >
+                          Save to Database
+                      </button>
+                  </div>
+                  {key === 'domains' && (
+                      <p className="ml-6 text-[10px] text-gray-400 font-sans leading-normal mt-1.5">
+                        * ค่า Yend สำหรับ Domains จะใช้ปรับขอบล่าง: ใส่ **ค่าลบ** เพื่อหักครอปขึ้นด้านบน (เช่น -250), ใส่ **ค่าบวก** เพื่อยืดขอบลงด้านล่าง (เช่น 50), หรือว่างไว้เป็น Auto (มี Pagination ยืด +15px / ไม่มีหักขึ้น -250px)
+                      </p>
+                  )}
+                  {key === 'dns' && (
+                      <p className="ml-6 text-[10px] text-gray-400 font-sans leading-normal mt-1.5">
+                        * ค่า Yend สำหรับ DNS จะใช้ปรับขอบล่าง: ใส่ **ค่าลบ** เพื่อหักครอปขึ้นด้านบน, ใส่ **ค่าบวก** เพื่อยืดขอบลงด้านล่าง, หรือว่างไว้เป็น Auto (ยืดลง +15px จากกล่อง pagination 1 to 50 of records)
+                      </p>
+                  )}
+              </div>
+          );
+      };
+ 
+     const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
     const addLog = useCallback((text, type = 'info') => {
         setLogs(prev => [
@@ -99,11 +257,18 @@ export default function ControlPage() {
                 setAccounts(res.data);
                 addLog(`Loaded ${res.data.length} accounts.`, 'success');
                 
-                // Override/force account ID for debug period
-                setEnvAccount('ae240d50da44461d1fc5e34f708ebec8');
-                const matchedAcc = res.data.find(a => a.id === 'ae240d50da44461d1fc5e34f708ebec8');
-                const accName = matchedAcc ? matchedAcc.name : 'ae240d50da44461d1fc5e34f708ebec8';
-                addLog(`Forced debug account: ${accName}`, 'info');
+                // Prioritize saved localStorage default account first
+                const savedAccount = localStorage.getItem('control_envAccount');
+                if (savedAccount && res.data.some(a => a.id === savedAccount)) {
+                    setEnvAccount(savedAccount);
+                    const accName = res.data.find(a => a.id === savedAccount)?.name || savedAccount;
+                    addLog(`Loaded saved account from defaults: ${accName}`, 'info');
+                } else {
+                    setEnvAccount('ae240d50da44461d1fc5e34f708ebec8');
+                    const matchedAcc = res.data.find(a => a.id === 'ae240d50da44461d1fc5e34f708ebec8');
+                    const accName = matchedAcc ? matchedAcc.name : 'ae240d50da44461d1fc5e34f708ebec8';
+                    addLog(`Loaded default account: ${accName}`, 'info');
+                }
             }
         } finally {
             setIsLoadingSettings(false);
@@ -212,7 +377,12 @@ export default function ControlPage() {
             }
             const savedDnsScreenshot = localStorage.getItem('control_capturedDnsScreenshot');
             if (savedDnsScreenshot) {
-                setCapturedDnsScreenshot(savedDnsScreenshot);
+                try {
+                    const parsed = savedDnsScreenshot.startsWith('[') ? JSON.parse(savedDnsScreenshot) : [savedDnsScreenshot];
+                    setCapturedDnsScreenshot(parsed);
+                } catch(e) {
+                    setCapturedDnsScreenshot([savedDnsScreenshot]);
+                }
             }
             const savedHttpTrafficScreenshot = localStorage.getItem('control_capturedHttpTrafficScreenshot');
             if (savedHttpTrafficScreenshot) {
@@ -258,40 +428,86 @@ export default function ControlPage() {
             if (savedSpeedMobileScreenshot) {
                 setCapturedSpeedMobileScreenshot(savedSpeedMobileScreenshot);
             }
-            const savedCaptureDomains = localStorage.getItem('control_captureDomains');
+            const savedCaptureDomains = localStorage.getItem('control_captureDomains') !== null 
+                ? localStorage.getItem('control_captureDomains') 
+                : localStorage.getItem('control_default_captureDomains');
             if (savedCaptureDomains !== null) {
                 setCaptureDomains(savedCaptureDomains === 'true');
             }
-            const savedCaptureDnsRecord = localStorage.getItem('control_captureDnsRecord');
+            const savedCaptureDnsRecord = localStorage.getItem('control_captureDnsRecord') !== null
+                ? localStorage.getItem('control_captureDnsRecord')
+                : localStorage.getItem('control_default_captureDnsRecord');
             if (savedCaptureDnsRecord !== null) {
                 setCaptureDnsRecord(savedCaptureDnsRecord === 'true');
             }
-            const savedCaptureHttpTraffic = localStorage.getItem('control_captureHttpTraffic');
+            const savedCaptureHttpTraffic = localStorage.getItem('control_captureHttpTraffic') !== null
+                ? localStorage.getItem('control_captureHttpTraffic')
+                : localStorage.getItem('control_default_captureHttpTraffic');
             if (savedCaptureHttpTraffic !== null) {
                 setCaptureHttpTraffic(savedCaptureHttpTraffic === 'true');
             }
-            const savedCaptureFirewall = localStorage.getItem('control_captureFirewall');
+            const savedCaptureFirewall = localStorage.getItem('control_captureFirewall') !== null
+                ? localStorage.getItem('control_captureFirewall')
+                : localStorage.getItem('control_default_captureFirewall');
             if (savedCaptureFirewall !== null) {
                 setCaptureFirewall(savedCaptureFirewall === 'true');
             }
-            const savedCaptureSecurityRules = localStorage.getItem('control_captureSecurityRules');
+            const savedCaptureSecurityRules = localStorage.getItem('control_captureSecurityRules') !== null
+                ? localStorage.getItem('control_captureSecurityRules')
+                : localStorage.getItem('control_default_captureSecurityRules');
             if (savedCaptureSecurityRules !== null) {
                 setCaptureSecurityRules(savedCaptureSecurityRules === 'true');
             }
-            const savedCaptureArgo = localStorage.getItem('control_captureArgo');
+            const savedCaptureArgo = localStorage.getItem('control_captureArgo') !== null
+                ? localStorage.getItem('control_captureArgo')
+                : localStorage.getItem('control_default_captureArgo');
             if (savedCaptureArgo !== null) {
                 setCaptureArgo(savedCaptureArgo === 'true');
             }
-            const savedCaptureSpeed = localStorage.getItem('control_captureSpeed');
+            const savedCaptureSpeed = localStorage.getItem('control_captureSpeed') !== null
+                ? localStorage.getItem('control_captureSpeed')
+                : localStorage.getItem('control_default_captureSpeed');
             if (savedCaptureSpeed !== null) {
                 setCaptureSpeed(savedCaptureSpeed === 'true');
             }
+            const savedStartDate = localStorage.getItem('control_envStartDate');
+            if (savedStartDate) {
+                setEnvStartDate(savedStartDate);
+            }
+            const savedEndDate = localStorage.getItem('control_envEndDate');
+            if (savedEndDate) {
+                setEnvEndDate(savedEndDate);
+            }
+            
+            // Fetch central database coordinates
+            fetch('/api/ntbc-capture-coords')
+                .then(res => res.json())
+                .then(data => {
+                    setCoords(data);
+                })
+                .catch(e => {
+                    console.error('Failed to load global coords:', e);
+                    const defaultCoords = {
+                        domains: { xStart: '395', xEnd: '1785', yStart: '115', yEnd: '' },
+                        dns: { xStart: '365', xEnd: '1843', yStart: '95', yEnd: '' },
+                        traffic: { xStart: '422', xEnd: '1766', yStart: '105', yEnd: '1005' },
+                        firewall: { xStart: '288', xEnd: '1728', yStart: '115', yEnd: '815' },
+                        securityRules: { xStart: '288', xEnd: '1920', yStart: '115', yEnd: '815' },
+                        argo: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' },
+                        speed: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' },
+                        speedMobile: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' }
+                    };
+                    setCoords(defaultCoords);
+                });
             // Clear stepStatus from localStorage on refresh
             localStorage.removeItem('control_stepStatus');
         }
 
         // Initialize logs with first entry containing client-side timestamp
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'System initialized and ready.', type: 'info' }]);
+        if (typeof window !== 'undefined') {
+            setVncUrl(`http://${window.location.hostname}:5800/?autoconnect=1&resize=scale`);
+        }
         setMounted(true);
         init();
     }, [router]);
@@ -309,6 +525,35 @@ export default function ControlPage() {
             loadSubdomainsForZone(envZone);
         }
     }, [envZone]);
+
+    // Auto-select tab when a screenshot is captured
+    useEffect(() => {
+        if (capturedScreenshot) setActiveCaptureTab('domains');
+    }, [capturedScreenshot]);
+
+    useEffect(() => {
+        if (capturedDnsScreenshot) setActiveCaptureTab('dns');
+    }, [capturedDnsScreenshot]);
+
+    useEffect(() => {
+        if (capturedHttpTrafficScreenshot) setActiveCaptureTab('traffic');
+    }, [capturedHttpTrafficScreenshot]);
+
+    useEffect(() => {
+        if (capturedFirewallScreenshot) setActiveCaptureTab('firewall');
+    }, [capturedFirewallScreenshot]);
+
+    useEffect(() => {
+        if (capturedSecurityRulesScreenshot) setActiveCaptureTab('securityRules');
+    }, [capturedSecurityRulesScreenshot]);
+
+    useEffect(() => {
+        if (capturedArgoScreenshot) setActiveCaptureTab('argo');
+    }, [capturedArgoScreenshot]);
+
+    useEffect(() => {
+        if (capturedSpeedScreenshot || capturedSpeedMobileScreenshot) setActiveCaptureTab('speed');
+    }, [capturedSpeedScreenshot, capturedSpeedMobileScreenshot]);
 
     const saveAsDefault = () => {
         localStorage.setItem('control_envAccount', envAccount);
@@ -332,15 +577,7 @@ export default function ControlPage() {
 
     const steps = [
         { name: "Step 1: Go to Login Page", desc: "Launches the Cloudflare login dashboard (dash.cloudflare.com) on port 9222." },
-        { name: "Step 2: Login Success, Capturing", desc: "Redirects active tab directly to the selected Cloudflare Account Home Overview." },
-        { name: "Step 3: Fetch DNS Records", desc: "Retrieves active DNS A, AAAA, CNAME, and MX records." },
-        { name: "Step 4: Load Security Settings", desc: "Queries WAF security level, SSL configuration, and custom rules." },
-        { name: "Step 5: Load WAF Event Logs", desc: "Downloads recent firewall block/challenge event logs." },
-        { name: "Step 6: Render Dashboard Charts", desc: "Compiles traffic metrics and renders SVG overview graphs." },
-        { name: "Step 7: Replace Template Placeholders", desc: "Injects live host analytics into target report template structures." },
-        { name: "Step 8: Generate PDF Draft", desc: "Compiles page layout into a print-ready PDF document format." },
-        { name: "Step 9: Compile Word Document", desc: "Formats final output as an editable Word Document (.doc)." },
-        { name: "Step 10: Finalize and Email Report", desc: "Stores report data locally and sends completion alerts." }
+        { name: "Step 2: Login Success, Capturing", desc: "Redirects active tab directly to the selected Cloudflare Account Home Overview and captures all active Cloudflare settings & screenshots." }
     ];
 
     const isConfigComplete = true;
@@ -368,141 +605,21 @@ export default function ControlPage() {
             return;
         }
 
-        const markCompleted = (screenshot = null, dnsScreenshot = null, trafficScreenshot = null, firewallScreenshot = null, securityRulesScreenshot = null, argoScreenshot = null, speedScreenshot = null) => {
+        const markCompleted = () => {
             updateStepStatusAtIndex(index, 'completed');
             addLog(`${steps[index].name} completed successfully.`, 'success');
 
-            let htmlContent = `<div class="text-center font-bold text-lg text-white">Already done[ step ${index + 1} ]</div>`;
-            if (index === 1 && (screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot || securityRulesScreenshot || argoScreenshot || speedScreenshot)) {
-                htmlContent += `<div class="mt-4 flex flex-col gap-4 max-h-[350px] overflow-y-auto">`;
-                if (screenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden">
-                            <span class="text-xs text-gray-400 mb-1">Domains Overview</span>
-                            <img src="${screenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Domains List" />
-                        </div>
-                    `;
-                }
-                if (dnsScreenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden">
-                            <span class="text-xs text-gray-400 mb-1">DNS Records</span>
-                            <img src="${dnsScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured DNS Records" />
-                        </div>
-                    `;
-                }
-                if (trafficScreenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden">
-                            <span class="text-xs text-gray-400 mb-1">HTTP Traffic Overview</span>
-                            <img src="${trafficScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic" />
-                        </div>
-                    `;
-                    const ts1 = localStorage.getItem('control_capturedHttpTrafficScreenshot1');
-                    if (ts1) {
-                        htmlContent += `
-                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 1 (900px)</span>
-                                <img src="${ts1}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 1" />
-                            </div>
-                        `;
-                    }
-                    const ts2 = localStorage.getItem('control_capturedHttpTrafficScreenshot2');
-                    if (ts2) {
-                        htmlContent += `
-                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 2 (900px)</span>
-                                <img src="${ts2}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 2" />
-                            </div>
-                        `;
-                    }
-                    const ts3 = localStorage.getItem('control_capturedHttpTrafficScreenshot3');
-                    if (ts3) {
-                        htmlContent += `
-                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 3 (900px)</span>
-                                <img src="${ts3}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 3" />
-                            </div>
-                        `;
-                    }
-                    const ts4 = localStorage.getItem('control_capturedHttpTrafficScreenshot4');
-                    if (ts4) {
-                        htmlContent += `
-                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 4 (900px)</span>
-                                <img src="${ts4}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 4" />
-                            </div>
-                        `;
-                    }
-                    const ts5 = localStorage.getItem('control_capturedHttpTrafficScreenshot5');
-                    if (ts5) {
-                        htmlContent += `
-                            <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                                <span class="text-xs text-gray-400 mb-1">HTTP Traffic Sub 5 (900px)</span>
-                                <img src="${ts5}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured HTTP Traffic Sub 5" />
-                            </div>
-                        `;
-                    }
-                }
-                if (firewallScreenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                            <span class="text-xs text-gray-400 mb-1">Event Analytics (Firewall)</span>
-                            <img src="${firewallScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Firewall Analytics" />
-                        </div>
-                    `;
-                }
-                if (securityRulesScreenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                            <span class="text-xs text-gray-400 mb-1">Security Rules</span>
-                            <img src="${securityRulesScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Security Rules" />
-                        </div>
-                    `;
-                }
-                if (argoScreenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                            <span class="text-xs text-gray-400 mb-1">Argo Smart Routing</span>
-                            <img src="${argoScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Argo Smart Routing" />
-                        </div>
-                    `;
-                }
-                if (speedScreenshot) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                            <span class="text-xs text-gray-400 mb-1">Speed Test</span>
-                            <img src="${speedScreenshot}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Speed Test" />
-                        </div>
-                    `;
-                }
-                const sms = localStorage.getItem('control_capturedSpeedMobileScreenshot');
-                if (sms) {
-                    htmlContent += `
-                        <div class="border border-gray-800 rounded bg-black p-2 flex flex-col items-center justify-center overflow-hidden mt-2">
-                            <span class="text-xs text-gray-400 mb-1">Speed Test (Mobile)</span>
-                            <img src="${sms}" class="max-w-full rounded h-auto max-h-[160px] object-contain border border-gray-700" alt="Captured Speed Test (Mobile)" />
-                        </div>
-                    `;
-                }
-                htmlContent += `</div>`;
-            }
-
-            const hasAnyScreenshot = screenshot || dnsScreenshot || trafficScreenshot || firewallScreenshot || securityRulesScreenshot || argoScreenshot || speedScreenshot;
-
             Swal.fire({
-                title: 'Notification',
-                html: htmlContent,
+                title: `${steps[index].name} Completed`,
+                text: 'All captures finished successfully.',
                 icon: 'success',
                 position: 'center',
-                timer: index === 1 && hasAnyScreenshot ? undefined : 2000,
-                showConfirmButton: index === 1 && hasAnyScreenshot,
-                confirmButtonText: 'Great!',
-                confirmButtonColor: '#e11d48',
+                timer: 2000,
+                showConfirmButton: false,
                 background: '#111827',
                 color: '#fff',
                 customClass: {
-                    popup: 'rounded-2xl border border-rose-500/30 shadow-2xl w-[500px]'
+                    popup: 'rounded-2xl border border-rose-500/30 shadow-2xl'
                 }
             });
         };
@@ -529,6 +646,18 @@ export default function ControlPage() {
         // Step 2: Redirect active tab & Capture screenshot for selected options
         if (index === 1) {
             try {
+                const getCaptureUrl = (typeKey, typeValue) => {
+                    let url = `/api/ntbc-capture?type=${typeValue}`;
+                    const c = coords[typeKey];
+                    if (c) {
+                        if (c.xStart) url += `&xStart=${c.xStart}`;
+                        if (c.xEnd) url += `&xEnd=${c.xEnd}`;
+                        if (c.yStart) url += `&yStart=${c.yStart}`;
+                        if (c.yEnd) url += `&yEnd=${c.yEnd}`;
+                    }
+                    return url;
+                };
+
                 let domainsImg = null;
                 let dnsImg = null;
                 let trafficImg = null;
@@ -547,10 +676,10 @@ export default function ControlPage() {
                     if (data.success) {
                         addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
                         addLog('Waiting for page rendering to stabilize...', 'info');
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
 
                         addLog('Triggering cropped screenshot capture ("Domains" heading to pagination)...', 'info');
-                        const captureRes = await fetch('/api/ntbc-capture?type=domains');
+                        const captureRes = await fetch(getCaptureUrl('domains', 'domains'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
                             domainsImg = captureData.image;
@@ -578,16 +707,16 @@ export default function ControlPage() {
                     if (data.success) {
                         addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
                         addLog('Waiting for page rendering to stabilize...', 'info');
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
 
                         addLog('Triggering cropped screenshot capture ("DNS" heading)...', 'info');
-                        const captureRes = await fetch('/api/ntbc-capture?type=dns');
+                        const captureRes = await fetch(getCaptureUrl('dns', 'dns'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
-                            dnsImg = captureData.image;
-                            setCapturedDnsScreenshot(captureData.image);
+                            const dnsImages = captureData.dnsPages || [captureData.image];
+                            setCapturedDnsScreenshot(dnsImages);
                             if (typeof window !== 'undefined') {
-                                localStorage.setItem('control_capturedDnsScreenshot', captureData.image);
+                                localStorage.setItem('control_capturedDnsScreenshot', JSON.stringify(dnsImages));
                                 if (captureData.dnsPages) {
                                     localStorage.setItem('control_capturedDnsPages', JSON.stringify(captureData.dnsPages));
                                 } else {
@@ -614,10 +743,10 @@ export default function ControlPage() {
                     if (data.success) {
                         addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
                         addLog('Waiting for page rendering to stabilize...', 'info');
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
 
                         addLog('Triggering cropped screenshot capture ("Traffic" heading)...', 'info');
-                        const captureRes = await fetch('/api/ntbc-capture?type=traffic');
+                        const captureRes = await fetch(getCaptureUrl('traffic', 'traffic'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
                             trafficImg = captureData.image;
@@ -675,10 +804,10 @@ export default function ControlPage() {
                     if (data.success) {
                         addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
                         addLog('Waiting for page rendering to stabilize...', 'info');
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
 
                         addLog('Triggering cropped screenshot capture ("Firewall" heading)...', 'info');
-                        const captureRes = await fetch('/api/ntbc-capture?type=firewall');
+                        const captureRes = await fetch(getCaptureUrl('firewall', 'firewall'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
                             firewallImg = captureData.image;
@@ -706,10 +835,10 @@ export default function ControlPage() {
                     if (data.success) {
                         addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
                         addLog('Waiting for page rendering to stabilize...', 'info');
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
 
                         addLog('Triggering cropped screenshot capture ("Security Rules" heading)...', 'info');
-                        const captureRes = await fetch('/api/ntbc-capture?type=security-rules');
+                        const captureRes = await fetch(getCaptureUrl('securityRules', 'security-rules'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
                             securityRulesImg = captureData.image;
@@ -737,10 +866,10 @@ export default function ControlPage() {
                     if (data.success) {
                         addLog(`Redirect successful to: ${data.redirectedUrl}`, 'success');
                         addLog('Waiting for page rendering to stabilize...', 'info');
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
 
                         addLog('Triggering cropped screenshot capture ("Argo" heading)...', 'info');
-                        const captureRes = await fetch('/api/ntbc-capture?type=argo');
+                        const captureRes = await fetch(getCaptureUrl('argo', 'argo'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
                             argoImg = captureData.image;
@@ -779,39 +908,38 @@ export default function ControlPage() {
                             })
                         });
                         const runData = await runRes.json();
-                        if (runData.success) {
-                            addLog('Speed test successfully triggered. Waiting 60 seconds before checking results...', 'info');
-                            await new Promise(r => setTimeout(r, 60000));
-                            
-                            // Check loop
-                            let isSuccess = false;
-                            for (let retry = 1; retry <= 3; retry++) {
-                                addLog(`Checking for speed test result (Attempt ${retry}/3)...`, 'info');
+                            if (runData.success) {
+                                addLog('Speed test successfully triggered. Waiting dynamically for results (max 60s)...', 'info');
                                 
-                                const checkRes = await fetch('/api/scrape', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        action: 'check-speed-results',
-                                        apiToken: currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
-                                    })
-                                });
-                                const checkData = await checkRes.json();
-                                if (checkData.success && checkData.found) {
-                                    addLog('Found "Speed test result" text on active page!', 'success');
-                                    isSuccess = true;
-                                    break;
+                                // Check loop (Polling)
+                                let isSuccess = false;
+                                const maxAttempts = DELAY_CONFIG.SPEED_TEST_MAX_ATTEMPTS;
+                                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                                    addLog(`Checking for speed test result (Attempt ${attempt}/${maxAttempts})...`, 'info');
+                                    
+                                    const checkRes = await fetch('/api/scrape', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            action: 'check-speed-results',
+                                            apiToken: currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
+                                        })
+                                    });
+                                    const checkData = await checkRes.json();
+                                    if (checkData.success && checkData.found) {
+                                        addLog('Found "Speed test result" text on active page!', 'success');
+                                        isSuccess = true;
+                                        break;
+                                    }
+                                    
+                                    if (attempt < maxAttempts) {
+                                        await new Promise(r => setTimeout(r, DELAY_CONFIG.SPEED_TEST_POLL_MS));
+                                    }
                                 }
-                                
-                                if (retry < 3) {
-                                    addLog('Result not found yet. Retrying in 5 seconds...', 'info');
-                                    await new Promise(r => setTimeout(r, 5000));
-                                }
-                            }
                             
                             if (isSuccess) {
                                 addLog('Triggering cropped screenshot capture ("Speed" heading)...', 'info');
-                                const captureRes = await fetch('/api/ntbc-capture?type=speed');
+                                const captureRes = await fetch(getCaptureUrl('speed', 'speed'));
                                 const captureData = await captureRes.json();
                                 if (captureData.success && captureData.image) {
                                     speedImg = captureData.image;
@@ -825,7 +953,7 @@ export default function ControlPage() {
                                 }
                             } else {
                                 addLog('Timeout waiting for Speed test results (Text not found after retries). Proceeding with screenshot fallback.', 'warn');
-                                const captureRes = await fetch('/api/ntbc-capture?type=speed');
+                                const captureRes = await fetch(getCaptureUrl('speed', 'speed'));
                                 const captureData = await captureRes.json();
                                 if (captureData.success && captureData.image) {
                                     speedImg = captureData.image;
@@ -836,7 +964,7 @@ export default function ControlPage() {
                                     addLog('Speed Test fallback screenshot captured successfully.', 'success');
                                 }
                             }
-
+ 
                             // Capture Speed Mobile
                             if (speedImg) {
                                 addLog('Clicking Mobile speed test tab...', 'info');
@@ -851,7 +979,7 @@ export default function ControlPage() {
                                 const mobileClickData = await mobileClickRes.json();
                                 if (mobileClickData.success) {
                                     addLog('Triggering mobile speed screenshot capture...', 'info');
-                                    const captureMobileRes = await fetch('/api/ntbc-capture?type=speed-mobile');
+                                    const captureMobileRes = await fetch(getCaptureUrl('speed', 'speed-mobile'));
                                     const captureMobileData = await captureMobileRes.json();
                                     if (captureMobileData.success && captureMobileData.image) {
                                         speedMobileImg = captureMobileData.image;
@@ -881,7 +1009,7 @@ export default function ControlPage() {
                     addLog('Session capturing completed successfully.', 'success');
                 }
                 
-                markCompleted(domainsImg, dnsImg, trafficImg, firewallImg, securityRulesImg, argoImg, speedImg);
+                markCompleted();
             } catch (err) {
                 console.error('Control Chrome failed:', err);
                 addLog(`Control Chrome failed: ${err.message}`, 'error');
@@ -889,15 +1017,130 @@ export default function ControlPage() {
             }
             return;
         }
+    };
 
-        // Mock steps (3-10)
-        setTimeout(() => {
-            markCompleted();
-        }, 800);
+    const isAllSelected = captureDomains && captureDnsRecord && captureHttpTraffic && captureFirewall && captureSecurityRules && captureArgo && captureSpeed;
+
+    const toggleSelectAll = () => {
+        const targetVal = !isAllSelected;
+        setCaptureDomains(targetVal);
+        setCaptureDnsRecord(targetVal);
+        setCaptureHttpTraffic(targetVal);
+        setCaptureFirewall(targetVal);
+        setCaptureSecurityRules(targetVal);
+        setCaptureArgo(targetVal);
+        setCaptureSpeed(targetVal);
+
+        if (typeof window !== 'undefined') {
+            const valStr = targetVal ? 'true' : 'false';
+            localStorage.setItem('control_captureDomains', valStr);
+            localStorage.setItem('control_captureDnsRecord', valStr);
+            localStorage.setItem('control_captureHttpTraffic', valStr);
+            localStorage.setItem('control_captureFirewall', valStr);
+            localStorage.setItem('control_captureSecurityRules', valStr);
+            localStorage.setItem('control_captureArgo', valStr);
+            localStorage.setItem('control_captureSpeed', valStr);
+        }
+        addLog(targetVal ? 'All captures selected.' : 'All captures deselected.', 'info');
+    };
+
+    const saveStep2Settings = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('control_captureDomains', captureDomains ? 'true' : 'false');
+            localStorage.setItem('control_captureDnsRecord', captureDnsRecord ? 'true' : 'false');
+            localStorage.setItem('control_captureHttpTraffic', captureHttpTraffic ? 'true' : 'false');
+            localStorage.setItem('control_captureFirewall', captureFirewall ? 'true' : 'false');
+            localStorage.setItem('control_captureSecurityRules', captureSecurityRules ? 'true' : 'false');
+            localStorage.setItem('control_captureArgo', captureArgo ? 'true' : 'false');
+            localStorage.setItem('control_captureSpeed', captureSpeed ? 'true' : 'false');
+        }
+        addLog('Step 2 capture settings saved successfully.', 'success');
+        Swal.fire({
+            title: 'Settings Saved',
+            text: 'Step 2 checklist switch status saved successfully.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+            background: '#111827',
+            color: '#fff'
+        });
+    };
+
+    const saveStep2AsDefault = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('control_default_captureDomains', captureDomains ? 'true' : 'false');
+            localStorage.setItem('control_default_captureDnsRecord', captureDnsRecord ? 'true' : 'false');
+            localStorage.setItem('control_default_captureHttpTraffic', captureHttpTraffic ? 'true' : 'false');
+            localStorage.setItem('control_default_captureFirewall', captureFirewall ? 'true' : 'false');
+            localStorage.setItem('control_default_captureSecurityRules', captureSecurityRules ? 'true' : 'false');
+            localStorage.setItem('control_default_captureArgo', captureArgo ? 'true' : 'false');
+            localStorage.setItem('control_default_captureSpeed', captureSpeed ? 'true' : 'false');
+            localStorage.setItem('control_default_coords', JSON.stringify(coords));
+            
+            // Also save to active keys
+            localStorage.setItem('control_captureDomains', captureDomains ? 'true' : 'false');
+            localStorage.setItem('control_captureDnsRecord', captureDnsRecord ? 'true' : 'false');
+            localStorage.setItem('control_captureHttpTraffic', captureHttpTraffic ? 'true' : 'false');
+            localStorage.setItem('control_captureFirewall', captureFirewall ? 'true' : 'false');
+            localStorage.setItem('control_captureSecurityRules', captureSecurityRules ? 'true' : 'false');
+            localStorage.setItem('control_captureArgo', captureArgo ? 'true' : 'false');
+            localStorage.setItem('control_captureSpeed', captureSpeed ? 'true' : 'false');
+            localStorage.setItem('control_coords', JSON.stringify(coords));
+        }
+        addLog('Step 2 capture settings saved as defaults.', 'success');
+        Swal.fire({
+            title: 'Saved as Default',
+            text: 'Step 2 checklist and coordinates locked in as default values.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+            background: '#111827',
+            color: '#fff'
+        });
     };
 
     const resetAll = () => {
-        setStepStatus(Array(10).fill('pending'));
+        setStepStatus(Array(2).fill('pending'));
+        const defaultCoords = {
+            domains: { xStart: '395', xEnd: '1785', yStart: '115', yEnd: '' },
+            dns: { xStart: '365', xEnd: '1843', yStart: '95', yEnd: '' },
+            traffic: { xStart: '422', xEnd: '1766', yStart: '105', yEnd: '1005' },
+            firewall: { xStart: '288', xEnd: '1728', yStart: '115', yEnd: '815' },
+            securityRules: { xStart: '288', xEnd: '1920', yStart: '115', yEnd: '815' },
+            argo: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' },
+            speed: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' }
+        };
+
+        const defDomains = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureDomains') === 'true') : false;
+        const defDns = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureDnsRecord') === 'true') : false;
+        const defTraffic = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureHttpTraffic') === 'true') : false;
+        const defFirewall = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureFirewall') === 'true') : false;
+        const defRules = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureSecurityRules') === 'true') : false;
+        const defArgo = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureArgo') === 'true') : false;
+        const defSpeed = typeof window !== 'undefined' ? (localStorage.getItem('control_default_captureSpeed') === 'true') : false;
+
+        setCaptureDomains(defDomains);
+        setCaptureDnsRecord(defDns);
+        setCaptureHttpTraffic(defTraffic);
+        setCaptureFirewall(defFirewall);
+        setCaptureSecurityRules(defRules);
+        setCaptureArgo(defArgo);
+        setCaptureSpeed(defSpeed);
+
+        const savedDefCoords = typeof window !== 'undefined' ? localStorage.getItem('control_default_coords') : null;
+        if (savedDefCoords) {
+            try {
+                setCoords(JSON.parse(savedDefCoords));
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem('control_coords', savedDefCoords);
+                }
+            } catch (e) {
+                setCoords(defaultCoords);
+            }
+        } else {
+            setCoords(defaultCoords);
+        }
+
         setCapturedScreenshot(null);
         setCapturedDnsScreenshot(null);
         setCapturedHttpTrafficScreenshot(null);
@@ -911,13 +1154,7 @@ export default function ControlPage() {
         setCapturedArgoScreenshot(null);
         setCapturedSpeedScreenshot(null);
         setCapturedSpeedMobileScreenshot(null);
-        setCaptureDomains(false);
-        setCaptureDnsRecord(false);
-        setCaptureHttpTraffic(false);
-        setCaptureFirewall(false);
-        setCaptureSecurityRules(false);
-        setCaptureArgo(false);
-        setCaptureSpeed(false);
+
         if (typeof window !== 'undefined') {
             localStorage.removeItem('control_stepStatus');
             localStorage.removeItem('control_capturedScreenshot');
@@ -933,13 +1170,14 @@ export default function ControlPage() {
             localStorage.removeItem('control_capturedArgoScreenshot');
             localStorage.removeItem('control_capturedSpeedScreenshot');
             localStorage.removeItem('control_capturedSpeedMobileScreenshot');
-            localStorage.removeItem('control_captureDomains');
-            localStorage.removeItem('control_captureDnsRecord');
-            localStorage.removeItem('control_captureHttpTraffic');
-            localStorage.removeItem('control_captureFirewall');
-            localStorage.removeItem('control_captureSecurityRules');
-            localStorage.removeItem('control_captureArgo');
-            localStorage.removeItem('control_captureSpeed');
+
+            localStorage.setItem('control_captureDomains', defDomains ? 'true' : 'false');
+            localStorage.setItem('control_captureDnsRecord', defDns ? 'true' : 'false');
+            localStorage.setItem('control_captureHttpTraffic', defTraffic ? 'true' : 'false');
+            localStorage.setItem('control_captureFirewall', defFirewall ? 'true' : 'false');
+            localStorage.setItem('control_captureSecurityRules', defRules ? 'true' : 'false');
+            localStorage.setItem('control_captureArgo', defArgo ? 'true' : 'false');
+            localStorage.setItem('control_captureSpeed', defSpeed ? 'true' : 'false');
         }
         setActiveStep(0);
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'Control panel reset to initial state.', type: 'info' }]);
@@ -954,6 +1192,49 @@ export default function ControlPage() {
             color: '#fff'
         });
     };
+
+    const renderVncCard = () => (
+        <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col mb-6">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
+                <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-rose-500 animate-pulse" />
+                    Live Browser Monitor (noVNC)
+                </h2>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsVncMaximized(!isVncMaximized)}
+                        className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border border-gray-700/50"
+                    >
+                        {isVncMaximized ? '🗗 Minimize Layout' : '🗖 Maximize Layout'}
+                    </button>
+                    <button
+                        onClick={requestVncFullscreen}
+                        className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1.5 shadow-md"
+                    >
+                        🖥️ Fullscreen Mode
+                    </button>
+                </div>
+            </div>
+            <div className="rounded-xl overflow-hidden bg-black aspect-video relative border border-gray-800 shadow-inner">
+                {mounted && vncUrl ? (
+                    <iframe 
+                        ref={vncIframeRef}
+                        src={vncUrl}
+                        allowFullScreen
+                        className={`w-full h-full border-none ${isVncMaximized ? 'min-h-[560px]' : 'min-h-[360px]'}`}
+                        title="Live Browser Monitor (VNC)"
+                    />
+                ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs font-mono">
+                        Initializing live stream...
+                    </div>
+                )}
+            </div>
+            <p className="text-[10px] text-gray-500 mt-2 font-mono">
+                Connecting VNC display at: {vncUrl}
+            </p>
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-[#030712] text-gray-100 font-sans p-6 md:p-10 flex flex-col">
@@ -990,10 +1271,535 @@ export default function ControlPage() {
                 </div>
             </div>
 
+            {/* VNC Card rendering when maximized */}
+            {isVncMaximized && renderVncCard()}
+
             {/* Dashboard Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
                 {/* Steps and Environment Section (Left) */}
                 <div className="lg:col-span-8 space-y-6 flex flex-col">
+                    {/* Live Browser Monitor Card */}
+                    {!isVncMaximized && renderVncCard()}
+
+                              {/* Consolidated Captured Screenshots (Step 2) */}
+                    <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl relative animate-scale-up">
+                        <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                <span className="text-xs font-bold text-gray-300 font-mono">Captured Screenshots (Step 2)</span>
+                            </div>
+                        </div>
+
+                        {/* Tab Sidebar layout */}
+                        <div className="flex flex-col md:flex-row gap-4 flex-1">
+                            {/* Left-hand sidebar nav bar */}
+                            <div className="flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:pr-3 border-b md:border-b-0 md:border-r border-gray-900 scrollbar-thin scrollbar-thumb-gray-800 shrink-0 md:w-[130px]">
+                                {[
+                                    { id: 'domains', label: 'Domains', hasData: !!capturedScreenshot, icon: '🌐' },
+                                    { id: 'dns', label: 'DNS Records', hasData: !!capturedDnsScreenshot, icon: '💾' },
+                                    { id: 'traffic', label: 'HTTP Traffic', hasData: !!capturedHttpTrafficScreenshot, icon: '📈' },
+                                    { id: 'firewall', label: 'Firewall', hasData: !!capturedFirewallScreenshot, icon: '🛡️' },
+                                    { id: 'securityRules', label: 'Security Rules', hasData: !!capturedSecurityRulesScreenshot, icon: '🔒' },
+                                    { id: 'argo', label: 'Argo Smart', hasData: !!capturedArgoScreenshot, icon: '⚡' },
+                                    { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀' }
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveCaptureTab(tab.id)}
+                                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 border w-full ${
+                                            activeCaptureTab === tab.id
+                                                ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+                                                : 'bg-gray-900/40 border-gray-800/80 text-gray-400 hover:text-gray-200 hover:border-gray-700'
+                                        }`}
+                                    >
+                                        <span>{tab.icon}</span>
+                                        <span className="truncate">{tab.label}</span>
+                                        {tab.hasData && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ml-auto shrink-0"></span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Tab contents (Right) */}
+                            <div className="flex-1 flex flex-col min-w-0">
+                                {/* Current Crop Coordinates display */}
+                                {coords[activeCaptureTab] && (
+                                    <div className="text-[9px] font-mono text-gray-400 bg-gray-900/60 px-2 py-1.5 rounded border border-gray-800/80 mb-3 flex items-center justify-between">
+                                        <span className="text-gray-500">Crop Coordinates:</span>
+                                        <span>X: {coords[activeCaptureTab].xStart || 'Auto'} → {coords[activeCaptureTab].xEnd || 'Auto'} | Y: {coords[activeCaptureTab].yStart || 'Auto'} → {coords[activeCaptureTab].yEnd || 'Auto'}</span>
+                                    </div>
+                                )}
+
+                                {/* Domains tab */}
+                                {activeCaptureTab === 'domains' && (
+                                    <div className="flex flex-col gap-2">
+                                        {capturedScreenshot ? (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
+                                                    <img src={capturedScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Domains Overview" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                        <button type="button" onClick={() => openImageInNewTab(capturedScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                            View Full Image
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No Domains Overview captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* DNS records tab */}
+                                {activeCaptureTab === 'dns' && (
+                                    <div className="flex flex-col gap-2">
+                                        {capturedDnsScreenshot && Array.isArray(capturedDnsScreenshot) ? (
+                                            <div className="flex flex-col gap-2">
+                                                {capturedDnsScreenshot.map((imgSrc, idx) => (
+                                                    <div key={idx} className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
+                                                        <img src={imgSrc} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={`DNS Records Overview - Page ${idx + 1}`} />
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                            <button type="button" onClick={() => openImageInNewTab(imgSrc)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                                View Full Image
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No DNS Records captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* HTTP Traffic tab */}
+                                {activeCaptureTab === 'traffic' && (
+                                    <div className="flex flex-col gap-3">
+                                        {capturedHttpTrafficScreenshot ? (
+                                            <div className="flex flex-col gap-3">
+                                                <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden group relative">
+                                                    <span className="text-[9px] text-gray-500 mb-1 font-mono">Overview</span>
+                                                    <img src={capturedHttpTrafficScreenshot} className="max-w-full rounded h-auto max-h-[220px] object-contain" alt="HTTP Traffic Overview" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                        <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                            View Full Image
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Subdomain details grid */}
+                                                {(capturedHttpTrafficScreenshot1 || capturedHttpTrafficScreenshot2 || capturedHttpTrafficScreenshot3 || capturedHttpTrafficScreenshot4 || capturedHttpTrafficScreenshot5) && (
+                                                    <div className="grid grid-cols-2 gap-2 mt-1">
+                                                        {capturedHttpTrafficScreenshot1 && (
+                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
+                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Requests</span>
+                                                                <img src={capturedHttpTrafficScreenshot1} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 1" />
+                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot1)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
+                                                                    Zoom
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {capturedHttpTrafficScreenshot2 && (
+                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
+                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Data Transfer</span>
+                                                                <img src={capturedHttpTrafficScreenshot2} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 2" />
+                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot2)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
+                                                                    Zoom
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {capturedHttpTrafficScreenshot3 && (
+                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
+                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Page views</span>
+                                                                <img src={capturedHttpTrafficScreenshot3} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 3" />
+                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot3)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
+                                                                    Zoom
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {capturedHttpTrafficScreenshot4 && (
+                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
+                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Visits</span>
+                                                                <img src={capturedHttpTrafficScreenshot4} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 4" />
+                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot4)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
+                                                                    Zoom
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {capturedHttpTrafficScreenshot5 && (
+                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group col-span-2">
+                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">API Requests</span>
+                                                                <img src={capturedHttpTrafficScreenshot5} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 5" />
+                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot5)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
+                                                                    Zoom
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No HTTP Traffic captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Firewall Events tab */}
+                                {activeCaptureTab === 'firewall' && (
+                                    <div className="flex flex-col gap-2">
+                                        {capturedFirewallScreenshot ? (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
+                                                    <img src={capturedFirewallScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Firewall Events Overview" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                        <button type="button" onClick={() => openImageInNewTab(capturedFirewallScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                            View Full Image
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No Firewall Events captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Security Rules tab */}
+                                {activeCaptureTab === 'securityRules' && (
+                                    <div className="flex flex-col gap-2">
+                                        {capturedSecurityRulesScreenshot ? (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
+                                                    <img src={capturedSecurityRulesScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Security Rules Overview" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                        <button type="button" onClick={() => openImageInNewTab(capturedSecurityRulesScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                            View Full Image
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No Security Rules captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Argo Routing tab */}
+                                {activeCaptureTab === 'argo' && (
+                                    <div className="flex flex-col gap-2">
+                                        {capturedArgoScreenshot ? (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
+                                                    <img src={capturedArgoScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Argo Smart Routing Overview" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                        <button type="button" onClick={() => openImageInNewTab(capturedArgoScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                            View Full Image
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No Argo Smart Routing captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Speed Test tab */}
+                                {activeCaptureTab === 'speed' && (
+                                    <div className="flex flex-col gap-3">
+                                        {(capturedSpeedScreenshot || capturedSpeedMobileScreenshot) ? (
+                                            <div className="flex flex-col gap-3">
+                                                {capturedSpeedScreenshot && (
+                                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden group relative">
+                                                        <span className="text-[9px] text-gray-500 mb-1 font-mono">Desktop Overview</span>
+                                                        <img src={capturedSpeedScreenshot} className="max-w-full rounded h-auto max-h-[200px] object-contain" alt="Speed Test Desktop" />
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                            <button type="button" onClick={() => openImageInNewTab(capturedSpeedScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                                View Full Image
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {capturedSpeedMobileScreenshot && (
+                                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden group relative">
+                                                        <span className="text-[9px] text-gray-500 mb-1 font-mono">Mobile Overview</span>
+                                                        <img src={capturedSpeedMobileScreenshot} className="max-w-full rounded h-auto max-h-[200px] object-contain" alt="Speed Test Mobile" />
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                            <button type="button" onClick={() => openImageInNewTab(capturedSpeedMobileScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                                View Full Image
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+                                                No Speed Test captured yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Execution Stages Card */}
+                    <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-bold flex items-center gap-2">
+                                <Layers className="w-5 h-5 text-rose-500" />
+                                Execution Stages (2 Mockup Steps)
+                            </h2>
+                            <span className="text-xs text-gray-500">
+                                Click any step to execute/verify it
+                            </span>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            {steps.map((step, idx) => {
+                                const status = stepStatus[idx];
+                                const isCurrent = activeStep === idx;
+
+                                let borderClass = "border-gray-800 hover:border-rose-500/50 bg-gray-950/40";
+                                let textClass = "text-gray-300";
+                                let statusIcon = <Play className="w-4 h-4 text-gray-500" />;
+
+                                if (status === 'completed') {
+                                    borderClass = "border-emerald-500/40 bg-emerald-950/10 hover:border-emerald-500/80";
+                                    textClass = "text-emerald-300";
+                                    statusIcon = <CheckCircle className="w-4 h-4 text-emerald-400" />;
+                                } else if (status === 'running') {
+                                    borderClass = "border-rose-500 bg-rose-950/20";
+                                    textClass = "text-rose-300 font-bold";
+                                    statusIcon = <RefreshCw className="w-4 h-4 text-rose-400 animate-spin" />;
+                                }
+
+                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic && !captureFirewall && !captureSecurityRules && !captureArgo && !captureSpeed));
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`flex flex-col p-4 rounded-xl border ${borderClass} transition-all duration-200 relative overflow-hidden gap-4 ${!isConfigComplete ? 'opacity-45 select-none' : ''}`}
+                                    >
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+                                            <button
+                                                disabled={isButtonDisabled}
+                                                onClick={() => runStep(idx)}
+                                                className={`flex items-center gap-3 shrink-0 min-w-[240px] text-left hover:text-white transition-colors group ${isButtonDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                            >
+                                                <span className="p-1 rounded bg-gray-900/80 border border-gray-800 group-hover:border-rose-500/30">
+                                                    {statusIcon}
+                                                </span>
+                                                <span className={`text-sm font-semibold ${textClass}`}>
+                                                    {step.name}
+                                                </span>
+                                            </button>
+                                            <p className="text-xs text-gray-500 flex-1 leading-relaxed sm:pl-4 border-l border-gray-800/80">
+                                                {step.desc}
+                                            </p>
+                                        </div>
+                                        
+                                        {idx === 1 && (
+                                            <div className="mt-2 pl-8 flex flex-col gap-3 border-t border-gray-800/50 pt-4" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-800/40">
+                                                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wider">Required Capture Checklist:</span>
+                                                    <div className="flex items-center flex-wrap gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={toggleSelectAll}
+                                                            className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700/50 rounded text-xs font-semibold text-gray-300 hover:text-white transition-all shadow-sm active:scale-95"
+                                                        >
+                                                            {isAllSelected ? 'Deselect All' : 'Select All'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={saveStep2Settings}
+                                                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 border border-emerald-500/30 rounded text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
+                                                        >
+                                                            Save Switch Status
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={saveStep2AsDefault}
+                                                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 border border-rose-500/30 rounded text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
+                                                        >
+                                                            Set as Default
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-3">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureDomains} 
+                                                                onChange={(e) => {
+                                                                    setCaptureDomains(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureDomains', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            Domains Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureDomains && renderCoordsInput('domains')}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureDnsRecord} 
+                                                                onChange={(e) => {
+                                                                    setCaptureDnsRecord(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureDnsRecord', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            Dns Record Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureDnsRecord && renderCoordsInput('dns')}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureHttpTraffic} 
+                                                                onChange={(e) => {
+                                                                    setCaptureHttpTraffic(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureHttpTraffic', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            HTTP Traffic Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureHttpTraffic && renderCoordsInput('traffic')}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureFirewall} 
+                                                                onChange={(e) => {
+                                                                    setCaptureFirewall(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureFirewall', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            Event Analytics (Firewall) Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureFirewall && renderCoordsInput('firewall')}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureSecurityRules} 
+                                                                onChange={(e) => {
+                                                                    setCaptureSecurityRules(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureSecurityRules', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            Security Rules Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureSecurityRules && renderCoordsInput('securityRules')}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureArgo} 
+                                                                onChange={(e) => {
+                                                                    setCaptureArgo(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureArgo', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            Argo Smart Routing Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureArgo && renderCoordsInput('argo')}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={captureSpeed} 
+                                                                onChange={(e) => {
+                                                                    setCaptureSpeed(e.target.checked);
+                                                                    if (typeof window !== 'undefined') {
+                                                                        localStorage.setItem('control_captureSpeed', e.target.checked ? 'true' : 'false');
+                                                                    }
+                                                                }}
+                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
+                                                            />
+                                                            Speed Test Option (Check to enable Step 2 Execution)
+                                                        </label>
+                                                        {captureSpeed && renderCoordsInput('speed')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Console Log Section (Right) */}
+                <div className="lg:col-span-4 flex flex-col gap-6">
+                    {/* Console / Log output */}
+                    <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col h-[460px] shadow-2xl relative">
+                        <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
+                            <div className="flex items-center gap-2">
+                                <Terminal className="w-4 h-4 text-rose-500" />
+                                <span className="text-xs font-bold text-gray-300 font-mono">Live Debug Console</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                                <span className="w-2.5 h-2.5 rounded-full bg-red-500/60"></span>
+                                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60"></span>
+                                <span className="w-2.5 h-2.5 rounded-full bg-green-500/60"></span>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-2.5 pr-1">
+                            {mounted && logs.map((log, index) => {
+                                let color = 'text-gray-400';
+                                if (log.type === 'success') color = 'text-emerald-400';
+                                if (log.type === 'warn') color = 'text-yellow-400';
+                                return (
+                                    <div key={index} className="flex gap-2.5 items-start leading-relaxed">
+                                        <span className="text-gray-600 shrink-0">[{log.time}]</span>
+                                        <span className={color}>{log.text}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
                     {/* Live status info / Active Environment */}
                     <div className="bg-gradient-to-br from-rose-950/20 to-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl">
                         <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
@@ -1009,14 +1815,13 @@ export default function ControlPage() {
                             </h3>
                             <button
                                 onClick={saveAsDefault}
-                                disabled
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800/40 border border-gray-800/80 rounded-lg text-[10px] font-bold text-gray-500 cursor-not-allowed transition-colors shadow-md pointer-events-none"
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 border border-rose-500/30 rounded-lg text-[10px] font-bold text-white transition-colors shadow-md"
                             >
-                                <Check className="w-3.5 h-3.5 text-gray-500" />
-                                Set as Default (Disabled)
+                                <Check className="w-3.5 h-3.5 text-white" />
+                                Set as Default
                             </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pointer-events-none opacity-50 select-none">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                             {/* Account Dropdown */}
                             <div className="flex flex-col gap-1 py-1 justify-end">
                                 <SearchableDropdown 
@@ -1091,332 +1896,6 @@ export default function ControlPage() {
                         </div>
                     </div>
 
-                    {/* Execution Stages Card */}
-                    <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex-1">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2">
-                                <Layers className="w-5 h-5 text-rose-500" />
-                                Execution Stages (10 Mockup Steps)
-                            </h2>
-                            <span className="text-xs text-gray-500">
-                                Click any step to execute/verify it
-                            </span>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            {steps.map((step, idx) => {
-                                const status = stepStatus[idx];
-                                const isCurrent = activeStep === idx;
-
-                                let borderClass = "border-gray-800 hover:border-rose-500/50 bg-gray-950/40";
-                                let textClass = "text-gray-300";
-                                let statusIcon = <Play className="w-4 h-4 text-gray-500" />;
-
-                                if (status === 'completed') {
-                                    borderClass = "border-emerald-500/40 bg-emerald-950/10 hover:border-emerald-500/80";
-                                    textClass = "text-emerald-300";
-                                    statusIcon = <CheckCircle className="w-4 h-4 text-emerald-400" />;
-                                } else if (status === 'running') {
-                                    borderClass = "border-rose-500 bg-rose-950/20";
-                                    textClass = "text-rose-300 font-bold";
-                                    statusIcon = <RefreshCw className="w-4 h-4 text-rose-400 animate-spin" />;
-                                }
-
-                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic && !captureFirewall && !captureSecurityRules && !captureArgo && !captureSpeed));
-
-                                return (
-                                    <div
-                                        key={idx}
-                                        className={`flex flex-col p-4 rounded-xl border ${borderClass} transition-all duration-200 relative overflow-hidden gap-4 ${!isConfigComplete ? 'opacity-45 select-none' : ''}`}
-                                    >
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
-                                            <button
-                                                disabled={isButtonDisabled}
-                                                onClick={() => runStep(idx)}
-                                                className={`flex items-center gap-3 shrink-0 min-w-[240px] text-left hover:text-white transition-colors group ${isButtonDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                            >
-                                                <span className="p-1 rounded bg-gray-900/80 border border-gray-800 group-hover:border-rose-500/30">
-                                                    {statusIcon}
-                                                </span>
-                                                <span className={`text-sm font-semibold ${textClass}`}>
-                                                    {step.name}
-                                                </span>
-                                            </button>
-                                            <p className="text-xs text-gray-500 flex-1 leading-relaxed sm:pl-4 border-l border-gray-800/80">
-                                                {step.desc}
-                                            </p>
-                                        </div>
-                                        
-                                        {idx === 1 && (
-                                            <div className="mt-2 pl-8 flex flex-col gap-2 border-t border-gray-800/50 pt-3" onClick={(e) => e.stopPropagation()}>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Required Capture Checklist:</span>
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureDomains} 
-                                                            onChange={(e) => {
-                                                                setCaptureDomains(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureDomains', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        Domains Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureDnsRecord} 
-                                                            onChange={(e) => {
-                                                                setCaptureDnsRecord(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureDnsRecord', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        Dns Record Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureHttpTraffic} 
-                                                            onChange={(e) => {
-                                                                setCaptureHttpTraffic(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureHttpTraffic', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        HTTP Traffic Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureFirewall} 
-                                                            onChange={(e) => {
-                                                                setCaptureFirewall(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureFirewall', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        Event Analytics (Firewall) Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureSecurityRules} 
-                                                            onChange={(e) => {
-                                                                setCaptureSecurityRules(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureSecurityRules', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        Security Rules Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureArgo} 
-                                                            onChange={(e) => {
-                                                                setCaptureArgo(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureArgo', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        Argo Smart Routing Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={captureSpeed} 
-                                                            onChange={(e) => {
-                                                                setCaptureSpeed(e.target.checked);
-                                                                if (typeof window !== 'undefined') {
-                                                                    localStorage.setItem('control_captureSpeed', e.target.checked ? 'true' : 'false');
-                                                                }
-                                                            }}
-                                                            className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500"
-                                                        />
-                                                        Speed Test Option (Check to enable Step 2 Execution)
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Console Log Section (Right) */}
-                <div className="lg:col-span-4 flex flex-col gap-6">
-                    {/* Console / Log output */}
-                    <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex-1 flex flex-col min-h-[350px] shadow-2xl relative">
-                        <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
-                            <div className="flex items-center gap-2">
-                                <Terminal className="w-4 h-4 text-rose-500" />
-                                <span className="text-xs font-bold text-gray-300 font-mono">Live Debug Console</span>
-                            </div>
-                            <div className="flex gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-red-500/60"></span>
-                                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60"></span>
-                                <span className="w-2.5 h-2.5 rounded-full bg-green-500/60"></span>
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-2.5 pr-1 max-h-[500px]">
-                            {mounted && logs.map((log, index) => {
-                                let color = 'text-gray-400';
-                                if (log.type === 'success') color = 'text-emerald-400';
-                                if (log.type === 'warn') color = 'text-yellow-400';
-                                return (
-                                    <div key={index} className="flex gap-2.5 items-start leading-relaxed">
-                                        <span className="text-gray-600 shrink-0">[{log.time}]</span>
-                                        <span className={color}>{log.text}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    
-                    {capturedScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Domains List
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Domains Overview" />
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedDnsScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured DNS Records
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedDnsScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="DNS Records" />
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedHttpTrafficScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured HTTP Traffic
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
-                                    <span className="text-[10px] text-gray-400 mb-1">Overview</span>
-                                    <img src={capturedHttpTrafficScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Overview" />
-                                </div>
-                                {capturedHttpTrafficScreenshot1 && (
-                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
-                                        <span className="text-[10px] text-gray-400 mb-1">Requests (900px)</span>
-                                        <img src={capturedHttpTrafficScreenshot1} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 1" />
-                                    </div>
-                                )}
-                                {capturedHttpTrafficScreenshot2 && (
-                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
-                                        <span className="text-[10px] text-gray-400 mb-1">Data Transfer (900px)</span>
-                                        <img src={capturedHttpTrafficScreenshot2} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 2" />
-                                    </div>
-                                )}
-                                {capturedHttpTrafficScreenshot3 && (
-                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
-                                        <span className="text-[10px] text-gray-400 mb-1">Page views (900px)</span>
-                                        <img src={capturedHttpTrafficScreenshot3} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 3" />
-                                    </div>
-                                )}
-                                {capturedHttpTrafficScreenshot4 && (
-                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
-                                        <span className="text-[10px] text-gray-400 mb-1">Visits (900px)</span>
-                                        <img src={capturedHttpTrafficScreenshot4} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 4" />
-                                    </div>
-                                )}
-                                {capturedHttpTrafficScreenshot5 && (
-                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden">
-                                        <span className="text-[10px] text-gray-400 mb-1">API Requests (900px)</span>
-                                        <img src={capturedHttpTrafficScreenshot5} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="HTTP Traffic Sub 5" />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedFirewallScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Firewall Events
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedFirewallScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Firewall Events Overview" />
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedSecurityRulesScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Security Rules
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedSecurityRulesScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Security Rules Overview" />
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedArgoScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Argo Smart Routing
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedArgoScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Argo Smart Routing Overview" />
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedSpeedScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Speed Test (Desktop)
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedSpeedScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Speed Test Overview" />
-                            </div>
-                        </div>
-                    )}
-
-                    {capturedSpeedMobileScreenshot && (
-                        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl animate-scale-up mt-4">
-                            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                Captured Speed Test (Mobile)
-                            </h4>
-                            <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden">
-                                <img src={capturedSpeedMobileScreenshot} className="max-w-full rounded h-auto max-h-[260px] object-contain" alt="Speed Test Mobile Overview" />
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

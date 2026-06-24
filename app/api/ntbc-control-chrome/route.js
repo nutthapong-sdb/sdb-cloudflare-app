@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { connectChrome } from '@/lib/chrome-helper';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,10 +8,7 @@ export async function GET(request) {
         const accountId = searchParams.get('accountId');
 
         console.log(`Connecting to Chrome on port 9222. Target Account: ${accountId}`);
-        const browser = await puppeteer.connect({
-            browserURL: 'http://localhost:9222',
-            defaultViewport: null
-        });
+        const browser = await connectChrome();
         const pages = await browser.pages();
         // Find page with cloudflare, otherwise use the first page
         let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
@@ -32,6 +29,34 @@ export async function GET(request) {
 
         console.log(`Redirecting active tab to: ${targetUrl}`);
         await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 });
+
+        // Wait up to 3 seconds for either the login page to appear or the dashboard to load
+        try {
+            await page.waitForFunction(() => {
+                const url = window.location.href;
+                const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
+                const isLoginPage = url.includes('/login') || url.includes('/sign-in') || hasLoginElement;
+                const hasDashboardElement = !!(document.querySelector('#react-app') || document.querySelector('[data-testid="zone-card"]') || document.querySelector('main'));
+                return isLoginPage || hasDashboardElement;
+            }, { timeout: 3000 });
+        } catch (e) {
+            console.log('Timeout waiting for page load state, checking current state...');
+        }
+
+        const isUnauthenticated = await page.evaluate(() => {
+            const url = window.location.href;
+            const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
+            return url.includes('/login') || url.includes('/sign-in') || hasLoginElement;
+        });
+
+        if (isUnauthenticated) {
+            await browser.disconnect();
+            return Response.json({ 
+                success: false, 
+                error: 'Cloudflare session is not authenticated. Please open the "Live Browser Monitor" (noVNC) from the Actions menu and log in to Cloudflare first.',
+                errorType: 'unauthenticated'
+            }, { status: 401 });
+        }
 
         await browser.disconnect();
         return Response.json({ success: true, redirectedUrl: targetUrl });
