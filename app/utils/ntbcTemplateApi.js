@@ -1,3 +1,8 @@
+
+const utf8ToBase64 = (str) => {
+    try { return btoa(unescape(encodeURIComponent(str))); }
+    catch(e) { return btoa(str); }
+};
 // NTBC Template Management API
 export const listTemplates = async () => {
     try {
@@ -45,7 +50,7 @@ export const saveTemplate = async (template, id = 'default') => {
     try {
         const response = await fetch(`/api/ntbc-template?id=${id}`, {
             method: 'POST',
-            body: JSON.stringify({ template }),
+            body: JSON.stringify({ encodedTemplate: utf8ToBase64(template) }),
             headers: { 'Content-Type': 'application/json' }
         });
         if (!response.ok) {
@@ -75,7 +80,7 @@ export const saveStaticTemplate = async (template, id = 'default') => {
     try {
         const response = await fetch(`/api/ntbc-static-template?id=${id}`, {
             method: 'POST',
-            body: JSON.stringify({ template }),
+            body: JSON.stringify({ encodedTemplate: utf8ToBase64(template) }),
             headers: { 'Content-Type': 'application/json' }
         });
         if (!response.ok) {
@@ -105,7 +110,7 @@ export const saveMiddleTemplate = async (template, id = 'default') => {
     try {
         const response = await fetch(`/api/ntbc-middle-template?id=${id}`, {
             method: 'POST',
-            body: JSON.stringify({ template }),
+            body: JSON.stringify({ encodedTemplate: utf8ToBase64(template) }),
             headers: { 'Content-Type': 'application/json' }
         });
         if (!response.ok) {

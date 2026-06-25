@@ -31,7 +31,8 @@ export async function GET(request) {
 export async function POST(request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const { template } = await request.json();
+    const { template, encodedTemplate } = await request.json();
+    const finalTemplate = encodedTemplate ? Buffer.from(encodedTemplate, "base64").toString("utf8") : template;
 
     let filePath = defaultFile;
     if (id && id !== 'default') {
@@ -45,7 +46,7 @@ export async function POST(request) {
     }
 
     try {
-        await fs.writeFile(filePath, JSON.stringify({ template }, null, 2), 'utf8');
+        await fs.writeFile(filePath, JSON.stringify({ template: finalTemplate }, null, 2), 'utf8');
         return Response.json({ success: true });
     } catch (error) {
         return Response.json({ success: false, error: error.message }, { status: 500 });
