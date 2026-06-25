@@ -83,7 +83,8 @@ export default function ControlPage() {
          speed: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' }
      });
 
-     const handleCoordChange = (key, coord, val) => {
+    const handleCoordChange = (key, coord, val) => {
+        console.log(`[DEBUG] handleCoordChange called for ${key}.${coord} = ${val}`);
         setCoords(prev => {
             const updated = {
                 ...prev,
@@ -95,6 +96,14 @@ export default function ControlPage() {
             return updated;
         });
     };
+
+    useEffect(() => {
+        console.log(`[DEBUG] useEffect for coords triggered. coords=`, coords);
+        if (coords) {
+            localStorage.setItem('control_coords', JSON.stringify(coords));
+            console.log(`[DEBUG] control_coords saved to localStorage.`);
+        }
+    }, [coords]);
 
     const saveCoordsToDatabase = async (e) => {
         if (e) e.stopPropagation();

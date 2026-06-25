@@ -852,10 +852,14 @@ const VncModal = ({ isOpen, onClose, theme }) => {
                         </div>
                     </div>
                 </div>
-                <div className="flex justify-between items-center mt-4">
-                    <span className="text-xs text-gray-400">
-                        Connecting to: <code className="bg-gray-800 px-1 py-0.5 rounded">{vncUrl}</code>
-                    </span>
+                <div className="flex justify-end items-center mt-4 gap-2">
+                    <button onClick={() => {
+                        const current = vncUrl;
+                        setVncUrl('');
+                        setTimeout(() => setVncUrl(current), 500);
+                    }} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded transition-colors shadow-lg">
+                        Restart Monitor
+                    </button>
                     <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded transition-colors shadow-lg">
                         Close Monitor
                     </button>
@@ -1868,9 +1872,51 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 <span className={`text-xs ${t.subText} w-10`}>Start:</span>
                                 <input type="date" value={batchStartDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchStartDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 mb-2">
                                 <span className={`text-xs ${t.subText} w-10`}>End:</span>
                                 <input type="date" value={batchEndDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchEndDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-2 justify-end">
+                                <span className={`text-[10px] ${t.subText} font-bold mr-1 uppercase`}>Quick:</span>
+                                {[
+                                    { label: '1 Day', days: 1 },
+                                    { label: '7 Days', days: 7 },
+                                    { label: '30 Days', days: 30 }
+                                ].map((btn) => {
+                                    // Calculate if this button is currently active
+                                    const d1 = new Date(batchStartDate);
+                                    const d2 = new Date(batchEndDate);
+                                    const diffDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+                                    // The end date should also be today for it to match the quick button logic perfectly
+                                    const isToday = batchEndDate === new Date().toLocaleDateString('en-CA'); // 'en-CA' outputs YYYY-MM-DD in local time
+                                    const isActive = isToday && diffDays === btn.days;
+                                    
+                                    return (
+                                        <button 
+                                            key={btn.label}
+                                            type="button" 
+                                            onClick={() => {
+                                                const end = new Date();
+                                                const start = new Date();
+                                                start.setDate(start.getDate() - btn.days);
+                                                
+                                                // Function to get YYYY-MM-DD in local timezone safely
+                                                const formatLocal = (date) => {
+                                                    const y = date.getFullYear();
+                                                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                                                    const d = String(date.getDate()).padStart(2, '0');
+                                                    return `${y}-${m}-${d}`;
+                                                };
+                                                
+                                                setBatchEndDate(formatLocal(end));
+                                                setBatchStartDate(formatLocal(start));
+                                            }} 
+                                            className={`px-2 py-1 rounded border text-[10px] transition-colors ${isActive ? 'bg-blue-600 text-white border-blue-500' : `${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border} hover:bg-gray-700`}`}
+                                        >
+                                            {btn.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -4226,13 +4272,18 @@ export default function NTBCCFReportPage() {
                                 statusMap[statusKey] = 'success';
                                 updateProgress();
                                 return captureData;
+                            } else {
+                                errorMap[statusKey] = captureData.error || captureData.message || 'Failed to capture screenshot';
                             }
+                        } else {
+                            errorMap[statusKey] = data.message || data.error || 'Failed to navigate to target URL';
                         }
                         statusMap[statusKey] = 'warn';
                     } catch (err) {
                         if (err.message === 'UNAUTHENTICATED_CLOUDFLARE' || err.message === 'Force stopped by user') throw err;
                         console.error(`Capture ${type} failed:`, err);
                         statusMap[statusKey] = 'warn';
+                        errorMap[statusKey] = err.message || 'Unknown error during capture';
                     }
                     updateProgress();
                     return null;
@@ -4298,8 +4349,14 @@ export default function NTBCCFReportPage() {
                 }
 
                 // Step 4: HTTP Traffic
+                let trafficQuery = '';
+                if (batchStartDate && batchEndDate) {
+                    const startIso = new Date(batchStartDate + 'T00:00:00.000Z').toISOString();
+                    const endIso = new Date(batchEndDate + 'T23:59:59.999Z').toISOString();
+                    trafficQuery = `?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
+                }
                 const trafficData = await controlAndCapture(
-                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/analytics/traffic`,
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/analytics/traffic${trafficQuery}`,
                     'traffic',
                     'traffic'
                 );
@@ -4540,15 +4597,6 @@ export default function NTBCCFReportPage() {
         } catch (error) {
             if (error.message === 'UNAUTHENTICATED_CLOUDFLARE') {
                 setIsVncModalOpen(true);
-                Swal.fire({
-                    title: 'Cloudflare Login Required',
-                    text: 'เซสชัน Cloudflare หมดอายุหรือไม่ได้รับสิทธิ์ในการเข้าถึง ระบบได้เปิดหน้าจอ "Live Browser Monitor" (noVNC) ขึ้นมาให้แล้ว กรุณาล็อกอินเข้าสู่ระบบ Cloudflare ก่อนใช้งาน',
-                    icon: 'warning',
-                    confirmButtonText: 'รับทราบ',
-                    confirmButtonColor: '#3b82f6',
-                    background: theme?.modalBg || '#111827',
-                    color: theme?.text || '#fff'
-                });
                 return;
             }
             if (error.message === 'Force stopped by user') {

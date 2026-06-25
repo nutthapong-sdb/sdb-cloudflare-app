@@ -51,16 +51,34 @@ const { selectDropdown } = require('../libs/gdcc-helper');
         await new Promise(r => setTimeout(r, 2000));
 
         log('\n🔹 Step 3: Selecting Account and Domain...', colors.blue);
-        log('   -> Selecting Account: Softdebut POC', colors.gray);
+        log('   -> Selecting Account: Government Data Center and Cloud service (GDCC)', colors.gray);
 
+        const acctOk = await selectDropdown(page, 0, 'Government Data Center and Cloud service (GDCC)');
+        if (!acctOk) throw new Error('Failed to select Account');
 
-        const acctOk = await selectDropdown(page, 0, 'Softdebut POC');
-        if (!acctOk) throw new Error('Failed to select Account: Softdebut POC');
-
-        // Select Zone: log.softdebut.online
-        log('   -> Selecting Zone: log.softdebut.online', colors.gray);
-        const zoneOk = await selectDropdown(page, 1, 'log.softdebut.online');
-        if (!zoneOk) throw new Error('Failed to select Zone: log.softdebut.online');
+        // Select Zone
+        log('   -> Selecting Zone: (First Available)', colors.gray);
+        await new Promise(r => setTimeout(r, 3000)); // Wait for zones to load
+        const zoneOk = await page.evaluate(() => {
+            const labels = Array.from(document.querySelectorAll('label'));
+            const zoneLabel = labels.find(l => l.textContent.includes('Select Zones'));
+            if (!zoneLabel) return false;
+            
+            const listContainer = zoneLabel.closest('div').nextElementSibling;
+            if (!listContainer) return false;
+            
+            const zones = Array.from(listContainer.querySelectorAll('div.cursor-pointer'));
+            let targetZone = zones.find(z => z.textContent.includes('log.softdebut.online'));
+            if (!targetZone && zones.length > 0) targetZone = zones[0];
+            
+            if (targetZone) {
+                targetZone.scrollIntoView({ block: 'center', inline: 'center' });
+                targetZone.click();
+                return true;
+            }
+            return false;
+        });
+        if (!zoneOk) throw new Error('Failed to select Zone (No zones found or clickable)');
 
         log('\n🔹 Step 4: Setting Date Range...', colors.blue);
         // Remove 'max' attributes first so future dates (July 2026) are allowed
@@ -74,22 +92,22 @@ const { selectDropdown } = require('../libs/gdcc-helper');
 
         const batchDateInputs = await page.$$('input[type="date"]');
         if (batchDateInputs.length >= 2) {
-            // Start Date: 2026-07-10
+            // Start Date: 2026-06-18
             await page.evaluate((el, val) => {
                 const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
                 setter.call(el, val);
                 el.dispatchEvent(new Event('input', { bubbles: true }));
                 el.dispatchEvent(new Event('change', { bubbles: true }));
-            }, batchDateInputs[0], '2026-07-10');
+            }, batchDateInputs[0], '2026-06-18');
 
-            // End Date: 2026-07-12
+            // End Date: 2026-06-24
             await page.evaluate((el, val) => {
                 const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
                 setter.call(el, val);
                 el.dispatchEvent(new Event('input', { bubbles: true }));
                 el.dispatchEvent(new Event('change', { bubbles: true }));
-            }, batchDateInputs[1], '2026-07-12');
-            log('   ✅ Dates set: 2026-07-10 to 2026-07-12', colors.green);
+            }, batchDateInputs[1], '2026-06-24');
+            log('   ✅ Dates set: 2026-06-18 to 2026-06-24', colors.green);
         } else {
             throw new Error('Could not find date input fields in modal');
         }
@@ -97,26 +115,54 @@ const { selectDropdown } = require('../libs/gdcc-helper');
         log('\n🔹 Step 5: Skipping subdomain selection (selection UI was removed)...', colors.blue);
         await new Promise(r => setTimeout(r, 500));
 
-        log('\n🔹 Step 6: Clicking "Generate Domain Report" button...', colors.blue);
-        const clickedGenerate = await page.evaluate(() => {
+        log('\n🔹 Step 6: Clicking "Add to Batch Queue" and "Start Processing Queue"...', colors.blue);
+        const queueResult = await page.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button'));
-            const genBtn = btns.find(b => (b.textContent || '').trim() === 'Generate Domain Report' && !b.disabled);
-            if (genBtn) {
-                genBtn.click();
-                return true;
-            }
-            return false;
+            const addBtn = btns.find(b => b.textContent.trim() === 'Add to Batch Queue' && !b.disabled);
+            if (!addBtn) return 'Add button not found';
+            addBtn.scrollIntoView({ block: 'center', inline: 'center' });
+            addBtn.click();
+            return 'added';
         });
-        if (!clickedGenerate) throw new Error('"Generate Domain Report" button not found or is disabled');
-        log('   ✅ Clicked Generate Domain Report', colors.green);
+
+        if (queueResult !== 'added') throw new Error('Failed to add to batch queue: ' + queueResult);
+        log('   ✅ Clicked Add to Batch Queue', colors.green);
+        
+        await new Promise(r => setTimeout(r, 2000));
+
+        const startResult = await page.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            const startBtn = btns.find(b => b.textContent.trim() === 'Start Processing Queue' && !b.disabled);
+            if (!startBtn) return 'Start button not found';
+            startBtn.scrollIntoView({ block: 'center', inline: 'center' });
+            startBtn.click();
+            return 'started';
+        });
+
+        if (startResult !== 'started') throw new Error('Failed to start processing queue: ' + startResult);
+        log('   ✅ Clicked Start Processing Queue', colors.green);
 
         log('\n🔹 Step 7: Waiting for report file download (max 5 min)...', colors.blue);
         const generateStartTime = Date.now();
-        const start = Date.now();
         let downloadedFile = null;
 
-        // 5 minutes timeout (300000ms)
-        while (Date.now() - start < 300000) {
+        // Wait up to 5 minutes, checking for Swal modals or the downloaded file
+        while (Date.now() - generateStartTime < 300000) {
+            // Check for Swal alert
+            const swalError = await page.evaluate(() => {
+                const swal = document.querySelector('.swal2-container.swal2-shown');
+                if (swal) {
+                    const title = swal.querySelector('.swal2-title')?.textContent || '';
+                    const content = swal.querySelector('.swal2-html-container')?.textContent || '';
+                    return { title, content };
+                }
+                return null;
+            });
+            
+            if (swalError && (swalError.title.toLowerCase().includes('required') || swalError.title.toLowerCase().includes('fail') || swalError.title.toLowerCase().includes('error'))) {
+                throw new Error(`Process interrupted by alert modal: [${swalError.title}] ${swalError.content}`);
+            }
+
             const tmpFiles = fs.readdirSync(TMP_DOWNLOAD_DIR);
             const foundTmp = tmpFiles.find(f => {
                 if (!(f.endsWith('.docx') || f.endsWith('.doc')) || f.endsWith('.crdownload')) return false;

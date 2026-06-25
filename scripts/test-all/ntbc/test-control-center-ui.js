@@ -29,6 +29,12 @@ async function testControlCenterUI() {
     try {
         browser = await setupBrowser();
         page = await setupPage(browser);
+        page.on('console', msg => {
+            const type = msg.type();
+            if (type === 'error') log(`[Browser Error] ${msg.text()}`, colors.red);
+            else if (type === 'warning') log(`[Browser Warn] ${msg.text()}`, colors.yellow);
+            else log(`[Browser Log] ${msg.text()}`, colors.gray);
+        });
         await login(page);
 
         log('Navigate to System Control Center...', colors.blue);
@@ -51,7 +57,7 @@ async function testControlCenterUI() {
         log('✅ Steps title shows 2 steps correctly.', colors.green);
 
         log('Verify Live Browser Monitor Card and iframe...', colors.blue);
-        await verifyElement(page, 'iframe[title="Live Browser Monitor (VNC)"]', '✅ Live Browser Monitor iframe found.', '❌ Live Browser Monitor iframe missing!');
+        await verifyElement(page, 'iframe[title="Live Browser Monitor"]', '✅ Live Browser Monitor iframe found.', '❌ Live Browser Monitor iframe missing!');
 
         log('Test VNC Maximize Layout toggle...', colors.blue);
         await page.evaluate(() => {
@@ -73,52 +79,58 @@ async function testControlCenterUI() {
 
         log('Open checklist inputs and check Domains option...', colors.blue);
         await page.evaluate(() => {
-            // Find Step 2 checklist checkboxes
-            const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
-            // Click the first one (Domains Option) if not checked
-            if (checkboxes.length > 0 && !checkboxes[0].checked) {
-                checkboxes[0].click();
-            }
+            const setChecked = (el, val) => {
+                const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+                nativeSetter.call(el, val);
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            const cbs = document.querySelectorAll('input[type="checkbox"]');
+            cbs.forEach(cb => { if (cb.checked) setChecked(cb, false); });
+            if (cbs.length > 0) setChecked(cbs[0], true);
         });
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 500));
 
         log('Verify Xstart, Xend, Ystart, Yend inputs are visible...', colors.blue);
         await page.waitForSelector('input[placeholder="Auto"]', { timeout: 10000 });
         await page.waitForFunction(() => {
             const inputs = Array.from(document.querySelectorAll('input[placeholder="Auto"]'));
-            // With 1 checkbox active, we expect 4 coordinates inputs
             return inputs.length >= 4;
         }, { timeout: 10000 });
         log('✅ Coordinate input fields are rendered.', colors.green);
 
         log('Fill custom coordinates for Domains...', colors.blue);
-        const inputs = await page.$$('input[placeholder="Auto"]');
-        if (inputs.length >= 4) {
-            await page.evaluate(el => el.value = '', inputs[0]);
-            await inputs[0].type('150');
-            await new Promise(r => setTimeout(r, 100));
-
-            await page.evaluate(el => el.value = '', inputs[1]);
-            await inputs[1].type('850');
-            await new Promise(r => setTimeout(r, 100));
-
-            await page.evaluate(el => el.value = '', inputs[2]);
-            await inputs[2].type('100');
-            await new Promise(r => setTimeout(r, 100));
-
-            await page.evaluate(el => el.value = '', inputs[3]);
-            await inputs[3].type('600');
-            await new Promise(r => setTimeout(r, 300));
-        } else {
-            throw new Error(`Expected at least 4 number inputs, found ${inputs.length}`);
-        }
+        await page.evaluate(() => {
+            const setValue = (el, val) => {
+                const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                nativeSetter.call(el, val);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            const inputs = document.querySelectorAll('input[placeholder="Auto"]');
+            if (inputs.length >= 4) {
+                setValue(inputs[0], '150');
+                setValue(inputs[1], '1200');
+                setValue(inputs[2], '85');
+                setValue(inputs[3], '600');
+            }
+        });
+        await new Promise(r => setTimeout(r, 500));
         await takeScreenshot(page, 'coords-inputs-filled.png');
         log('✅ Coordinates populated in UI.', colors.green);
 
         log('Verify coordinate values persisted in localStorage...', colors.blue);
-        const savedCoordsStr = await page.evaluate(() => localStorage.getItem('control_coords'));
-        const savedCoords = JSON.parse(savedCoordsStr);
-        if (savedCoords && savedCoords.domains.xStart === '150' && savedCoords.domains.xEnd === '850') {
+        const lsData = await page.evaluate(() => {
+            let data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                data[key] = localStorage.getItem(key);
+            }
+            return data;
+        });
+        console.log('localStorage dumped:', Object.keys(lsData));
+        const savedCoordsStr = lsData['control_coords'];
+        const savedCoords = savedCoordsStr ? JSON.parse(savedCoordsStr) : null;
+        if (savedCoords && savedCoords.domains.xStart === '150' && savedCoords.domains.xEnd === '1200') {
             log('✅ Coordinates successfully saved and persisted in localStorage.', colors.green);
         } else {
             throw new Error(`localStorage coords did not persist correctly: ${savedCoordsStr}`);

@@ -9,8 +9,10 @@ const { log, colors, BASE_URL } = require('./ui-helper');
 // Default GDCC test config - matches real data
 const GDCC_TEST_CONFIG = {
     account_name: 'Government Data Center and Cloud service (GDCC)',
-    zone_name: 'dwf.go.th',
-    subdomain: 'ALL_SUBDOMAINS',
+    zone_name: 'alro.go.th',     // leave empty to pick first available
+    subdomain: 'ALL_SUBDOMAINS',    // leave empty to pick first available
+    startDate: '2024-01-01',
+    endDate: '2024-01-31'
 };
 
 /**
@@ -258,6 +260,16 @@ async function selectDropdown(page, dropdownIndex, searchText) {
         input.dispatchEvent(new Event('input', { bubbles: true }));
     }, activeInput);
 
+    // Dump all available options before typing anything
+    const allOptions = await page.evaluate((input) => {
+        const root = input.closest('div.space-y-1.relative') || input.closest('div.relative');
+        if (!root) return [];
+        const container = root.querySelector('div[class*="absolute"]');
+        if (!container) return [];
+        return Array.from(container.querySelectorAll('.font-medium')).map(el => (el.textContent || '').trim());
+    }, activeInput);
+    console.log(`\n🔍 [DEBUG] ALL Available Accounts Before Search:\n   - ${allOptions.join('\n   - ')}\n`);
+
     await activeInput.type(searchText);
     await new Promise(r => setTimeout(r, 1000));
 
@@ -305,11 +317,17 @@ async function selectDropdown(page, dropdownIndex, searchText) {
                 return { success: true, matchedText: t };
             }
         }
-        return { success: false, reason: 'Not found', candidates: candidates.length };
+        return { success: false, reason: 'Not found', candidates: candidates.map(el => (el.textContent || '').trim()).filter(Boolean) };
     }, searchText);
 
     if (!clickResult.success) {
         log(`❌ Could not select dropdown item: "${searchText}" (${clickResult.reason || 'failed'})`, colors.red);
+        if (clickResult.candidates && clickResult.candidates.length > 0) {
+             log(`   Available options were: \n     - ${clickResult.candidates.join('\n     - ')}`, colors.yellow);
+        } else {
+             log(`   No options were found in the dropdown!`, colors.yellow);
+        }
+        await page.screenshot({ path: 'scratch/dropdown-fail.png', fullPage: true });
         return false;
     }
 
@@ -542,13 +560,21 @@ async function generateBatchReport(page, reportDateStr, subdomain = 'ALL_SUBDOMA
                 const clickedSelectAll = await page.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button'));
                     const btn = btns.find(b => (b.textContent || '').trim().includes('Select All'));
-                    if (!btn) return false;
-                    btn.scrollIntoView({ block: 'center', inline: 'center' });
-                    btn.click();
-                    return true;
+                    if (btn) {
+                        btn.scrollIntoView({ block: 'center', inline: 'center' });
+                        btn.click();
+                    }
+                    // Fallback: If no checkboxes are checked, click the first one available
+                    const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+                    const anyChecked = checkboxes.some(cb => cb.checked);
+                    if (!anyChecked && checkboxes.length > 0) {
+                        checkboxes[0].click();
+                        return true;
+                    }
+                    return !!btn;
                 });
-                if (!clickedSelectAll) throw new Error('Select All button not found in modal');
-                log('☑️ Selected all hosts.', colors.gray);
+                if (!clickedSelectAll) throw new Error('Select All button or checkbox not found in modal');
+                log('☑️ Selected hosts.', colors.gray);
             }
             hostsSelected = true;
             break;
@@ -562,34 +588,41 @@ async function generateBatchReport(page, reportDateStr, subdomain = 'ALL_SUBDOMA
     // Click Generate (avoid accidentally clicking "Generate Dashboard")
     await new Promise(r => setTimeout(r, 1000));
     let clickedGenerate = false;
+    let buttonDebugInfo = [];
     for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-            clickedGenerate = await page.evaluate(() => {
+            const result = await page.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button'));
+                const debugInfo = btns.map(b => ({ text: (b.textContent || '').trim(), disabled: b.disabled }));
                 const candidates = btns.filter(b => {
                     const txt = (b.textContent || '').trim();
                     if (!txt) return false;
                     if (txt === 'Generate Dashboard') return false;
-                    if (!txt.startsWith('Generate')) return false;
+                    if (!txt.startsWith('Generate') && !txt.includes('Generate')) return false;
                     if (b.disabled) return false;
                     return true;
                 });
 
-                // Prefer the last matching button (modal footer tends to be later in DOM)
                 const btn = candidates[candidates.length - 1];
-                if (!btn) return false;
+                if (!btn) return { success: false, debugInfo };
                 btn.scrollIntoView({ block: 'center', inline: 'center' });
                 btn.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
                 btn.click();
-                return true;
+                return { success: true, debugInfo };
             });
+            clickedGenerate = result.success;
+            if (!clickedGenerate) buttonDebugInfo = result.debugInfo;
             if (clickedGenerate) break;
         } catch (e) {
             log(`⚠️ Attempt ${attempt} to click Generate failed: ${e.message}. Retrying...`, colors.yellow);
             await new Promise(r => setTimeout(r, 1500));
         }
     }
-    if (!clickedGenerate) throw new Error('Generate button not found/clickable (modal)');
+    if (!clickedGenerate) {
+        log(`❌ Generate button not found/clickable. Button texts were: \n${JSON.stringify(buttonDebugInfo, null, 2)}`, colors.red);
+        await page.screenshot({ path: 'scratch/generate-fail.png', fullPage: true });
+        throw new Error('Generate button not found/clickable (modal)');
+    }
     log('⏳ Report generation started...', colors.blue);
 }
 

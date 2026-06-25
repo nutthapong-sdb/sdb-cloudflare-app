@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: ['.env.local', '.env'] });
 
-const BASE_URL = 'http://localhost:8002';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:8002';
 const TMP_DOWNLOAD_DIR = path.join(__dirname, '../tmp_downloads');
 
 if (!fs.existsSync(TMP_DOWNLOAD_DIR)) fs.mkdirSync(TMP_DOWNLOAD_DIR);
@@ -24,20 +24,28 @@ function log(msg, color = colors.reset) {
 async function setupBrowser() {
     log('🚀 Setting up Browser...', colors.cyan);
 
-    // Default: headed mode (matches original behavior). Set HEADLESS=1 to run headless.
-    const isHeadless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
-    const browser = await puppeteer.launch({
-        headless: isHeadless ? 'new' : false,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding'
-        ],
-        defaultViewport: { width: 1280, height: 800 }
-    });
-    return browser;
+    // Attempt remote connection (for Docker/Container environments)
+    try {
+        const dns = require('dns');
+        const axios = require('axios');
+        let host = 'chrome-browser';
+        host = await new Promise((resolve, reject) => {
+            dns.lookup(host, (err, address) => err ? reject(err) : resolve(address));
+        });
+        const res = await axios.get(`http://${host}:9222/json/version`, { headers: { 'Host': 'localhost' } });
+        const wsUrlObj = new URL(res.data.webSocketDebuggerUrl);
+        const wsUrl = `ws://${host}:9222${wsUrlObj.pathname}${wsUrlObj.search}`;
+        log(`🔌 Connected to remote Cloudflare Browser (${host}:9222)`, colors.green);
+        return await puppeteer.connect({ browserWSEndpoint: wsUrl, defaultViewport: { width: 1280, height: 800 } });
+    } catch (e) {
+        log(`⚠️ Remote browser connection failed, falling back to local launch...`, colors.yellow);
+        const isHeadless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
+        return await puppeteer.launch({
+            headless: isHeadless ? 'new' : false,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            defaultViewport: { width: 1280, height: 800 }
+        });
+    }
 }
 
 async function setupPage(browser) {
