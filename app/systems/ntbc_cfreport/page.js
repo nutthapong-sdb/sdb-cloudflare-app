@@ -840,27 +840,15 @@ const VncModal = ({ isOpen, onClose, theme }) => {
                     </button>
                 </div>
                 <div className="flex-1 overflow-hidden relative">
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 h-full">
-                        {/* Monitor 1: Proxy */}
+                    <div className="grid grid-cols-1 gap-3 h-full">
+                        {/* Live Browser Monitor */}
                         <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
-                            <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 1: Proxy (/vnc/)</div>
+                            <div className="absolute top-0 left-0 bg-rose-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Live Browser Monitor</div>
                             {vncUrl ? (
-                                <iframe src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor 1" />
+                                <iframe src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor" />
                             ) : (
-                                <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Loading M1...</div>
+                                <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Loading Browser...</div>
                             )}
-                        </div>
-
-                        {/* Monitor 2: Hostname */}
-                        <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
-                            <div className="absolute top-0 left-0 bg-blue-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 2: Hostname:5800</div>
-                            <iframe src={`http://${window.location.hostname}:5800/?autoconnect=1&resize=scale`} className="w-full flex-1 border-none" title="Live Browser Monitor 2" />
-                        </div>
-
-                        {/* Monitor 3: Direct IP */}
-                        <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
-                            <div className="absolute top-0 left-0 bg-green-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Monitor 3: Direct IP:5800</div>
-                            <iframe src={`http://172.19.0.2:5800/?autoconnect=1&resize=scale`} className="w-full flex-1 border-none" title="Live Browser Monitor 3" />
                         </div>
                     </div>
                 </div>
@@ -4074,17 +4062,9 @@ export default function NTBCCFReportPage() {
                         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
                     <div style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
-                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
-                            <div style="position: absolute; top: 0; left: 0; background: #dc2626; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 1: Proxy (/vnc/)</div>
-                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify" style="width: 100%; height: 100%; border: none;" title="M1"></iframe>
-                        </div>
-                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
-                            <div style="position: absolute; top: 0; left: 0; background: #2563eb; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 2: Hostname 5800</div>
-                            <iframe src="http://${window.location.hostname}:5800/?autoconnect=1&resize=scale" style="width: 100%; height: 100%; border: none;" title="M2"></iframe>
-                        </div>
-                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 210px; background: #000;">
-                            <div style="position: absolute; top: 0; left: 0; background: #16a34a; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Monitor 3: Direct IP 5800</div>
-                            <iframe src="http://172.19.0.2:5800/?autoconnect=1&resize=scale" style="width: 100%; height: 100%; border: none;" title="M3"></iframe>
+                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 100%; min-height: 250px; background: #000;">
+                            <div style="position: absolute; top: 0; left: 0; background: #e11d48; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Live Browser Monitor</div>
+                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify" style="width: 100%; height: 100%; border: none;" title="Live Browser Monitor"></iframe>
                         </div>
                     </div>
                     <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #374151; padding-left: 20px;">
