@@ -59,11 +59,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/app/data ./app/data
 
 USER nextjs
 
+# Backup default data so it can be restored if a bind mount hides it
+RUN mkdir -p /app/default_data && cp -R app/data/* /app/default_data/ || true
+
 EXPOSE 8002
 
 ENV PORT 8002
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
-# Start Next.js production server
-CMD ["npm", "run", "start"]
+# Start Next.js production server, copying default files to the bind mount if missing
+CMD sh -c "cp -rn /app/default_data/* ./app/data/ 2>/dev/null || true && npm run start"
