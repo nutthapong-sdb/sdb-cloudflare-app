@@ -57,10 +57,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/app/data ./app/data
 # Copy the database file if it exists, but usually we want to mount it
 # COPY --chown=nextjs:nodejs sdb_users.db ./sdb_users.db
 
-USER nextjs
-
 # Backup default data so it can be restored if a bind mount hides it
 RUN mkdir -p /app/default_data && cp -R app/data/* /app/default_data/ || true
+
+# Run as root to avoid bind mount permission issues
+# USER nextjs
 
 EXPOSE 8002
 
