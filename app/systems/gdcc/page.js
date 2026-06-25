@@ -4962,20 +4962,32 @@ export default function GDCCPage() {
 
     const handleSaveTemplate = async (newTemplate) => {
         setReportTemplate(newTemplate);
-        await saveTemplate(newTemplate, templateToEditId);
-        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        const res = await saveTemplate(newTemplate, templateToEditId);
+        if (!res || res.error) {
+            Swal.fire('Error', res?.error || 'Failed to save template', 'error');
+        } else {
+            Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        }
     };
 
     const handleSaveStaticTemplate = async (newTemplate) => {
         setStaticReportTemplate(newTemplate);
-        await saveStaticTemplate(newTemplate, templateToEditId);
-        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        const res = await saveStaticTemplate(newTemplate, templateToEditId);
+        if (!res || res.error) {
+            Swal.fire('Error', res?.error || 'Failed to save template', 'error');
+        } else {
+            Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        }
     };
 
     const handleSaveMiddleTemplate = async (newTemplate) => {
         setMiddleReportTemplate(newTemplate);
-        await saveMiddleTemplate(newTemplate, templateToEditId);
-        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        const res = await saveMiddleTemplate(newTemplate, templateToEditId);
+        if (!res || res.error) {
+            Swal.fire('Error', res?.error || 'Failed to save template', 'error');
+        } else {
+            Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        }
     };
 
     // -- TEMPLATE EDIT HANDLERS --
