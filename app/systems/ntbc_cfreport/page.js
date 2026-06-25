@@ -4042,6 +4042,8 @@ export default function NTBCCFReportPage() {
             report: 'pending'
         };
 
+        const errorMap = {};
+
         const renderHtml = () => {
             const getIcon = (status) => {
                 if (status === 'running') return '<span style="display: inline-block; animation: spin 1s linear infinite; margin-right: 8px;">🔄</span>';
@@ -4049,6 +4051,12 @@ export default function NTBCCFReportPage() {
                 if (status === 'error') return '<span style="color: #ef4444; margin-right: 8px;">❌</span>';
                 if (status === 'warn') return '<span style="color: #f59e0b; margin-right: 8px;">⚠️</span>';
                 return '<span style="color: #6b7280; margin-right: 8px;">⚪</span>';
+            };
+
+            const renderLine = (statusKey, text) => {
+                const icon = getIcon(statusMap[statusKey]);
+                const errMsg = errorMap[statusKey] ? `<div style="color: #ef4444; font-size: 11px; margin-left: 24px; margin-top: -6px; margin-bottom: 8px; line-height: 1.2; word-break: break-word;">${errorMap[statusKey]}</div>` : '';
+                return `<div style="margin-bottom: ${errMsg ? '2px' : '10px'};">${icon} ${text}</div>${errMsg}`;
             };
 
             return `
@@ -4068,16 +4076,16 @@ export default function NTBCCFReportPage() {
                         </div>
                     </div>
                     <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #374151; padding-left: 20px;">
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.launch)} Start debug browser</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.domains)} Capture Domains Overview</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.dns)} Capture DNS Records</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.traffic)} Capture HTTP Traffic</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.firewall)} Capture Firewall Events</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.rules)} Capture Security Rules</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.argo)} Capture Argo Routing</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.speed)} Capture Speed Test</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.stats)} Fetch CF Statistics</p>
-                        <p style="margin: 0 0 10px 0;">${getIcon(statusMap.report)} Generate & Download Report</p>
+                        ${renderLine('launch', 'Start debug browser')}
+                        ${renderLine('domains', 'Capture Domains Overview')}
+                        ${renderLine('dns', 'Capture DNS Records')}
+                        ${renderLine('traffic', 'Capture HTTP Traffic')}
+                        ${renderLine('firewall', 'Capture Firewall Events')}
+                        ${renderLine('rules', 'Capture Security Rules')}
+                        ${renderLine('argo', 'Capture Argo Routing')}
+                        ${renderLine('speed', 'Capture Speed Test')}
+                        ${renderLine('stats', 'Fetch CF Statistics')}
+                        ${renderLine('report', 'Generate & Download Report')}
                         <div style="text-align: left; margin-top: 10px;">
                             <button id="force-stop-btn" style="background-color: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; width: 100%;">
                                 Force Stop
@@ -4531,11 +4539,12 @@ export default function NTBCCFReportPage() {
 
         } catch (error) {
             if (error.message === 'UNAUTHENTICATED_CLOUDFLARE') {
+                setIsVncModalOpen(true);
                 Swal.fire({
                     title: 'Cloudflare Login Required',
-                    text: 'เซสชัน Cloudflare หมดอายุหรือไม่ได้รับสิทธิ์ในการเข้าถึง กรุณาเปิดหน้าจอ "Live Browser Monitor" (noVNC) จากเมนู Actions ด้านบนเพื่อล็อกอินเข้าสู่ระบบ Cloudflare ก่อนใช้งาน',
+                    text: 'เซสชัน Cloudflare หมดอายุหรือไม่ได้รับสิทธิ์ในการเข้าถึง ระบบได้เปิดหน้าจอ "Live Browser Monitor" (noVNC) ขึ้นมาให้แล้ว กรุณาล็อกอินเข้าสู่ระบบ Cloudflare ก่อนใช้งาน',
                     icon: 'warning',
-                    confirmButtonText: 'ตกลง',
+                    confirmButtonText: 'รับทราบ',
                     confirmButtonColor: '#3b82f6',
                     background: theme?.modalBg || '#111827',
                     color: theme?.text || '#fff'

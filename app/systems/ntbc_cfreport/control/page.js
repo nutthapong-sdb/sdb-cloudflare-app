@@ -65,6 +65,9 @@ export default function ControlPage() {
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
      const [captureHttpTraffic, setCaptureHttpTraffic] = useState(true);
+     const [trafficTimeWindow, setTrafficTimeWindow] = useState('1440'); // '1440' = 1d, '10080' = 7d, '43200' = 30d, 'custom'
+     const [trafficStartDate, setTrafficStartDate] = useState('');
+     const [trafficEndDate, setTrafficEndDate] = useState('');
      const [captureFirewall, setCaptureFirewall] = useState(true);
      const [captureSecurityRules, setCaptureSecurityRules] = useState(true);
      const [captureArgo, setCaptureArgo] = useState(true);
@@ -735,7 +738,15 @@ export default function ControlPage() {
                 // 3. HTTP Traffic overview capture
                 if (captureHttpTraffic) {
                     const debugDomain = 'log.softdebut.online';
-                    const targetTrafficUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/analytics/traffic`;
+                    let trafficQuery = '';
+                    if (trafficTimeWindow === 'custom' && trafficStartDate && trafficEndDate) {
+                        const startIso = new Date(trafficStartDate).toISOString();
+                        const endIso = new Date(trafficEndDate).toISOString();
+                        trafficQuery = `?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
+                    } else if (trafficTimeWindow !== 'custom') {
+                        trafficQuery = `?time-window=${trafficTimeWindow}`;
+                    }
+                    const targetTrafficUrl = `https://dash.cloudflare.com/${envAccount}/${debugDomain}/analytics/traffic${trafficQuery}`;
                     addLog(`Connecting to debug browser on port 9222 for HTTP Traffic...`, 'info');
                     addLog(`Redirecting active tab to Traffic Analytics page: ${targetTrafficUrl}`, 'info');
                     const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetTrafficUrl)}`);
@@ -1699,6 +1710,25 @@ export default function ControlPage() {
                                                             />
                                                             HTTP Traffic Option (Check to enable Step 2 Execution)
                                                         </label>
+                                                        {captureHttpTraffic && (
+                                                            <div className="pl-6 flex flex-col gap-2 my-1">
+                                                                <div className="flex items-center gap-2 text-xs">
+                                                                    <span className="text-gray-400 font-bold min-w-[80px]">Quick Options:</span>
+                                                                    <button type="button" onClick={() => setTrafficTimeWindow('1440')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === '1440' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>1 Day</button>
+                                                                    <button type="button" onClick={() => setTrafficTimeWindow('10080')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === '10080' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>7 Days</button>
+                                                                    <button type="button" onClick={() => setTrafficTimeWindow('43200')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === '43200' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>30 Days</button>
+                                                                    <button type="button" onClick={() => setTrafficTimeWindow('custom')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === 'custom' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>Custom</button>
+                                                                </div>
+                                                                {trafficTimeWindow === 'custom' && (
+                                                                    <div className="flex items-center gap-2 text-xs mt-1">
+                                                                        <span className="text-gray-400 font-bold min-w-[80px]">Date Range:</span>
+                                                                        <input type="datetime-local" value={trafficStartDate} onChange={(e) => setTrafficStartDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-300 rounded px-2 py-1 w-[160px]" />
+                                                                        <span className="text-gray-500 font-bold px-1">to</span>
+                                                                        <input type="datetime-local" value={trafficEndDate} onChange={(e) => setTrafficEndDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-300 rounded px-2 py-1 w-[160px]" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                         {captureHttpTraffic && renderCoordsInput('traffic')}
                                                     </div>
                                                     <div className="flex flex-col gap-1.5">
