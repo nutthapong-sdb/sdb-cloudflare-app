@@ -48,10 +48,15 @@ export const saveTemplate = async (template, id = 'default') => {
             body: JSON.stringify({ template }),
             headers: { 'Content-Type': 'application/json' }
         });
+        if (!response.ok) {
+            const text = await response.text();
+            let errJson;
+            try { errJson = JSON.parse(text); } catch(e) {}
+            return errJson || { success: false, error: `HTTP ${response.status}: ${text.substring(0, 100)}` };
+        }
         return await response.json();
     } catch (error) {
-        console.error("Failed to save template", error);
-        return null;
+        return { success: false, error: error.message };
     }
 };
 
@@ -73,10 +78,15 @@ export const saveStaticTemplate = async (template, id = 'default') => {
             body: JSON.stringify({ template }),
             headers: { 'Content-Type': 'application/json' }
         });
+        if (!response.ok) {
+            const text = await response.text();
+            let errJson;
+            try { errJson = JSON.parse(text); } catch(e) {}
+            return errJson || { success: false, error: `HTTP ${response.status}: ${text.substring(0, 100)}` };
+        }
         return await response.json();
     } catch (error) {
-        console.error("Failed to save static template", error);
-        return null;
+        return { success: false, error: error.message };
     }
 };
 
@@ -98,10 +108,15 @@ export const saveMiddleTemplate = async (template, id = 'default') => {
             body: JSON.stringify({ template }),
             headers: { 'Content-Type': 'application/json' }
         });
+        if (!response.ok) {
+            const text = await response.text();
+            let errJson;
+            try { errJson = JSON.parse(text); } catch(e) {}
+            return errJson || { success: false, error: `HTTP ${response.status}: ${text.substring(0, 100)}` };
+        }
         return await response.json();
     } catch (error) {
-        console.error("Failed to save middle template", error);
-        return null;
+        return { success: false, error: error.message };
     }
 };
 
