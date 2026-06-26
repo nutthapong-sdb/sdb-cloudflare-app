@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-export default function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon, theme }) {
+export default function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon, theme, rightAction }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -89,11 +89,16 @@ export default function SearchableDropdown({ options, value, onChange, placehold
 
     return (
         <div className="space-y-1 relative" ref={dropdownRef}>
-            {label && (
-                <label className={`${t.label} text-[10px] font-semibold uppercase tracking-wider flex items-center gap-2 mb-1`}>
-                    {icon}
-                    {label}
-                </label>
+            {(label || rightAction) && (
+                <div className="flex justify-between items-center mb-1">
+                    {label ? (
+                        <label className={`${t.label} text-[10px] font-semibold uppercase tracking-wider flex items-center gap-2`}>
+                            {icon}
+                            {label}
+                        </label>
+                    ) : <div />}
+                    {rightAction}
+                </div>
             )}
 
             <div className="relative" onKeyDown={handleKeyDown}>

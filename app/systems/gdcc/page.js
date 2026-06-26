@@ -1433,6 +1433,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
     const [internalZoneId, setInternalZoneId] = useState('');
     const [internalSubdomains, setInternalSubdomains] = useState([]);
     const [loadingSubdomains, setLoadingSubdomains] = useState(false);
+    const isFirstAccountFetch = useRef(true);
 
     const callScrapeApi = async (action, bodyData = {}) => {
         try {
@@ -1451,6 +1452,36 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
         }
     };
 
+    const handleSetDefaultAccount = () => {
+        if (selectedAccountId) {
+            localStorage.setItem('gdcc:default:accountId', selectedAccountId);
+            Swal.fire({
+                title: 'Default Account Set',
+                text: 'This account will be loaded by default in the future.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                background: theme?.modalBg || '#111827',
+                color: theme?.text || '#fff'
+            });
+        }
+    };
+
+    const handleSetDefaultZone = () => {
+        if (internalZoneId) {
+            localStorage.setItem('gdcc:default:zoneId', internalZoneId);
+            Swal.fire({
+                title: 'Default Zone Set',
+                text: 'This zone will be loaded by default in the future.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                background: theme?.modalBg || '#111827',
+                color: theme?.text || '#fff'
+            });
+        }
+    };
+
     useEffect(() => {
         if (isOpen) {
             // Reset selection states for fresh open
@@ -1461,9 +1492,13 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
             setSearchTerm('');
             setMode('standard');
 
-            // Initialize from dashboard state
-            setSelectedAccountId(initialAccountId || '');
-            setInternalZoneId(initialZoneId || '');
+            // Initialize from dashboard state or defaults
+            const savedAccount = typeof window !== 'undefined' ? localStorage.getItem('gdcc:default:accountId') : '';
+            const savedZone = typeof window !== 'undefined' ? localStorage.getItem('gdcc:default:zoneId') : '';
+
+            isFirstAccountFetch.current = true;
+            setSelectedAccountId(initialAccountId || savedAccount || '');
+            setInternalZoneId(initialZoneId || savedZone || '');
             setInternalSubdomains(dashboardHosts || []);
 
             listTemplates().then(list => {
@@ -1528,7 +1563,9 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                     setZones([]);
                 }
                 setLoadingZones(false);
-                if (selectedAccountId !== initialAccountId) {
+                if (isFirstAccountFetch.current) {
+                    isFirstAccountFetch.current = false;
+                } else {
                     setInternalZoneId('');
                     setInternalSubdomains([]);
                     setSelected(new Set());
@@ -1746,6 +1783,16 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
                                 value={selectedAccountId}
                                 onChange={setSelectedAccountId}
+                                rightAction={
+                                    selectedAccountId && (
+                                        <button
+                                            onClick={handleSetDefaultAccount}
+                                            className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase transition-colors"
+                                        >
+                                            Set Default
+                                        </button>
+                                    )
+                                }
                             />
 
                             <SearchableDropdown
@@ -1757,6 +1804,16 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 value={internalZoneId}
                                 onChange={setInternalZoneId}
                                 loading={loadingZones}
+                                rightAction={
+                                    internalZoneId && (
+                                        <button
+                                            onClick={handleSetDefaultZone}
+                                            className="text-[10px] text-green-400 hover:text-green-300 font-bold uppercase transition-colors"
+                                        >
+                                            Set Default
+                                        </button>
+                                    )
+                                }
                             />
                         </div>
 
