@@ -76,6 +76,7 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
 
 # Key Files
 
+*   `.agent/gdcc_cloudflare_api_spec.md`: Detailed specification guide outlining Cloudflare GraphQL query patterns, dashboard mounting lifecycle, and query constraints for GDCC.
 *   `app/page.js`: The main portal page with links to different systems.
 *   `app/systems/gdcc/page.js`: The GDCC Analytics dashboard. Handles data visualization, report generation logic, logic for "Promote to Domain", and processing of template variables.
 *   `app/systems/Sidebar.js`: The global sidebar component, fully themable and responsive.

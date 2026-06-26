@@ -123,7 +123,7 @@ const fetchCloudflareAnalytics = async (token, zoneId, targetSubdomain, since, u
          viewer {
            zones(filter: { zoneTag: $zoneTag }) {
              zoneSummary: httpRequests1dGroups(
-                limit: 1000, filter: { date_geq: $since_date, date_leq: $until_date${targetSubdomain ? ', clientRequestHTTPHost: $host' : ''} }
+                limit: 1000, filter: { date_geq: $since_date, date_leq: $until_date }
              ) {
                 sum {
                   requests bytes cachedRequests cachedBytes pageViews
@@ -240,7 +240,7 @@ const fetchSubdomainAnalytics = async (token, zoneId, host, since, until, hostTo
           viewer {
             zones(filter: { zoneTag: $zoneTag }) {
               zoneSummary: httpRequests1dGroups(
-                limit: 1, filter: { date_geq: $since_date, date_leq: $until_date, clientRequestHTTPHost: $host }
+                limit: 1, filter: { date_geq: $since_date, date_leq: $until_date }
               ) {
                 sum { requests bytes cachedRequests cachedBytes pageViews }
                 uniq { uniques }

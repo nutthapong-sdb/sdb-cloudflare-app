@@ -3363,6 +3363,68 @@ export default function GDCCPage() {
     const [selectedAccount, setSelectedAccount] = useState('');
     const [selectedZone, setSelectedZone] = useState('');
     const [selectedSubDomain, setSelectedSubDomain] = useState('');
+
+    // Dashboard Defaults States
+    const [defaultAccount, setDefaultAccount] = useState('');
+    const [defaultZone, setDefaultZone] = useState('');
+    const [defaultSubdomain, setDefaultSubdomain] = useState('');
+
+    useEffect(() => {
+        if (currentUser?.id) {
+            const userKey = String(currentUser.id);
+            setDefaultAccount(localStorage.getItem(`gdcc:dashboard:${userKey}:accountId`) || '');
+            setDefaultZone(localStorage.getItem(`gdcc:dashboard:${userKey}:zoneId`) || '');
+            setDefaultSubdomain(localStorage.getItem(`gdcc:dashboard:${userKey}:subdomain`) || '');
+        }
+    }, [currentUser]);
+
+    const handleSetDefaultDashboardAccount = (accId) => {
+        if (!currentUser?.id) return;
+        const userKey = String(currentUser.id);
+        localStorage.setItem(`gdcc:dashboard:${userKey}:accountId`, accId);
+        setDefaultAccount(accId);
+        Swal.fire({
+            title: 'Default Account Set',
+            text: 'This account will be loaded by default in the future.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+            background: theme?.modalBg || '#111827',
+            color: theme?.text || '#fff'
+        });
+    };
+
+    const handleSetDefaultDashboardZone = (zoneId) => {
+        if (!currentUser?.id) return;
+        const userKey = String(currentUser.id);
+        localStorage.setItem(`gdcc:dashboard:${userKey}:zoneId`, zoneId);
+        setDefaultZone(zoneId);
+        Swal.fire({
+            title: 'Default Zone Set',
+            text: 'This zone will be loaded by default in the future.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+            background: theme?.modalBg || '#111827',
+            color: theme?.text || '#fff'
+        });
+    };
+
+    const handleSetDefaultDashboardSubdomain = (subdomain) => {
+        if (!currentUser?.id) return;
+        const userKey = String(currentUser.id);
+        localStorage.setItem(`gdcc:dashboard:${userKey}:subdomain`, subdomain);
+        setDefaultSubdomain(subdomain);
+        Swal.fire({
+            title: 'Default Subdomain Set',
+            text: 'This subdomain will be loaded by default in the future.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+            background: theme?.modalBg || '#111827',
+            color: theme?.text || '#fff'
+        });
+    };
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [lastSyncDate, setLastSyncDate] = useState(null);
@@ -5040,10 +5102,28 @@ export default function GDCCPage() {
         const result = await callAPI('get-account-info', {}, tokenOverride);
         if (result && result.data) {
             setAccounts(result.data);
-            const defaultAcc = result.data.find(a => (a.name || '').trim().toLowerCase() === DEFAULT_CONFIG.accountName.trim().toLowerCase());
-            if (defaultAcc && DEFAULT_CONFIG.accountName) {
-                console.log('✅ Auto-selecting Account (Config Match):', defaultAcc.name);
-                handleAccountChange(defaultAcc.id, true, tokenOverride);
+            
+            let userId = currentUser?.id;
+            if (!userId) {
+                try {
+                    const sess = localStorage.getItem('sdb_session');
+                    if (sess) userId = JSON.parse(sess).id;
+                } catch (_) {}
+            }
+            
+            const userKey = userId ? String(userId) : 'anonymous';
+            const savedAccId = localStorage.getItem(`gdcc:dashboard:${userKey}:accountId`);
+            const hasSavedAcc = savedAccId && result.data.some(a => a.id === savedAccId);
+            
+            if (hasSavedAcc) {
+                console.log('✅ Auto-selecting Account (Saved Default):', savedAccId);
+                handleAccountChange(savedAccId, true, tokenOverride);
+            } else {
+                const defaultAcc = result.data.find(a => (a.name || '').trim().toLowerCase() === DEFAULT_CONFIG.accountName.trim().toLowerCase());
+                if (defaultAcc && DEFAULT_CONFIG.accountName) {
+                    console.log('✅ Auto-selecting Account (Config Match):', defaultAcc.name);
+                    handleAccountChange(defaultAcc.id, true, tokenOverride);
+                }
             }
         }
     };
@@ -5061,11 +5141,29 @@ export default function GDCCPage() {
         const result = await callAPI('list-zones', { accountId }, tokenOverride);
         if (result && result.data) {
             setZones(result.data);
+            
+            let userId = currentUser?.id;
+            if (!userId) {
+                try {
+                    const sess = localStorage.getItem('sdb_session');
+                    if (sess) userId = JSON.parse(sess).id;
+                } catch (_) {}
+            }
+            
+            const userKey = userId ? String(userId) : 'anonymous';
+            const savedZoneId = localStorage.getItem(`gdcc:dashboard:${userKey}:zoneId`);
+            const hasSavedZone = savedZoneId && result.data.some(z => z.id === savedZoneId);
+            
             if (isAuto && result.data.length > 0) {
-                const defaultZone = result.data.find(z => (z.name || '').trim().toLowerCase() === DEFAULT_CONFIG.zoneName.trim().toLowerCase());
-                if (defaultZone && DEFAULT_CONFIG.zoneName) {
-                    console.log('✅ Auto-selecting Zone (Config Match):', defaultZone.name);
-                    setSelectedZone(defaultZone.id);
+                if (hasSavedZone) {
+                    console.log('✅ Auto-selecting Zone (Saved Default):', savedZoneId);
+                    setSelectedZone(savedZoneId);
+                } else {
+                    const defaultZone = result.data.find(z => (z.name || '').trim().toLowerCase() === DEFAULT_CONFIG.zoneName.trim().toLowerCase());
+                    if (defaultZone && DEFAULT_CONFIG.zoneName) {
+                        console.log('✅ Auto-selecting Zone (Config Match):', defaultZone.name);
+                        setSelectedZone(defaultZone.id);
+                    }
                 }
             }
         }
@@ -5119,12 +5217,29 @@ export default function GDCCPage() {
 
             setSubDomains(hostOptions);
 
-            const defaultSub = hostOptions.find(h => (h.value || '').trim().toLowerCase() === DEFAULT_CONFIG.subDomain.trim().toLowerCase());
-            if (defaultSub) {
-                console.log('✅ Auto-selecting Subdomain:', defaultSub.value);
-                setSelectedSubDomain(defaultSub.value);
+            let userId = currentUser?.id;
+            if (!userId) {
+                try {
+                    const sess = localStorage.getItem('sdb_session');
+                    if (sess) userId = JSON.parse(sess).id;
+                } catch (_) {}
+            }
+            
+            const userKey = userId ? String(userId) : 'anonymous';
+            const savedSub = localStorage.getItem(`gdcc:dashboard:${userKey}:subdomain`);
+            const hasSavedSub = savedSub && hostOptions.some(h => h.value === savedSub);
+            
+            if (hasSavedSub) {
+                console.log('✅ Auto-selecting Subdomain (Saved Default):', savedSub);
+                setSelectedSubDomain(savedSub);
             } else {
-                setSelectedSubDomain('ALL_SUBDOMAINS');
+                const defaultSub = hostOptions.find(h => (h.value || '').trim().toLowerCase() === DEFAULT_CONFIG.subDomain.trim().toLowerCase());
+                if (defaultSub) {
+                    console.log('✅ Auto-selecting Subdomain (Config Match):', defaultSub.value);
+                    setSelectedSubDomain(defaultSub.value);
+                } else {
+                    setSelectedSubDomain('ALL_SUBDOMAINS');
+                }
             }
 
             setLoadingDNS(false);
@@ -5664,9 +5779,81 @@ export default function GDCCPage() {
 
                 {/* SELECTORS */}
                 <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 p-5 rounded-xl border border-dashed ${theme.selectorContainer}`}>
-                    <SearchableDropdown theme={theme} icon={<Key className="w-4 h-4 text-blue-400" />} label="Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))} value={selectedAccount} onChange={(val) => handleAccountChange(val, false)} loading={loading && accounts.length === 0} />
-                    <SearchableDropdown theme={theme} icon={<Server className="w-4 h-4 text-green-400" />} label="Select Zone (Domain)" placeholder={!selectedAccount ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."} options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))} value={selectedZone} onChange={setSelectedZone} loading={loadingZones} />
-                    <SearchableDropdown theme={theme} icon={<Globe className="w-4 h-4 text-purple-400" />} label="Select Subdomain" placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."} options={subDomains} value={selectedSubDomain} onChange={setSelectedSubDomain} loading={loadingDNS && subDomains.length === 0} />
+                    <SearchableDropdown
+                        theme={theme}
+                        icon={<Key className="w-4 h-4 text-blue-400" />}
+                        label="Select Account"
+                        placeholder={loading ? "Loading..." : "Choose an account..."}
+                        options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: `ID: ${acc.id}` }))}
+                        value={selectedAccount}
+                        onChange={(val) => handleAccountChange(val, false)}
+                        loading={loading && accounts.length === 0}
+                        rightAction={
+                            <button
+                                onClick={() => selectedAccount && handleSetDefaultDashboardAccount(selectedAccount)}
+                                disabled={!selectedAccount}
+                                className={`text-[10px] font-bold uppercase transition-colors ${
+                                    !selectedAccount
+                                        ? 'text-gray-500 cursor-not-allowed opacity-55'
+                                        : defaultAccount === selectedAccount
+                                        ? 'text-gray-500 hover:text-gray-400 opacity-60 cursor-pointer'
+                                        : 'text-blue-400 hover:text-blue-300 cursor-pointer'
+                                }`}
+                            >
+                                {defaultAccount === selectedAccount ? 'Default' : 'Set Default'}
+                            </button>
+                        }
+                    />
+                    <SearchableDropdown
+                        theme={theme}
+                        icon={<Server className="w-4 h-4 text-green-400" />}
+                        label="Select Zone (Domain)"
+                        placeholder={!selectedAccount ? "Select Account first" : loadingZones ? "Loading..." : "Choose a zone..."}
+                        options={zones.map(zone => ({ value: zone.id, label: zone.name, subtitle: zone.status }))}
+                        value={selectedZone}
+                        onChange={setSelectedZone}
+                        loading={loadingZones}
+                        rightAction={
+                            <button
+                                onClick={() => selectedZone && handleSetDefaultDashboardZone(selectedZone)}
+                                disabled={!selectedZone}
+                                className={`text-[10px] font-bold uppercase transition-colors ${
+                                    !selectedZone
+                                        ? 'text-gray-500 cursor-not-allowed opacity-55'
+                                        : defaultZone === selectedZone
+                                        ? 'text-gray-500 hover:text-gray-400 opacity-60 cursor-pointer'
+                                        : 'text-green-400 hover:text-green-300 cursor-pointer'
+                                }`}
+                            >
+                                {defaultZone === selectedZone ? 'Default' : 'Set Default'}
+                            </button>
+                        }
+                    />
+                    <SearchableDropdown
+                        theme={theme}
+                        icon={<Globe className="w-4 h-4 text-purple-400" />}
+                        label="Select Subdomain"
+                        placeholder={!selectedZone ? "Select Zone first" : "Choose Subdomain..."}
+                        options={subDomains}
+                        value={selectedSubDomain}
+                        onChange={setSelectedSubDomain}
+                        loading={loadingDNS && subDomains.length === 0}
+                        rightAction={
+                            <button
+                                onClick={() => selectedSubDomain && handleSetDefaultDashboardSubdomain(selectedSubDomain)}
+                                disabled={!selectedSubDomain}
+                                className={`text-[10px] font-bold uppercase transition-colors ${
+                                    !selectedSubDomain
+                                        ? 'text-gray-500 cursor-not-allowed opacity-55'
+                                        : defaultSubdomain === selectedSubDomain
+                                        ? 'text-gray-500 hover:text-gray-400 opacity-60 cursor-pointer'
+                                        : 'text-purple-400 hover:text-purple-300 cursor-pointer'
+                                }`}
+                            >
+                                {defaultSubdomain === selectedSubDomain ? 'Default' : 'Set Default'}
+                            </button>
+                        }
+                    />
                 </div>
 
 
