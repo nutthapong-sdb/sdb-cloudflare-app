@@ -72,6 +72,7 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
     *   **Scope Safety:** All variables used in report generation (such as `firewallRulesData`, `firewallActivity`) MUST be declared with `let` in the outer function scope before `if` success blocks. This prevents block-scoping ReferenceErrors during batch report generations.
     *   **WAF XSS Bypass:** Template saving API calls must Base64-encode their payload on the frontend, and API routes must decode it on the backend, preventing HTTP 403 blocks from Cloudflare's WAF.
     *   **Testing & Validation:** When developing, modifying, or verifying features (especially report generation, UI flows, and dashboard variables), testing **MUST** be performed using E2E Web Automation (Puppeteer/Browser automation) rather than relying solely on backend API or script testing. Ensure regression tests are updated or created, and all regression tests must detect and parse SweetAlert2 (or other UI alert) modal popups to output errors immediately and fail the test gracefully.
+    *   **Module-Specific Testing Requirement:** Running global "test all" scripts is prohibited. All tests must be run separately per module (e.g., `npm run test:gdcc`, `npm run test:ntbc`, `npm run test:api-discovery`, etc.) to prevent unwanted side-effects or configuration leakage between different systems.
 
 # Key Files
 

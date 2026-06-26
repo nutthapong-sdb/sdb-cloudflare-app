@@ -1239,7 +1239,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         const tempDiv = document.createElement('div');
         if (isEditing) {
-            // Stored templates stay Arabic; only convert for output.
             let baseHtml = localTemplate;
             if (useAutoTOC) {
                 baseHtml = addAutomaticTOC(baseHtml, true, useThaiDigits, useAutoTOC);
@@ -1248,13 +1247,14 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         } else {
             let cloneHtml = getProcessedHtml(true); // Generates processed template with the black TOC at the correct @TOC@ placeholder location!
             tempDiv.innerHTML = cloneHtml;
+        }
 
-            const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
-            let node;
-            while (node = walker.nextNode()) {
-                if (node.nodeValue) {
-                    node.nodeValue = node.nodeValue.replace(/ (?= )/g, '\u00A0');
-                }
+        // Process non-breaking spaces
+        const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+        let node;
+        while (node = walker.nextNode()) {
+            if (node.nodeValue) {
+                node.nodeValue = node.nodeValue.replace(/ (?= )/g, '\u00A0');
             }
         }
 
@@ -1291,16 +1291,83 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             console.error('Failed to inline images client-side:', inlineErr);
         }
 
+        // Helper to process images for Word centering compatibility
+        const processImagesForWord = (container) => {
+            const imgs = container.querySelectorAll('img');
+            imgs.forEach(img => {
+                const imgStyle = img.getAttribute('style') || '';
+                const imgAlign = img.getAttribute('align') || '';
+                const imgClass = img.getAttribute('class') || '';
+                
+                let isCentered = false;
+                
+                if (imgAlign.toLowerCase() === 'center' || imgClass.includes('aligncenter')) {
+                    isCentered = true;
+                } else if (/margin-left:\s*auto/i.test(imgStyle) && /margin-right:\s*auto/i.test(imgStyle)) {
+                    isCentered = true;
+                } else if (/margin:\s*[^;]*auto/i.test(imgStyle)) {
+                    isCentered = true;
+                }
+                
+                let parent = img.parentElement;
+                while (parent && parent !== container) {
+                    const parentTagName = parent.tagName.toLowerCase();
+                    const parentStyle = parent.getAttribute('style') || '';
+                    const parentAlign = parent.getAttribute('align') || '';
+                    
+                    if (parentAlign.toLowerCase() === 'center' || /text-align:\s*center/i.test(parentStyle)) {
+                        isCentered = true;
+                        break;
+                    }
+                    if (['p', 'div', 'td', 'th', 'table', 'body'].includes(parentTagName)) {
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+                
+                if (isCentered) {
+                    let targetBlock = img.parentElement;
+                    while (targetBlock && targetBlock !== container) {
+                        const tag = targetBlock.tagName.toLowerCase();
+                        if (['p', 'div', 'td', 'th'].includes(tag)) {
+                            break;
+                        }
+                        targetBlock = targetBlock.parentElement;
+                    }
+                    
+                    if (targetBlock && targetBlock !== container && ['p', 'div'].includes(targetBlock.tagName.toLowerCase())) {
+                        targetBlock.setAttribute('align', 'center');
+                        let style = targetBlock.getAttribute('style') || '';
+                        if (!/text-align:\s*center/i.test(style)) {
+                            style = (style.trim() && !style.trim().endsWith(';') ? style + ';' : style) + ' text-align: center;';
+                            targetBlock.setAttribute('style', style);
+                        }
+                    } else {
+                        const p = document.createElement('p');
+                        p.setAttribute('align', 'center');
+                        p.setAttribute('style', 'text-align: center;');
+                        img.parentNode.insertBefore(p, img);
+                        p.appendChild(img);
+                    }
+                    
+                    let cleanImgStyle = imgStyle
+                        .replace(/margin-left:\s*auto;?/gi, '')
+                        .replace(/margin-right:\s*auto;?/gi, '')
+                        .replace(/margin:\s*[^;]*auto;?/gi, '')
+                        .replace(/float:\s*[^;]+;?/gi, '');
+                    img.setAttribute('style', cleanImgStyle);
+                }
+            });
+        };
+
+        processImagesForWord(tempDiv);
+
         cleanHTML = tempDiv.innerHTML;
         cleanHTML = useThaiDigits ? convertDigitsToThaiTextNodes(cleanHTML) : cleanHTML;
 
         if (!isEditing) {
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
-
-            cleanHTML = cleanHTML.replace(/<img[^>]*style="[^"]*margin-left:\s*auto;[^"]*margin-right:\s*auto;[^"]*"[^>]*>/gi, (match) => {
-                return `<p align="center">${match}</p>`;
-            });
         }
 
         const sourceHTML = legacyHeader + cleanHTML + footer;
@@ -1511,10 +1578,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
                                                     'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'nonbreaking'
                                                 ],
-                                                toolbar: 'undo redo | blocks fontfamily fontsize | ' +
+                                                toolbar: 'undo redo | blocks fontfamily fontsize lineheight | ' +
                                                     'bold italic forecolor | alignleft aligncenter ' +
                                                     'alignright alignjustify | bullist numlist outdent indent | ' +
                                                     'image table | removeformat | help',
+                                                line_height_formats: '1 1.15 1.5 2 2.5 3',
                                                 content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 forced_root_block: 'p',
                                                 nonbreaking_force_tab: true,

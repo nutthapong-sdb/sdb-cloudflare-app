@@ -51,14 +51,28 @@ const { selectDropdown } = require('../libs/gdcc-helper');
         await new Promise(r => setTimeout(r, 2000));
 
         log('\n🔹 Step 3: Selecting Account and Domain...', colors.blue);
-        log('   -> Selecting Account: Government Data Center and Cloud service (GDCC)', colors.gray);
+        log('   -> Selecting Account: softdebut POC', colors.gray);
 
-        const acctOk = await selectDropdown(page, 0, 'Government Data Center and Cloud service (GDCC)');
+        const acctOk = await selectDropdown(page, 0, 'softdebut POC');
         if (!acctOk) throw new Error('Failed to select Account');
 
         // Select Zone
-        log('   -> Selecting Zone: (First Available)', colors.gray);
-        await new Promise(r => setTimeout(r, 3000)); // Wait for zones to load
+        log('   -> Selecting Zone: log.softdebut.online', colors.gray);
+        
+        // Wait for zones to load completely
+        await page.waitForFunction(() => {
+            const labels = Array.from(document.querySelectorAll('label'));
+            const zoneLabel = labels.find(l => l.textContent.includes('Select Zones'));
+            if (!zoneLabel) return false;
+            
+            const listContainer = zoneLabel.closest('div').nextElementSibling;
+            if (!listContainer) return false;
+            
+            const isLoading = listContainer.textContent.includes('Loading zones');
+            const zoneItems = listContainer.querySelectorAll('div.cursor-pointer');
+            return !isLoading && zoneItems.length > 0;
+        }, { timeout: 30000 });
+
         const zoneOk = await page.evaluate(() => {
             const labels = Array.from(document.querySelectorAll('label'));
             const zoneLabel = labels.find(l => l.textContent.includes('Select Zones'));
@@ -69,6 +83,9 @@ const { selectDropdown } = require('../libs/gdcc-helper');
             
             const zones = Array.from(listContainer.querySelectorAll('div.cursor-pointer'));
             let targetZone = zones.find(z => z.textContent.includes('log.softdebut.online'));
+            if (!targetZone) {
+                targetZone = zones.find(z => z.textContent.toLowerCase().includes('softdebut'));
+            }
             if (!targetZone && zones.length > 0) targetZone = zones[0];
             
             if (targetZone) {

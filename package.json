@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start -p 8002",
     "lint": "eslint",
-    "test:e2e": "node scripts/test-all/run-all.js",
+    "test:gdcc": "node scripts/test-all/ntbc/test-gdcc-zone-name-live.js",
+    "test:ntbc": "node scripts/test-all/ntbc/test-ntbc-cfreport-capture.js",
+    "test:api-discovery": "node scripts/test-all/api_discovery/test-api.js",
+    "test:firewall": "node scripts/test-all/firewall/test-firewall.js",
+    "test:auth": "node scripts/test-all/auth/test-login.js",
     "postinstall": "mkdir -p public/tinymce && cp -R node_modules/tinymce/* public/tinymce/"
   },
   "dependencies": {
