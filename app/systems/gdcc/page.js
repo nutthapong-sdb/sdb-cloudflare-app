@@ -3334,6 +3334,8 @@ export default function GDCCPage() {
         let firewallSourcesData = [];
         let customList = [];
         let managedList = [];
+        let firewallRulesData = [];
+        let firewallActivity = [];
 
         if (result && result.success) {
             // console.log('✅ Traffic Data Received:', result.data); // Debug Header
@@ -3341,8 +3343,8 @@ export default function GDCCPage() {
             hostRequestTotal = result.data?.hostRequestTotal || 0;
             // console.log('   - Adaptive Groups:', filteredData.length);
 
-            const firewallActivity = result.data?.firewallActivity || [];
-            const firewallRulesData = result.data?.firewallRules || [];
+            firewallActivity = result.data?.firewallActivity || [];
+            firewallRulesData = result.data?.firewallRules || [];
             // console.log('   - Firewall Rules:', firewallRulesData.length);
             const firewallIPsData = result.data?.firewallIPs || [];
             firewallSourcesData = result.data?.firewallSources || [];

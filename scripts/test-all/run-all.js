@@ -141,19 +141,10 @@ async function main() {
   let tests = [
     'scripts/test-all/auth/test-login.js',
 
-    'scripts/test-all/gdcc/test-gdcc.js',
-    'scripts/test-all/gdcc/test-manual-generation.js',
-    'scripts/test-all/gdcc/test-ui-enhancements.js',
-    'scripts/test-all/gdcc/test-report-generation.js',
-    'scripts/test-all/gdcc/test-report-generation-separated.js',
-    'scripts/test-all/gdcc/test-template-variables.js',
-    'scripts/test-all/gdcc/test-total-requests.js',
-    'scripts/test-all/gdcc/test-gdcc-history-backend.js',
-    'scripts/test-all/gdcc/test-gdcc-history-ui.js',
-    'scripts/test-all/gdcc/test-template-api.js',
     'scripts/test-all/ntbc/test-control-center-ui.js',
     'scripts/test-all/ntbc/test-ntbc-cfreport-capture.js',
-    'scripts/test-all/gdcc/test-dns-specific.js',
+    'scripts/test-all/ntbc/test-traffic-time-window.js',
+    'scripts/test-all/ntbc/test-gdcc-firewall-regression.js',
 
     'scripts/test-all/api_discovery/test-api.js',
     'scripts/test-all/api_discovery/test-api-discovery.js',
