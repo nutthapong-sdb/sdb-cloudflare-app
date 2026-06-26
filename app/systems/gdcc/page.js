@@ -1784,14 +1784,17 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 value={selectedAccountId}
                                 onChange={setSelectedAccountId}
                                 rightAction={
-                                    selectedAccountId && (
-                                        <button
-                                            onClick={handleSetDefaultAccount}
-                                            className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase transition-colors"
-                                        >
-                                            Set Default
-                                        </button>
-                                    )
+                                    <button
+                                        onClick={handleSetDefaultAccount}
+                                        disabled={!selectedAccountId}
+                                        className={`text-[10px] font-bold uppercase transition-colors ${
+                                            selectedAccountId
+                                                ? 'text-blue-400 hover:text-blue-300 cursor-pointer'
+                                                : 'text-gray-500 cursor-not-allowed opacity-55'
+                                        }`}
+                                    >
+                                        Set Default
+                                    </button>
                                 }
                             />
 
@@ -1805,14 +1808,17 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 onChange={setInternalZoneId}
                                 loading={loadingZones}
                                 rightAction={
-                                    internalZoneId && (
-                                        <button
-                                            onClick={handleSetDefaultZone}
-                                            className="text-[10px] text-green-400 hover:text-green-300 font-bold uppercase transition-colors"
-                                        >
-                                            Set Default
-                                        </button>
-                                    )
+                                    <button
+                                        onClick={handleSetDefaultZone}
+                                        disabled={!internalZoneId}
+                                        className={`text-[10px] font-bold uppercase transition-colors ${
+                                            internalZoneId
+                                                ? 'text-green-400 hover:text-green-300 cursor-pointer'
+                                                : 'text-gray-500 cursor-not-allowed opacity-55'
+                                        }`}
+                                    >
+                                        Set Default
+                                    </button>
                                 }
                             />
                         </div>
