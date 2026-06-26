@@ -26,6 +26,9 @@ The frontend is built with React and Tailwind CSS, and the backend is powered by
     ```env
     # Required for scripts/debug/*.js
     CLOUDFLARE_API_TOKEN=your_token_here
+
+    # Required for staging auto-deployment via scripts/deploy.js
+    PORTAINER_WEBHOOK_URL=http://<YOUR_SERVER_IP>:<PORT>/api/stacks/webhooks/<TOKEN>
     ```
 
 3.  **Run the development server:**
