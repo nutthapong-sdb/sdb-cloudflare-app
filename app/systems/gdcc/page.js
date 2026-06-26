@@ -1034,6 +1034,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
         const footer = "</div>";
 
+        let cleanHTML = "";
         const tempDiv = document.createElement('div');
 
         if (isEditing) {
