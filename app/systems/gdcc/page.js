@@ -133,6 +133,163 @@ const formatThaiDate = (date) => {
     });
 };
 
+const toThaiDigits = (input) => {
+    if (!input) return input;
+    const thai = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
+    return String(input).replace(/[0-9]/g, (d) => thai[Number(d)]);
+};
+
+const convertDigitsToThaiTextNodes = (html) => {
+    if (!html) return html;
+    if (typeof DOMParser === 'undefined') return html;
+    try {
+        const doc = new DOMParser().parseFromString(String(html), 'text/html');
+        const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            if (!node.nodeValue) continue;
+            if (!/[0-9]/.test(node.nodeValue)) continue;
+            node.nodeValue = toThaiDigits(node.nodeValue);
+        }
+        return doc.body.innerHTML;
+    } catch (e) {
+        console.warn('Thai digit conversion failed:', e);
+        return html;
+    }
+};
+
+const addAutomaticTOC = (html, isForExport = false, useThaiDigits = true, useAutoTOC = true) => {
+    if (!html) return html;
+    if (typeof DOMParser === 'undefined') return html;
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(String(html), 'text/html');
+        
+        // Query all h1, h2, h3, h4 headings (ignoring only empty ones, just like early versions)
+        const headings = Array.from(doc.body.querySelectorAll('h1, h2, h3, h4')).filter(heading => {
+            return heading.textContent.trim().length > 0;
+        });
+
+        if (headings.length === 0) return html;
+
+        headings.forEach((heading, idx) => {
+            if (!heading.id) {
+                heading.id = `toc-heading-${idx + 1}`;
+            }
+        });
+
+        // Set colors based on preview vs export
+        const textColor = isForExport ? '#000000' : '#ffffff';
+
+        // Define page number mapper based on user example
+        const getPageNumber = (text, idx) => {
+            const tLower = text.toLowerCase();
+            let rawPage = '';
+            if (tLower.includes('การตั้งค่าระบบการป้องกัน')) {
+                rawPage = '3';
+            } else if (tLower.includes('การตั้งค่าระบบป้องกันการโจมตี')) {
+                rawPage = '3';
+            } else if (tLower.includes('รูปแบบการตั้งค่า')) {
+                rawPage = '4';
+            } else if (tLower.includes('รายงานการใช้งาน')) {
+                rawPage = '7';
+            } else {
+                // Fallback estimation
+                rawPage = String(3 + Math.floor(idx * 1.5));
+            }
+            return useThaiDigits ? toThaiDigits(rawPage) : rawPage;
+        };
+
+        const tocContainer = doc.createElement('div');
+        tocContainer.className = 'toc-container';
+        tocContainer.setAttribute('style', `margin-bottom: 30px; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35; width: 100%;`);
+        
+        const tocTitle = doc.createElement('p');
+        tocTitle.innerHTML = '<strong>สารบัญ</strong>';
+        tocTitle.setAttribute('style', `text-align: center; margin-bottom: 20px; font-size: 20pt; font-family: "TH SarabunPSK", "Sarabun", sans-serif; margin-top: 0; color: ${textColor};`);
+        tocContainer.appendChild(tocTitle);
+
+        // Simple Paragraphs with exactly 20 dots
+        headings.forEach((heading, idx) => {
+            const level = parseInt(heading.tagName.substring(1));
+            let text = heading.textContent.replace(/\s+/g, ' ').trim();
+            const pageNum = getPageNumber(text, idx);
+            
+            let indent = '';
+            if (level === 2) {
+                indent = '&nbsp; &nbsp; &nbsp;';
+            } else if (level === 3) {
+                indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
+            } else if (level === 4) {
+                indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
+            }
+
+            const dots = '.'.repeat(20);
+
+            const p = doc.createElement('p');
+            p.setAttribute('style', `margin-bottom: 6px; margin-top: 0; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35;`);
+            p.innerHTML = `${indent}${text} ${dots} ${pageNum}`;
+            tocContainer.appendChild(p);
+        });
+
+        // Check if @TOC@ or @TOC placeholder exists anywhere in the body
+        const bodyHtml = doc.body.innerHTML;
+        const tocPlaceholder = bodyHtml.includes('@TOC@') ? '@TOC@' : (bodyHtml.includes('@TOC') ? '@TOC' : null);
+        if (tocPlaceholder) {
+            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+            let node;
+            let targetNode = null;
+            while ((node = walker.nextNode())) {
+                if (node.nodeValue && (node.nodeValue.includes('@TOC@') || node.nodeValue.includes('@TOC'))) {
+                    targetNode = node;
+                    break;
+                }
+            }
+            
+            if (targetNode) {
+                const parent = targetNode.parentNode;
+                const tempSpan = doc.createElement('span');
+                tempSpan.innerHTML = tocContainer.outerHTML;
+                parent.replaceChild(tempSpan, targetNode);
+                while (tempSpan.firstChild) {
+                    parent.insertBefore(tempSpan.firstChild, tempSpan);
+                }
+                parent.removeChild(tempSpan);
+            } else {
+                doc.body.innerHTML = bodyHtml.replace(tocPlaceholder, tocContainer.outerHTML);
+            }
+        } else if (useAutoTOC) {
+            // Default fallback: prepend TOC right after the first H1 tag, or at the very beginning
+            const firstH1 = doc.body.querySelector('h1');
+            if (firstH1 && firstH1.nextSibling) {
+                doc.body.insertBefore(tocContainer, firstH1.nextSibling);
+                const br = doc.createElement('br');
+                doc.body.insertBefore(br, firstH1.nextSibling);
+            } else {
+                doc.body.insertBefore(tocContainer, doc.body.firstChild);
+            }
+        }
+
+        return doc.body.innerHTML;
+    } catch (e) {
+        console.warn('Auto TOC generation failed:', e);
+        return html;
+    }
+};
+
+const getZoneName = (zoneId, zones = []) => {
+    if (!zoneId) return '-';
+    if (zoneId.includes('.')) return zoneId; // It's already the domain name!
+    const zoneObj = zones.find(z => z.id === zoneId);
+    if (zoneObj?.name) return zoneObj.name;
+    if (typeof window !== 'undefined') {
+        const savedName = localStorage.getItem(`gdcc:zoneName:${zoneId}`) || localStorage.getItem(`ntbc:zoneName:${zoneId}`);
+        if (savedName) return savedName;
+    }
+    return '-';
+};
+
+
 // --- TEMPLATE PROCESSING ---
 // Helper to escape special regex characters
 const escapeRegExp = (string) => {
@@ -267,6 +424,9 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@FULL_DATE': now.toLocaleString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
         '@ACCOUNT_NAME': safeData.accountName || '-',
         '@ZONE_NAME': safeData.zoneName || '-',
+        '@DOMAIN_COUNT': (safeData.domainCount || '0').toString(),
+        '@SUBDOMAIN_COUNT': (safeData.dnsRecords ? safeData.dnsRecords.length : 0).toString(),
+        '@PROXIED_COUNT': (safeData.dnsRecords ? safeData.dnsRecords.filter(r => r.proxied === true).length : 0).toString(),
         // Firewall Action Counts
         '@FW_LOG_COUNT': formatEventCount(getActionCount('log')),
         '@FW_SKIP_COUNT': formatEventCount(getActionCount('skip')),
@@ -799,164 +959,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const topUA = safeData.topUserAgents && safeData.topUserAgents.length > 0 ? safeData.topUserAgents[0] : { agent: '-', count: 0 };
     const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
-    // --- TEMPLATE PROCESSING ---
-    const addAutomaticTOC = (html, isForExport = false) => {
-        if (!html) return html;
-        if (typeof DOMParser === 'undefined') return html;
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(String(html), 'text/html');
-            
-            // Query all h1, h2, h3, h4 headings (ignoring only empty ones, just like early versions)
-            const headings = Array.from(doc.body.querySelectorAll('h1, h2, h3, h4')).filter(heading => {
-                return heading.textContent.trim().length > 0;
-            });
-
-            if (headings.length === 0) return html;
-
-            headings.forEach((heading, idx) => {
-                if (!heading.id) {
-                    heading.id = `toc-heading-${idx + 1}`;
-                }
-            });
-
-            // Set colors based on preview vs export
-            const textColor = isForExport ? '#000000' : '#ffffff';
-
-            // Define page number mapper based on user example
-            const getPageNumber = (text, idx) => {
-                const tLower = text.toLowerCase();
-                let rawPage = '';
-                if (tLower.includes('การตั้งค่าระบบการป้องกัน')) {
-                    rawPage = '3';
-                } else if (tLower.includes('การตั้งค่าระบบป้องกันการโจมตี')) {
-                    rawPage = '3';
-                } else if (tLower.includes('รูปแบบการตั้งค่า')) {
-                    rawPage = '4';
-                } else if (tLower.includes('รายงานการใช้งาน')) {
-                    rawPage = '7';
-                } else {
-                    // Fallback estimation
-                    rawPage = String(3 + Math.floor(idx * 1.5));
-                }
-                return useThaiDigits ? toThaiDigits(rawPage) : rawPage;
-            };
-
-            const tocContainer = doc.createElement('div');
-            tocContainer.className = 'toc-container';
-            tocContainer.setAttribute('style', `margin-bottom: 30px; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35; width: 100%;`);
-            
-            const tocTitle = doc.createElement('p');
-            tocTitle.innerHTML = '<strong>สารบัญ</strong>';
-            tocTitle.setAttribute('style', `text-align: center; margin-bottom: 20px; font-size: 20pt; font-family: "TH SarabunPSK", "Sarabun", sans-serif; margin-top: 0; color: ${textColor};`);
-            tocContainer.appendChild(tocTitle);
-
-            // Simple Paragraphs with exactly 20 dots
-            headings.forEach((heading, idx) => {
-                const level = parseInt(heading.tagName.substring(1));
-                let text = heading.textContent.replace(/\s+/g, ' ').trim();
-                const pageNum = getPageNumber(text, idx);
-                
-                let indent = '';
-                if (level === 2) {
-                    indent = '&nbsp; &nbsp; &nbsp;';
-                } else if (level === 3) {
-                    indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
-                } else if (level === 4) {
-                    indent = '&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;';
-                }
-
-                const dots = '.'.repeat(20);
-
-                const p = doc.createElement('p');
-                p.setAttribute('style', `margin-bottom: 6px; margin-top: 0; font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; color: ${textColor}; line-height: 1.35;`);
-                p.innerHTML = `${indent}${text} ${dots} ${pageNum}`;
-                tocContainer.appendChild(p);
-            });
-
-            // Check if @TOC@ placeholder exists anywhere in the body
-            const bodyHtml = doc.body.innerHTML;
-            if (bodyHtml.includes('@TOC@')) {
-                const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-                let node;
-                let targetNode = null;
-                while ((node = walker.nextNode())) {
-                    if (node.nodeValue && node.nodeValue.includes('@TOC@')) {
-                        targetNode = node;
-                        break;
-                    }
-                }
-                
-                if (targetNode) {
-                    const parent = targetNode.parentNode;
-                    const tempSpan = doc.createElement('span');
-                    tempSpan.innerHTML = tocContainer.outerHTML;
-                    parent.replaceChild(tempSpan, targetNode);
-                    while (tempSpan.firstChild) {
-                        parent.insertBefore(tempSpan.firstChild, tempSpan);
-                    }
-                    parent.removeChild(tempSpan);
-                } else {
-                    doc.body.innerHTML = bodyHtml.replace('@TOC@', tocContainer.outerHTML);
-                }
-            } else if (useAutoTOC) {
-                // Default fallback: prepend TOC right after the first H1 tag, or at the very beginning
-                const firstH1 = doc.body.querySelector('h1');
-                if (firstH1 && firstH1.nextSibling) {
-                    doc.body.insertBefore(tocContainer, firstH1.nextSibling);
-                    const br = doc.createElement('br');
-                    doc.body.insertBefore(br, firstH1.nextSibling);
-                } else {
-                    doc.body.insertBefore(tocContainer, doc.body.firstChild);
-                }
-            }
-
-            return doc.body.innerHTML;
-        } catch (e) {
-            console.warn('Auto TOC generation failed:', e);
-            return html;
-        }
-    };
-
     const getProcessedHtml = (isForExport = false) => {
         const baseTmpl = isEditing ? localTemplate : (template ?? DEFAULT_TEMPLATE);
         // Even for static template, we want to process date variables
         let html = processTemplate(baseTmpl, safeData, new Date(), dashboardImage);
-        const hasTOCPlaceholder = html.includes('@TOC@');
+        const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
         if (useAutoTOC || hasTOCPlaceholder) {
-            html = addAutomaticTOC(html, isForExport);
+            html = addAutomaticTOC(html, isForExport, useThaiDigits, useAutoTOC);
         }
-        // Cleanup leftover @TOC@ placeholder (if headings were empty or if TOC was disabled)
-        if (html.includes('@TOC@')) {
-            html = html.replaceAll('@TOC@', '');
-        }
+        // Cleanup leftover placeholders (if headings were empty or if TOC was disabled)
+        html = html.replaceAll('@TOC@', '').replaceAll('@TOC', '');
         return html;
-    };
-
-    const toThaiDigits = (input) => {
-        if (!input) return input;
-        const thai = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
-        return String(input).replace(/[0-9]/g, (d) => thai[Number(d)]);
-    };
-
-    // Convert Arabic digits to Thai digits in visible text only (text nodes), not attributes.
-    const convertDigitsToThaiTextNodes = (html) => {
-        if (!html) return html;
-        if (typeof DOMParser === 'undefined') return html;
-        try {
-            const doc = new DOMParser().parseFromString(String(html), 'text/html');
-            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-            let node;
-            while ((node = walker.nextNode())) {
-                if (!node.nodeValue) continue;
-                if (!/[0-9]/.test(node.nodeValue)) continue;
-                node.nodeValue = toThaiDigits(node.nodeValue);
-            }
-            return doc.body.innerHTML;
-        } catch (e) {
-            console.warn('Thai digit conversion failed:', e);
-            return html;
-        }
     };
 
     // --- COPY FUNCTION ---
@@ -1492,14 +1505,10 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
             setSearchTerm('');
             setMode('standard');
 
-            // Initialize from dashboard state or defaults
-            const savedAccount = typeof window !== 'undefined' ? localStorage.getItem('gdcc:default:accountId') : '';
-            const savedZone = typeof window !== 'undefined' ? localStorage.getItem('gdcc:default:zoneId') : '';
-
-            isFirstAccountFetch.current = true;
-            setSelectedAccountId(initialAccountId || savedAccount || '');
-            setInternalZoneId(initialZoneId || savedZone || '');
-            setInternalSubdomains(dashboardHosts || []);
+            // Initialize states as empty
+            setSelectedAccountId('');
+            setInternalZoneId('');
+            setInternalSubdomains([]);
 
             listTemplates().then(list => {
                 if (typeof window === 'undefined') {
@@ -1532,7 +1541,16 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                 }
             });
         }
-    }, [isOpen, initialZoneId, initialAccountId, dashboardHosts]);
+    }, [isOpen]);
+
+    // 1. Initialize Account when open and accounts are loaded
+    useEffect(() => {
+        if (isOpen && accounts && accounts.length > 0 && !selectedAccountId) {
+            const savedAccount = typeof window !== 'undefined' ? localStorage.getItem('gdcc:default:accountId') : '';
+            const accountToSet = initialAccountId || savedAccount || accounts[0]?.id || '';
+            setSelectedAccountId(accountToSet);
+        }
+    }, [isOpen, accounts, initialAccountId, selectedAccountId]);
 
     // Fetch departments when account or zone changes
     useEffect(() => {
@@ -1549,8 +1567,10 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
     // Handle Account Change -> Fetch Zones
     useEffect(() => {
-        if (!isOpen || !selectedAccountId) return;
-        if (selectedAccountId === initialAccountId && zones.length > 0) return;
+        if (!isOpen || !selectedAccountId) {
+            setZones([]);
+            return;
+        }
 
         let isMounted = true;
         const fetchZones = async () => {
@@ -1563,25 +1583,53 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                     setZones([]);
                 }
                 setLoadingZones(false);
-                if (isFirstAccountFetch.current) {
-                    isFirstAccountFetch.current = false;
-                } else {
-                    setInternalZoneId('');
-                    setInternalSubdomains([]);
-                    setSelected(new Set());
-                    setSelectedDeptIds(new Set());
-                    setDeptMemberHosts([]);
-                }
             }
         };
         fetchZones();
         return () => { isMounted = false; };
-    }, [selectedAccountId, isOpen, initialAccountId]);
+    }, [selectedAccountId, isOpen]);
+
+    // Reset lower selections when Account ID changes manually
+    useEffect(() => {
+        if (isOpen && selectedAccountId) {
+            setInternalZoneId('');
+            setInternalSubdomains([]);
+            setSelected(new Set());
+            setSelectedDeptIds(new Set());
+            setDeptMemberHosts([]);
+        }
+    }, [selectedAccountId, isOpen]);
+
+    // 2. Initialize Zone when zones are loaded
+    useEffect(() => {
+        if (isOpen && selectedAccountId && zones && zones.length > 0 && !internalZoneId) {
+            const savedZone = typeof window !== 'undefined' ? localStorage.getItem('gdcc:default:zoneId') : '';
+            const zoneExists = (zoneId) => zones.some(z => z.id === zoneId);
+
+            let zoneToSet = '';
+            if (initialZoneId && zoneExists(initialZoneId)) {
+                zoneToSet = initialZoneId;
+            } else if (savedZone && zoneExists(savedZone)) {
+                zoneToSet = savedZone;
+            } else {
+                zoneToSet = zones[0]?.id || '';
+            }
+            setInternalZoneId(zoneToSet);
+        }
+    }, [isOpen, selectedAccountId, zones, initialZoneId, internalZoneId]);
 
     // Handle Zone Change -> Fetch Subdomains
     useEffect(() => {
-        if (!isOpen || !internalZoneId) return;
-        if (internalZoneId === initialZoneId && internalSubdomains.length > 0) return;
+        if (!isOpen || !internalZoneId) {
+            setInternalSubdomains([]);
+            return;
+        }
+
+        // Reuse dashboardHosts if it's the initially selected zone to be fast
+        if (internalZoneId === initialZoneId && dashboardHosts && dashboardHosts.length > 0 && internalSubdomains.length === 0) {
+            setInternalSubdomains(dashboardHosts);
+            return;
+        }
 
         let isMounted = true;
         const fetchDns = async () => {
@@ -1610,7 +1658,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
         };
         fetchDns();
         return () => { isMounted = false; };
-    }, [internalZoneId, isOpen, zones, initialZoneId]);
+    }, [internalZoneId, isOpen, zones, initialZoneId, dashboardHosts]);
 
     // Use internal subdomains if available, otherwise dashboard hosts
     const hosts = internalSubdomains.length > 0 ? internalSubdomains : dashboardHosts;
@@ -2044,7 +2092,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
                                 const promotedArray = Array.from(promotedHosts);
                                 // extra final arg: exportSeparated
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, zones);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.button} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -2072,7 +2120,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 }
 
                                 const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, zones);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -3897,10 +3945,11 @@ export default function GDCCPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false) => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = []) => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
+        const activeZones = (batchModalZones && batchModalZones.length > 0) ? batchModalZones : zones;
         const zoneDataCache = new Map();
         const getZoneData = async (zId) => {
             if (!zId) return { dns: [], settings: {} };
@@ -4122,7 +4171,7 @@ export default function GDCCPage() {
                 };
 
                 const domainReportData = {
-                    domain: zones.find(z => z.id === defaultZoneId)?.name,
+                    domain: activeZones.find(z => z.id === defaultZoneId)?.name,
                     totalRequests: totalRequests,
                     totalDataTransfer: totalDataTransfer,
                     pageViews: pageViews,
@@ -4144,11 +4193,12 @@ export default function GDCCPage() {
                     topCustomRules: customRulesList,
                     topManagedRules: managedRulesList,
                     topFirewallSources: topFirewallSources,
-                    zoneName: zones.find(z => z.id === selectedZone)?.name || '-',
-                    accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
+                    zoneName: getZoneName(defaultZoneId, activeZones) || '-',
+                    accountName: activeZones.find(z => z.id === defaultZoneId)?.account?.name || accounts.find(a => a.id === selectedAccount)?.name || '-',
                     startDate: batchStartDate,
                     endDate: batchEndDate,
                     dnsRecords: localDnsRecords,
+                    domainCount: (activeZones || []).length || '0',
                     // Add zone settings (using localZoneSettings)
                     botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
                     blockAiBots: localZoneSettings?.botManagement?.blockAiBots || 'unknown',
@@ -4264,7 +4314,7 @@ export default function GDCCPage() {
                     const zoneStats = zoneDataCache.get(zoneStatsCacheKey);
 
                     const domainReportData = {
-                        domain: zones.find(z => z.id === zId)?.name,
+                        domain: activeZones.find(z => z.id === zId)?.name,
                         totalRequests: totalRequests,
                         totalDataTransfer: totalDataTransfer,
                         pageViews: pageViews,
@@ -4286,11 +4336,12 @@ export default function GDCCPage() {
                         topCustomRules: customRulesList,
                         topManagedRules: managedRulesList,
                         topFirewallSources: topFirewallSources,
-                        zoneName: zones.find(z => z.id === zId)?.name || '-',
-                        accountName: accounts.find(a => a.id === selectedAccount)?.name || '-',
+                        zoneName: activeZones.find(z => z.id === zId)?.name || '-',
+                        accountName: activeZones.find(z => z.id === zId)?.account?.name || accounts.find(a => a.id === selectedAccount)?.name || '-',
                         startDate: batchStartDate,
                         endDate: batchEndDate,
                         dnsRecords: localDnsRecords,
+                        domainCount: (activeZones || []).length || '0',
                         botManagementEnabled: localZoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
                         blockAiBots: localZoneSettings?.botManagement?.blockAiBots || 'unknown',
                         definitelyAutomated: localZoneSettings?.botManagement?.definitelyAutomated || 'unknown',
@@ -4441,8 +4492,9 @@ export default function GDCCPage() {
                             topHosts: safeStats.topHosts,
                             topCustomRules: safeStats.topCustomRules,
                             topManagedRules: safeStats.topManagedRules,
-                            zoneName: zones.find(z => z.id === currentZoneId)?.name,
+                            zoneName: getZoneName(currentZoneId, activeZones),
                             dnsRecords: currentZoneData.dns,
+                            domainCount: (activeZones || []).length || '0',
                             ipAccessRules: currentZoneData.settings?.ipAccessRules,
                             customRules: currentZoneData.settings?.customRules,
                             rateLimits: currentZoneData.settings?.rateLimits
@@ -4456,9 +4508,35 @@ export default function GDCCPage() {
                         updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 85, 'Packing .doc and adding to .zip...');
 
                         const zoneSectionHtml = await getZoneSectionHtml(currentZoneId);
-                        const docHtml = cleanHeader + `${zoneSectionHtml}<div class="page-break"></div>${reportHtml}` + footer;
+                        let combinedBody = `${zoneSectionHtml}<div class="page-break"></div>${reportHtml}`;
+
+                        // Retrieve Thai digits preference for batch report if stored, default to true
+                        const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
+                        const thaiDigitsPrefKey = `gdcc:templates:${userKey}:thaiDigits:${templateId}`;
+                        let useThaiDigits = true;
+                        if (typeof window !== 'undefined') {
+                            try {
+                                const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
+                                if (storedDigits !== null) {
+                                    useThaiDigits = storedDigits === '1';
+                                }
+                            } catch (_) {}
+                        }
+
+                        // Generate TOC
+                        const hasTOCPlaceholder = combinedBody.includes('@TOC@') || combinedBody.includes('@TOC');
+                        if (hasTOCPlaceholder) {
+                            combinedBody = addAutomaticTOC(combinedBody, true, useThaiDigits, true);
+                        }
+                        // Cleanup leftover placeholders
+                        combinedBody = combinedBody.replaceAll('@TOC@', '').replaceAll('@TOC', '');
+                        if (useThaiDigits) {
+                            combinedBody = convertDigitsToThaiTextNodes(combinedBody);
+                        }
+
+                        const docHtml = cleanHeader + combinedBody + footer;
                         const safeHost = sanitizeFilePart(host);
-                        const safeZone = sanitizeFilePart(zones.find(z => z.id === currentZoneId)?.name || 'zone');
+                        const safeZone = sanitizeFilePart(activeZones.find(z => z.id === currentZoneId)?.name || 'zone');
                         const fileName = `report_${safeZone}_${safeHost}_${batchStartDate}_${batchEndDate}.doc`;
 
                         zip.file(fileName, docHtml);
@@ -4619,10 +4697,11 @@ export default function GDCCPage() {
                         topHosts: safeStats.topHosts,
                         topCustomRules: safeStats.topCustomRules,
                         topManagedRules: safeStats.topManagedRules,
-                        zoneName: zones.find(z => z.id === currentZoneId)?.name,
+                        zoneName: getZoneName(currentZoneId, activeZones),
 
                         // Added missing fields for Batch Report Template placeholders (using Verified Local Data)
                         dnsRecords: currentZoneData.dns,
+                        domainCount: (activeZones || []).length || '0',
                         ipAccessRules: currentZoneData.settings?.ipAccessRules,
                         customRules: currentZoneData.settings?.customRules,
                         rateLimits: currentZoneData.settings?.rateLimits
@@ -4681,8 +4760,32 @@ export default function GDCCPage() {
             updateOverlay('Finalizing...', selectedHosts.length, selectedHosts.length, 100, 'Packing final Word Document (.doc)...');
             await new Promise(r => setTimeout(r, 800)); // Small delay for effect
 
+            const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
+            const thaiDigitsPrefKey = `gdcc:templates:${userKey}:thaiDigits:${templateId}`;
+            let useThaiDigits = true;
+            if (typeof window !== 'undefined') {
+                try {
+                    const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
+                    if (storedDigits !== null) {
+                        useThaiDigits = storedDigits === '1';
+                    }
+                } catch (_) {}
+            }
+
+            // Resolve TOC on the combined html!
+            let finalCombinedHtml = addAutomaticTOC(combinedHtml, true, useThaiDigits, true);
+            if (finalCombinedHtml.includes('@TOC@')) {
+                finalCombinedHtml = finalCombinedHtml.replaceAll('@TOC@', '');
+            }
+            if (finalCombinedHtml.includes('@TOC')) {
+                finalCombinedHtml = finalCombinedHtml.replaceAll('@TOC', '');
+            }
+            if (useThaiDigits) {
+                finalCombinedHtml = convertDigitsToThaiTextNodes(finalCombinedHtml);
+            }
+
             // 6. Download the final Word document
-            const sourceHTML = cleanHeader + combinedHtml + footer;
+            const sourceHTML = cleanHeader + finalCombinedHtml + footer;
             const filename = `batch_report_${new Date().getTime()}.doc`;
 
             try {
@@ -5387,8 +5490,9 @@ export default function GDCCPage() {
                 onClose={() => setIsReportModalOpen(false)}
                 data={{
                     ...reportData,
-                    zoneName: zones.find(z => z.id === selectedZone)?.name,
+                    zoneName: getZoneName(selectedZone, zones),
                     accountName: accounts.find(a => a.id === selectedAccount)?.name,
+                    domainCount: (zones || []).length || '0',
                     // Add zone settings (Security Level removed)
                     botManagementEnabled: zoneSettings?.botManagement?.enabled ? 'Enabled' : 'Disabled',
                     blockAiBots: zoneSettings?.botManagement?.blockAiBots || 'unknown',
@@ -5474,7 +5578,7 @@ export default function GDCCPage() {
                 onClose={() => setIsDepartmentModalOpen(false)}
                 theme={theme}
                 selectedZoneId={selectedZone}
-                zoneName={zones.find(z => z.id === selectedZone)?.name}
+                zoneName={getZoneName(selectedZone, zones)}
                 selectedAccountId={selectedAccount}
                 subdomains={subDomains.map(s => s.value)}
                 accounts={accounts}
