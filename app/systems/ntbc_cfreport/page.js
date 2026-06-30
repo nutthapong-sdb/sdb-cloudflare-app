@@ -1680,39 +1680,55 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     </div>
 
                                     {/* Link Variables Section */}
-                                    <div className="mt-4 pt-3 border-t border-gray-700/30">
+                                    <div className="mt-4 pt-3 border-t border-gray-700/30 flex flex-col overflow-hidden max-h-[220px]">
                                         <div className="text-[11px] font-bold text-orange-500 mb-2 uppercase tracking-wider">
-                                            Link Variables
+                                            Link Variables (Screenshots)
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {[
-                                                '@captured_domain_page',
-                                                '@captured_dns_page',
-                                                '@captured_traffic_page',
-                                                '@captured_request_traffic_page',
-                                                '@captured_data_transfer_traffic_page',
-                                                '@captured_page_views_traffic_page',
-                                                '@captured_visits_traffic_page',
-                                                '@captured_api_requests_traffic_page',
-                                                '@captured_firewall_page',
-                                                '@captured_security_rules_page',
-                                                '@captured_argo_page',
-                                                '@captured_speed_page',
-                                                '@captured_speed_mobile_page'
-                                            ].map((vName) => (
-                                                <a
-                                                    key={vName}
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        editorRef.current?.insertContent(vName);
-                                                    }}
-                                                    className="text-orange-500 hover:text-orange-400 font-mono text-xs font-semibold bg-orange-500/10 hover:bg-orange-500/20 px-2 py-1 rounded border border-orange-500/30 transition-colors cursor-pointer inline-block"
-                                                    title={`Click to insert ${vName}`}
-                                                >
-                                                    {vName}
-                                                </a>
-                                            ))}
+                                        <div className="flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar">
+                                            <table className="w-full text-left text-xs border-collapse relative">
+                                                <thead className="sticky top-0 z-10 bg-gray-100 border-b shadow-sm">
+                                                    <tr>
+                                                        <th className="p-2 font-semibold w-[30%] text-orange-600">Variable</th>
+                                                        <th className="p-2 font-semibold w-[45%] text-orange-600">Description</th>
+                                                        <th className="p-2 font-semibold w-[25%] text-orange-600">Example</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {[
+                                                        { name: '@captured_domain_page', desc: 'รูปภาพหน้าจอหน้ารวมโดเมน (Sites overview)', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_dns_page', desc: 'รูปภาพหน้าจอรายการ DNS Records', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_firewall_page', desc: 'รูปภาพหน้าจอความปลอดภัยและเหตุการณ์ WAF (Firewall Overview)', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_security_rules_page', desc: 'รูปภาพหน้าจอรายการกฎความปลอดภัย (Security Custom Rules)', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_argo_page', desc: 'รูปภาพหน้าจอการตั้งค่า Argo Smart Routing', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_speed_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วเว็บไซต์ (Speed Test)', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_speed_mobile_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วบนมือถือ (Speed Test Mobile)', example: '<img>', category: 'Screenshots' },
+                                                        { name: '@captured_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic แบบรวมทั้งหมด', example: '<img>', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_request_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Requests', example: '<img>', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_data_transfer_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Data Transfer', example: '<img>', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', example: '<img>', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', example: '<img>', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', example: '<img>', category: 'Traffic Screenshots' }
+                                                    ].map((v) => (
+                                                        <tr
+                                                            key={v.name}
+                                                            onClick={() => editorRef.current?.insertContent(v.name)}
+                                                            className="cursor-pointer hover:bg-orange-50 transition-colors group text-gray-700"
+                                                            title={`Click to insert ${v.name}\nCategory: ${v.category}`}
+                                                        >
+                                                            <td className="p-2 font-mono text-orange-600 font-medium whitespace-nowrap group-hover:underline align-top">
+                                                                {v.name}
+                                                                <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
+                                                            </td>
+                                                            <td className="p-2 text-gray-600 align-top">
+                                                                {v.desc}
+                                                            </td>
+                                                            <td className="p-2 font-mono text-gray-500 text-[10px] break-all align-top">
+                                                                {v.example}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
                                 </div>
