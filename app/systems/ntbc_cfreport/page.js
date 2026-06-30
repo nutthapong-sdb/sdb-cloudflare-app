@@ -1688,26 +1688,25 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             <table className="w-full text-left text-xs border-collapse relative">
                                                 <thead className="sticky top-0 z-10 bg-gray-100 border-b shadow-sm">
                                                     <tr>
-                                                        <th className="p-2 font-semibold w-[30%] text-orange-600">Variable</th>
-                                                        <th className="p-2 font-semibold w-[45%] text-orange-600">Description</th>
-                                                        <th className="p-2 font-semibold w-[25%] text-orange-600">Example</th>
+                                                        <th className="p-2 font-semibold w-[40%] text-orange-600">Variable</th>
+                                                        <th className="p-2 font-semibold w-[60%] text-orange-600">Description</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100">
                                                     {[
-                                                        { name: '@captured_domain_page', desc: 'รูปภาพหน้าจอหน้ารวมโดเมน (Sites overview)', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_dns_page', desc: 'รูปภาพหน้าจอรายการ DNS Records', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_firewall_page', desc: 'รูปภาพหน้าจอความปลอดภัยและเหตุการณ์ WAF (Firewall Overview)', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_security_rules_page', desc: 'รูปภาพหน้าจอรายการกฎความปลอดภัย (Security Custom Rules)', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_argo_page', desc: 'รูปภาพหน้าจอการตั้งค่า Argo Smart Routing', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_speed_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วเว็บไซต์ (Speed Test)', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_speed_mobile_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วบนมือถือ (Speed Test Mobile)', example: '<img>', category: 'Screenshots' },
-                                                        { name: '@captured_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic แบบรวมทั้งหมด', example: '<img>', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_request_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Requests', example: '<img>', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_data_transfer_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Data Transfer', example: '<img>', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', example: '<img>', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', example: '<img>', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', example: '<img>', category: 'Traffic Screenshots' }
+                                                        { name: '@captured_domain_page', desc: 'รูปภาพหน้าจอหน้ารวมโดเมน (Sites overview)', category: 'Screenshots' },
+                                                        { name: '@captured_dns_page', desc: 'รูปภาพหน้าจอรายการ DNS Records', category: 'Screenshots' },
+                                                        { name: '@captured_firewall_page', desc: 'รูปภาพหน้าจอความปลอดภัยและเหตุการณ์ WAF (Firewall Overview)', category: 'Screenshots' },
+                                                        { name: '@captured_security_rules_page', desc: 'รูปภาพหน้าจอรายการกฎความปลอดภัย (Security Custom Rules)', category: 'Screenshots' },
+                                                        { name: '@captured_argo_page', desc: 'รูปภาพหน้าจอการตั้งค่า Argo Smart Routing', category: 'Screenshots' },
+                                                        { name: '@captured_speed_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วเว็บไซต์ (Speed Test)', category: 'Screenshots' },
+                                                        { name: '@captured_speed_mobile_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วบนมือถือ (Speed Test Mobile)', category: 'Screenshots' },
+                                                        { name: '@captured_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic แบบรวมทั้งหมด', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_request_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Requests', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_data_transfer_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Data Transfer', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', category: 'Traffic Screenshots' },
+                                                        { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', category: 'Traffic Screenshots' }
                                                     ].map((v) => (
                                                         <tr
                                                             key={v.name}
@@ -1721,9 +1720,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                             </td>
                                                             <td className="p-2 text-gray-600 align-top">
                                                                 {v.desc}
-                                                            </td>
-                                                            <td className="p-2 font-mono text-gray-500 text-[10px] break-all align-top">
-                                                                {v.example}
                                                             </td>
                                                         </tr>
                                                     ))}
