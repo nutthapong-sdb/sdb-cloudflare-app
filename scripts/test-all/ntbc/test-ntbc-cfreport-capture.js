@@ -280,6 +280,15 @@ async function selectModalDropdown(page, labelText, searchText) {
                 throw new Error(`Process interrupted by alert modal: [${swalError.title}] ${swalError.content}`);
             }
 
+            // Check if VNC modal is open (unauthenticated Cloudflare detected)
+            const isVncOpen = await page.evaluate(() => {
+                const headers = Array.from(document.querySelectorAll('h3, h2, h1, div'));
+                return !!headers.find(el => (el.textContent || '').includes('Live Debug Browser (VNC)'));
+            });
+            if (isVncOpen) {
+                throw new Error('Cloudflare is not authenticated. Opened VNC modal for manual login.');
+            }
+
             const tmpFiles = fs.readdirSync(TMP_DOWNLOAD_DIR);
             const foundTmp = tmpFiles.find(f => {
                 if (!(f.endsWith('.docx') || f.endsWith('.doc')) || f.endsWith('.crdownload')) return false;
