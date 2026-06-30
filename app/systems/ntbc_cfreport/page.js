@@ -477,6 +477,11 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
             return `<div class="mb-6" style="text-align: center;"><img src="${fallbackSrc}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`;
         })(),
         '@captured_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImage || safeData.captured_traffic_page, '/captured-traffic.png')}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_request_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub1 || safeData.captured_request_traffic_page, '/captured-traffic-sub1.png')}" alt="Captured HTTP Traffic Requests" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_data_transfer_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub2 || safeData.captured_data_transfer_traffic_page, '/captured-traffic-sub2.png')}" alt="Captured HTTP Traffic Data Transfer" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_page_views_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub3 || safeData.captured_page_views_traffic_page, '/captured-traffic-sub3.png')}" alt="Captured HTTP Traffic Page Views" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_visits_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub4 || safeData.captured_visits_traffic_page, '/captured-traffic-sub4.png')}" alt="Captured HTTP Traffic Visits" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_api_requests_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub5 || safeData.captured_api_requests_traffic_page, '/captured-traffic-sub5.png')}" alt="Captured HTTP Traffic API Requests" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_firewall_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedFirewallImage || safeData.captured_firewall_page, '/captured-firewall.png')}" alt="Captured Firewall Overview" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_security_rules_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page, '/captured-security-rules.png')}" alt="Captured Security Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_argo_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedArgoImage || safeData.captured_argo_page, '/captured-argo.png')}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
@@ -1684,12 +1689,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 '@captured_domain_page',
                                                 '@captured_dns_page',
                                                 '@captured_traffic_page',
+                                                '@captured_request_traffic_page',
+                                                '@captured_data_transfer_traffic_page',
+                                                '@captured_page_views_traffic_page',
+                                                '@captured_visits_traffic_page',
+                                                '@captured_api_requests_traffic_page',
                                                 '@captured_firewall_page',
                                                 '@captured_security_rules_page',
                                                 '@captured_argo_page',
                                                 '@captured_speed_page',
-                                                 '@captured_speed_mobile_page'
-                                             ].map((vName) => (
+                                                '@captured_speed_mobile_page'
+                                            ].map((vName) => (
                                                 <a
                                                     key={vName}
                                                     href="#"
@@ -3139,6 +3149,11 @@ export default function NTBCCFReportPage() {
     const [capturedDnsImage, setCapturedDnsImage] = useState(null);
     const [capturedDnsPages, setCapturedDnsPages] = useState([]);
     const [capturedTrafficImage, setCapturedTrafficImage] = useState(null);
+    const [capturedTrafficImageSub1, setCapturedTrafficImageSub1] = useState(null);
+    const [capturedTrafficImageSub2, setCapturedTrafficImageSub2] = useState(null);
+    const [capturedTrafficImageSub3, setCapturedTrafficImageSub3] = useState(null);
+    const [capturedTrafficImageSub4, setCapturedTrafficImageSub4] = useState(null);
+    const [capturedTrafficImageSub5, setCapturedTrafficImageSub5] = useState(null);
     const [capturedFirewallImage, setCapturedFirewallImage] = useState(null);
     const [capturedSecurityRulesImage, setCapturedSecurityRulesImage] = useState(null);
     const [capturedArgoImage, setCapturedArgoImage] = useState(null);
@@ -3158,6 +3173,11 @@ export default function NTBCCFReportPage() {
                 setCapturedDnsPages([]);
             }
             setCapturedTrafficImage(localStorage.getItem('control_capturedHttpTrafficScreenshot'));
+            setCapturedTrafficImageSub1(localStorage.getItem('control_capturedHttpTrafficScreenshot1'));
+            setCapturedTrafficImageSub2(localStorage.getItem('control_capturedHttpTrafficScreenshot2'));
+            setCapturedTrafficImageSub3(localStorage.getItem('control_capturedHttpTrafficScreenshot3'));
+            setCapturedTrafficImageSub4(localStorage.getItem('control_capturedHttpTrafficScreenshot4'));
+            setCapturedTrafficImageSub5(localStorage.getItem('control_capturedHttpTrafficScreenshot5'));
             setCapturedFirewallImage(localStorage.getItem('control_capturedFirewallScreenshot'));
             setCapturedSecurityRulesImage(localStorage.getItem('control_capturedSecurityRulesScreenshot'));
             setCapturedArgoImage(localStorage.getItem('control_capturedArgoScreenshot'));
@@ -4461,18 +4481,23 @@ export default function NTBCCFReportPage() {
                     setCapturedTrafficImage(trafficData.image);
                     localStorage.setItem('control_capturedHttpTrafficScreenshot', trafficData.image);
                     if (trafficData.imageSub1) {
+                        setCapturedTrafficImageSub1(trafficData.imageSub1);
                         localStorage.setItem('control_capturedHttpTrafficScreenshot1', trafficData.imageSub1);
                     }
                     if (trafficData.imageSub2) {
+                        setCapturedTrafficImageSub2(trafficData.imageSub2);
                         localStorage.setItem('control_capturedHttpTrafficScreenshot2', trafficData.imageSub2);
                     }
                     if (trafficData.imageSub3) {
+                        setCapturedTrafficImageSub3(trafficData.imageSub3);
                         localStorage.setItem('control_capturedHttpTrafficScreenshot3', trafficData.imageSub3);
                     }
                     if (trafficData.imageSub4) {
+                        setCapturedTrafficImageSub4(trafficData.imageSub4);
                         localStorage.setItem('control_capturedHttpTrafficScreenshot4', trafficData.imageSub4);
                     }
                     if (trafficData.imageSub5) {
+                        setCapturedTrafficImageSub5(trafficData.imageSub5);
                         localStorage.setItem('control_capturedHttpTrafficScreenshot5', trafficData.imageSub5);
                     }
                 }
@@ -5262,6 +5287,11 @@ export default function NTBCCFReportPage() {
                     capturedDnsImage,
                     capturedDnsPages,
                     capturedTrafficImage,
+                    capturedTrafficImageSub1,
+                    capturedTrafficImageSub2,
+                    capturedTrafficImageSub3,
+                    capturedTrafficImageSub4,
+                    capturedTrafficImageSub5,
                     capturedFirewallImage,
                     capturedSecurityRulesImage,
                     capturedArgoImage,
