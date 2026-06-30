@@ -411,6 +411,8 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@PAGE_VIEWS_M': (Number(safeData.pageViews || 0) / 1000000).toFixed(2) + 'M',
         '@TRAFFIC_CHANGE_TEXT': safeData.trafficChangeText || 'เพิ่มขึ้น',
         '@TRAFFIC_CHANGE_PCT': safeData.trafficChangePct || '1.79%',
+        '@DATA_TRANSFER_CHANGE_TEXT': safeData.dataTransferChangeText || 'ลดลง',
+        '@DATA_TRANSFER_CHANGE_PCT': safeData.dataTransferChangePct || '17.43%',
         '@AVG_TIME': avgTimeSec,
         '@BLOCK_PCT': blockPct,
         '@LOG_PCT': logPct,
@@ -1053,6 +1055,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [mounted, setMounted] = useState(false);
     const [trafficChangeText, setTrafficChangeText] = useState('เพิ่มขึ้น');
     const [trafficChangePct, setTrafficChangePct] = useState('1.79%');
+    const [dataTransferChangeText, setDataTransferChangeText] = useState('ลดลง');
+    const [dataTransferChangePct, setDataTransferChangePct] = useState('17.43%');
     // Local states and handleCaptureScreenshot removed (lifted to parent NTBCCFReportPage)
 
     const downloadWordRef = useRef(null);
@@ -1181,7 +1185,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             ...safeData, 
             capturedDomainImage,
             trafficChangeText,
-            trafficChangePct
+            trafficChangePct,
+            dataTransferChangeText,
+            dataTransferChangePct
         }, new Date(), dashboardImage);
         console.log('DEBUG getProcessedHtml: processed html length =', html?.length);
         const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
@@ -1657,31 +1663,59 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
                                     {/* Traffic Comparison Config Panel */}
                                     <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
-                                        <div className="text-[11px] font-bold text-orange-600 mb-2 uppercase tracking-wider flex items-center justify-between">
-                                            <span>Traffic Comparison Config</span>
-                                            <span className="text-[9px] text-gray-400 font-mono normal-case">@TRAFFIC_CHANGE_TEXT & @TRAFFIC_CHANGE_PCT</span>
+                                        <div className="text-[11px] font-bold text-orange-600 mb-2 uppercase tracking-wider">
+                                            Traffic Comparison Config
                                         </div>
-                                        <div className="flex gap-3">
-                                            <div className="flex-1">
-                                                <label className="text-[10px] text-gray-500 font-semibold block mb-1">Change Trend (แนวโน้ม)</label>
-                                                <select
-                                                    value={trafficChangeText}
-                                                    onChange={(e) => setTrafficChangeText(e.target.value)}
-                                                    className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                >
-                                                    <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
-                                                    <option value="ลดลง">ลดลง (Decrease)</option>
-                                                </select>
+                                        
+                                        {/* Row 1: Requests */}
+                                        <div className="mb-2 pb-2 border-b border-orange-100">
+                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Requests Trend (@TRAFFIC_CHANGE_TEXT & @TRAFFIC_CHANGE_PCT)</div>
+                                            <div className="flex gap-3">
+                                                <div className="flex-1">
+                                                    <select
+                                                        value={trafficChangeText}
+                                                        onChange={(e) => setTrafficChangeText(e.target.value)}
+                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                    >
+                                                        <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
+                                                        <option value="ลดลง">ลดลง (Decrease)</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <input
+                                                        type="text"
+                                                        value={trafficChangePct}
+                                                        onChange={(e) => setTrafficChangePct(e.target.value)}
+                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="เช่น 1.79%"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="flex-1">
-                                                <label className="text-[10px] text-gray-500 font-semibold block mb-1">Change Percentage (เปอร์เซ็นต์)</label>
-                                                <input
-                                                    type="text"
-                                                    value={trafficChangePct}
-                                                    onChange={(e) => setTrafficChangePct(e.target.value)}
-                                                    className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                    placeholder="เช่น 1.79%"
-                                                />
+                                        </div>
+
+                                        {/* Row 2: Data Transfer */}
+                                        <div>
+                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Data Transfer Trend (@DATA_TRANSFER_CHANGE_TEXT & @DATA_TRANSFER_CHANGE_PCT)</div>
+                                            <div className="flex gap-3">
+                                                <div className="flex-1">
+                                                    <select
+                                                        value={dataTransferChangeText}
+                                                        onChange={(e) => setDataTransferChangeText(e.target.value)}
+                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                    >
+                                                        <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
+                                                        <option value="ลดลง">ลดลง (Decrease)</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <input
+                                                        type="text"
+                                                        value={dataTransferChangePct}
+                                                        onChange={(e) => setDataTransferChangePct(e.target.value)}
+                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="เช่น 17.43%"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
