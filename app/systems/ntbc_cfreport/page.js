@@ -416,6 +416,10 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@ARGO_IMPROVEMENT_PCT': safeData.argoImprovementPct || '29.84%',
         '@ARGO_RT_BEFORE': safeData.argoResponseTimeBefore || '1.15 s',
         '@ARGO_RT_AFTER': safeData.argoResponseTimeAfter || '804 ms',
+        '@SPEED_TTI': safeData.speedTimeToInteractive || '1,221 ms',
+        '@SPEED_INDEX': safeData.speedIndex || '1,165 ms',
+        '@SPEED_SCORE': safeData.speedScorePct || '97%',
+        '@SPEED_LEVEL': safeData.speedLevel || 'ดีเยี่ยม',
         '@AVG_TIME': avgTimeSec,
         '@BLOCK_PCT': blockPct,
         '@LOG_PCT': logPct,
@@ -1063,6 +1067,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [argoImprovementPct, setArgoImprovementPct] = useState('29.84%');
     const [argoResponseTimeBefore, setArgoResponseTimeBefore] = useState('1.15 s');
     const [argoResponseTimeAfter, setArgoResponseTimeAfter] = useState('804 ms');
+    const [speedTimeToInteractive, setSpeedTimeToInteractive] = useState('1,221 ms');
+    const [speedIndex, setSpeedIndex] = useState('1,165 ms');
+    const [speedScorePct, setSpeedScorePct] = useState('97%');
+    const [speedLevel, setSpeedLevel] = useState('ดีเยี่ยม');
     // Local states and handleCaptureScreenshot removed (lifted to parent NTBCCFReportPage)
 
     const downloadWordRef = useRef(null);
@@ -1196,7 +1204,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             dataTransferChangePct,
             argoImprovementPct,
             argoResponseTimeBefore,
-            argoResponseTimeAfter
+            argoResponseTimeAfter,
+            speedTimeToInteractive,
+            speedIndex,
+            speedScorePct,
+            speedLevel
         }, new Date(), dashboardImage);
         console.log('DEBUG getProcessedHtml: processed html length =', html?.length);
         const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
@@ -1729,7 +1741,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                         </div>
 
                                         {/* Row 3: Argo Performance */}
-                                        <div>
+                                        <div className="mb-2 pb-2 border-b border-orange-100">
                                             <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Argo Performance (@ARGO_IMPROVEMENT_PCT & RT before/after)</div>
                                             <div className="flex gap-2">
                                                 <div className="flex-[4] relative">
@@ -1763,6 +1775,59 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         placeholder="804 ms"
                                                         title="Response Time after Argo"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 4: Speed Test Desktop */}
+                                        <div>
+                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Performance (@SPEED_TTI, @SPEED_INDEX, @SPEED_SCORE, @SPEED_LEVEL)</div>
+                                            <div className="flex gap-2 mb-1.5">
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedTimeToInteractive}
+                                                        onChange={(e) => setSpeedTimeToInteractive(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="1,221 ms"
+                                                        title="Time to Interactive"
+                                                    />
+                                                </div>
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Idx</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedIndex}
+                                                        onChange={(e) => setSpeedIndex(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="1,165 ms"
+                                                        title="Speed Index"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Scr</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedScorePct}
+                                                        onChange={(e) => setSpeedScorePct(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="97%"
+                                                        title="Performance Score %"
+                                                    />
+                                                </div>
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Lvl</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedLevel}
+                                                        onChange={(e) => setSpeedLevel(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="ดีเยี่ยม"
+                                                        title="Performance Level"
                                                     />
                                                 </div>
                                             </div>
