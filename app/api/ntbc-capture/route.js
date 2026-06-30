@@ -482,16 +482,14 @@ export async function GET(request) {
                     const extractHeight = Math.max(10, Math.min(scaleHeight, metadata.height - extractTop));
 
                     if (type === 'traffic') {
-                        // 1. Crop sub1 (900px height from startY on the initial Requests tab)
-                        console.log('Cropping sub1 (900px height)...');
-                        const scaleHeight900 = Math.round(900 * pagesDevicePixelRatio);
-                        const extractHeight900 = Math.max(10, Math.min(scaleHeight900, metadata.height - extractTop));
+                        // 1. Crop sub1 (Requests tab using extractHeight)
+                        console.log('Cropping sub1...');
                         sub1Buffer = await sharp(pageBuffer)
                             .extract({
                                 left: extractLeft,
                                 top: extractTop,
                                 width: extractWidth,
-                                height: extractHeight900
+                                height: extractHeight
                             })
                             .toBuffer();
 
@@ -556,31 +554,7 @@ export async function GET(request) {
                                     const subImage = sharp(subFullBuffer);
                                     const subMetadata = await subImage.metadata();
 
-                                    // Find element with text "Requests volume by country"
-                                    const requestsVolumeTop = await page.evaluate(() => {
-                                        const findElementByText = (selector, text) => {
-                                            const elements = Array.from(document.querySelectorAll(selector));
-                                            return elements.find(el => {
-                                                const content = el.textContent || '';
-                                                const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
-                                                return isVisible && content.trim().toLowerCase().includes(text.toLowerCase());
-                                            });
-                                        };
-                                        const el = findElementByText('h1, h2, h3, h4, h5, div, span, p', 'Requests volume by country');
-                                        if (el) {
-                                            return el.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0);
-                                        }
-                                        return null;
-                                    });
-
-                                    let customSubHeight = scaleHeight900;
-                                    if (requestsVolumeTop) {
-                                        const relativeHeight = requestsVolumeTop - cropCoords.y - 15; // 15px safety margin above the heading
-                                        customSubHeight = Math.round(relativeHeight * pagesDevicePixelRatio);
-                                        console.log(`Dynamic ${tabInfo.text} height: ending before 'Requests volume by country' at height: ${relativeHeight}px (${customSubHeight} scaled px)`);
-                                    }
-
-                                    const extractHeightSub = Math.max(10, Math.min(customSubHeight, subMetadata.height - extractTop));
+                                    const extractHeightSub = Math.max(10, Math.min(extractHeight, subMetadata.height - extractTop));
 
                                     const croppedBuf = await subImage
                                         .extract({
