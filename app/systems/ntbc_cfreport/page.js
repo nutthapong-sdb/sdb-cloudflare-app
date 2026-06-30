@@ -406,6 +406,11 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@TIME_RANGE': timeRangeStr,
         '@DOMAIN': domainDisplay,
         '@TOTAL_REQ': (safeData.totalRequests || 0).toLocaleString(),
+        '@TOTAL_REQ_M': (Number(safeData.totalRequests || 0) / 1000000).toFixed(2) + 'M',
+        '@ZONE_TOTAL_REQ_M': (Number(safeData.zoneWideRequests || safeData.totalRequests || 0) / 1000000).toFixed(2) + 'M',
+        '@PAGE_VIEWS_M': (Number(safeData.pageViews || 0) / 1000000).toFixed(2) + 'M',
+        '@TRAFFIC_CHANGE_TEXT': safeData.trafficChangeText || 'เพิ่มขึ้น',
+        '@TRAFFIC_CHANGE_PCT': safeData.trafficChangePct || '1.79%',
         '@AVG_TIME': avgTimeSec,
         '@BLOCK_PCT': blockPct,
         '@LOG_PCT': logPct,
@@ -1047,6 +1052,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const editorRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [mounted, setMounted] = useState(false);
+    const [trafficChangeText, setTrafficChangeText] = useState('เพิ่มขึ้น');
+    const [trafficChangePct, setTrafficChangePct] = useState('1.79%');
     // Local states and handleCaptureScreenshot removed (lifted to parent NTBCCFReportPage)
 
     const downloadWordRef = useRef(null);
@@ -1076,8 +1083,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
     const filteredVariables = availableVariables.filter(v =>
-        v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.desc.toLowerCase().includes(searchTerm.toLowerCase())
+        v.category !== 'Screenshots' &&
+        v.category !== 'Traffic Screenshots' &&
+        (
+            v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            v.desc.toLowerCase().includes(searchTerm.toLowerCase())
+        )
     );
 
     // Sync local template when prop changes
@@ -1167,7 +1178,12 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         const baseTmpl = isEditing ? localTemplate : (template ?? DEFAULT_TEMPLATE);
         console.log('DEBUG getProcessedHtml: baseTmpl length =', baseTmpl?.length, 'localTemplate length =', localTemplate?.length, 'template length =', template?.length);
         // Even for static template, we want to process date variables
-        let html = processTemplate(baseTmpl, { ...safeData, capturedDomainImage }, new Date(), dashboardImage);
+        let html = processTemplate(baseTmpl, { 
+            ...safeData, 
+            capturedDomainImage,
+            trafficChangeText,
+            trafficChangePct
+        }, new Date(), dashboardImage);
         console.log('DEBUG getProcessedHtml: processed html length =', html?.length);
         const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
         if (useAutoTOC || hasTOCPlaceholder) {
@@ -1637,6 +1653,37 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                                 className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
                                             />
+                                        </div>
+                                    </div>
+
+                                    {/* Traffic Comparison Config Panel */}
+                                    <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                                        <div className="text-[11px] font-bold text-orange-600 mb-2 uppercase tracking-wider flex items-center justify-between">
+                                            <span>Traffic Comparison Config</span>
+                                            <span className="text-[9px] text-gray-400 font-mono normal-case">@TRAFFIC_CHANGE_TEXT & @TRAFFIC_CHANGE_PCT</span>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-gray-500 font-semibold block mb-1">Change Trend (แนวโน้ม)</label>
+                                                <select
+                                                    value={trafficChangeText}
+                                                    onChange={(e) => setTrafficChangeText(e.target.value)}
+                                                    className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                >
+                                                    <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
+                                                    <option value="ลดลง">ลดลง (Decrease)</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-gray-500 font-semibold block mb-1">Change Percentage (เปอร์เซ็นต์)</label>
+                                                <input
+                                                    type="text"
+                                                    value={trafficChangePct}
+                                                    onChange={(e) => setTrafficChangePct(e.target.value)}
+                                                    className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                    placeholder="เช่น 1.79%"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
