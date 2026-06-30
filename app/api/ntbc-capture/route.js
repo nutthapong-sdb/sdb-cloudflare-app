@@ -81,6 +81,9 @@ export async function GET(request) {
             return Response.json({ success: false, error: 'No active browser page found' }, { status: 400 });
         }
 
+        // Force viewport size to 1920x1080 to match browser window size inside VNC container
+        await page.setViewport({ width: 1920, height: 1080 });
+
         // Wait up to 3 seconds for either the login page to appear or the dashboard to load
         try {
             await page.waitForFunction(() => {

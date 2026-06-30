@@ -27,6 +27,9 @@ export async function GET(request) {
             return Response.json({ success: false, error: 'No active browser page found. Please start Step 1.' }, { status: 400 });
         }
 
+        // Force viewport size to 1920x1080 to match browser window size inside VNC container
+        await page.setViewport({ width: 1920, height: 1080 });
+
         // Determine redirect target
         const customUrl = searchParams.get('url');
         const targetUrl = customUrl || (accountId 

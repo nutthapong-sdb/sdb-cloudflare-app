@@ -36,14 +36,14 @@ async function setupBrowser() {
         const wsUrlObj = new URL(res.data.webSocketDebuggerUrl);
         const wsUrl = `ws://${host}:9222${wsUrlObj.pathname}${wsUrlObj.search}`;
         log(`🔌 Connected to remote Cloudflare Browser (${host}:9222)`, colors.green);
-        return await puppeteer.connect({ browserWSEndpoint: wsUrl, defaultViewport: { width: 1280, height: 800 } });
+        return await puppeteer.connect({ browserWSEndpoint: wsUrl, defaultViewport: null });
     } catch (e) {
         log(`⚠️ Remote browser connection failed, falling back to local launch...`, colors.yellow);
         const isHeadless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
         return await puppeteer.launch({
             headless: isHeadless ? 'new' : false,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            defaultViewport: { width: 1280, height: 800 }
+            defaultViewport: null
         });
     }
 }
