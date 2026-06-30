@@ -43,8 +43,10 @@ export async function GET(request) {
         try {
             await page.waitForFunction(() => {
                 const url = window.location.href;
+                const text = document.body ? document.body.innerText.toLowerCase() : '';
+                const hasLoginText = text.includes('sign in to cloudflare') || text.includes('log in to cloudflare');
                 const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
-                const isLoginPage = url.includes('/login') || url.includes('/sign-in') || hasLoginElement;
+                const isLoginPage = url.includes('/login') || url.includes('/sign-in') || hasLoginText || hasLoginElement;
                 const hasDashboardElement = !!(document.querySelector('#react-app') || document.querySelector('[data-testid="zone-card"]') || document.querySelector('main'));
                 return isLoginPage || hasDashboardElement;
             }, { timeout: 3000 });
@@ -54,8 +56,10 @@ export async function GET(request) {
 
         const isUnauthenticated = await page.evaluate(() => {
             const url = window.location.href;
+            const text = document.body ? document.body.innerText.toLowerCase() : '';
+            const hasLoginText = text.includes('sign in to cloudflare') || text.includes('log in to cloudflare');
             const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
-            return url.includes('/login') || url.includes('/sign-in') || hasLoginElement;
+            return url.includes('/login') || url.includes('/sign-in') || hasLoginText || hasLoginElement;
         });
 
         if (isUnauthenticated) {
