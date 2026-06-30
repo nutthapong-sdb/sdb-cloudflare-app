@@ -406,7 +406,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@TIME_RANGE': timeRangeStr,
         '@DOMAIN': domainDisplay,
         '@TOTAL_REQ': (safeData.totalRequests || 0).toLocaleString(),
-        '@TOTAL_REQ_M': (Number(safeData.totalRequests || 0) / 1000000).toFixed(2) + 'M',
+        '@SUBDOMAIN_TOTAL_REQ_M': (Number(safeData.totalRequests || 0) / 1000000).toFixed(2) + 'M',
         '@ZONE_TOTAL_REQ_M': (Number(safeData.zoneWideRequests || safeData.totalRequests || 0) / 1000000).toFixed(2) + 'M',
         '@PAGE_VIEWS_M': (Number(safeData.pageViews || 0) / 1000000).toFixed(2) + 'M',
         '@TRAFFIC_CHANGE_TEXT': safeData.trafficChangeText || 'เพิ่มขึ้น',
