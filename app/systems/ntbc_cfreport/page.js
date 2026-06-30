@@ -504,6 +504,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@captured_argo_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedArgoImage || safeData.captured_argo_page, '/captured-argo.png')}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_speed_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedImage || safeData.captured_speed_page, '/captured-speed.png')}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_speed_mobile_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page, '/captured-speed-mobile.png')}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImage || safeData.captured_traffic_page, '/captured-traffic.png')}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
 
 
         // DDoS Protection - individual protections (convert Always On to Enable)
