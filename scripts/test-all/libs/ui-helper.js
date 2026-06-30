@@ -55,6 +55,16 @@ async function setupPage(browser) {
         behavior: 'allow',
         downloadPath: TMP_DOWNLOAD_DIR,
     });
+
+    // Reset zoom to 100% via keyboard shortcut Ctrl+0
+    try {
+        await page.keyboard.down('Control');
+        await page.keyboard.press('Digit0');
+        await page.keyboard.up('Control');
+    } catch (err) {
+        log(`⚠️ Failed to reset zoom: ${err.message}`, colors.yellow);
+    }
+
     return page;
 }
 

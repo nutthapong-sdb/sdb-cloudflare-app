@@ -84,6 +84,38 @@ export async function GET(request) {
         // Force viewport size to 1920x1080 to match browser window size inside VNC container
         await page.setViewport({ width: 1920, height: 1080 });
 
+        // Reset zoom to 100% via keyboard shortcut Ctrl+0
+        try {
+            await page.keyboard.down('Control');
+            await page.keyboard.press('Digit0');
+            await page.keyboard.up('Control');
+            console.log('Reset zoom to 100% using Ctrl+0');
+        } catch (err) {
+            console.error('Failed to reset zoom via Ctrl+0:', err);
+        }
+
+        // Collapse Cloudflare sidebar navigation to keep layout standardized
+        try {
+            const isExpanded = await page.evaluate(() => {
+                const nav = document.querySelector('nav') || document.querySelector('aside') || document.querySelector('[aria-label*="navigation"]');
+                if (nav) {
+                    return nav.offsetWidth > 120;
+                }
+                return false;
+            });
+            if (isExpanded) {
+                console.log('Sidebar is expanded, collapsing it using keyboard shortcut "t" then "s"...');
+                await page.keyboard.press('KeyT');
+                await new Promise(r => setTimeout(r, 100));
+                await page.keyboard.press('KeyS');
+                await new Promise(r => setTimeout(r, 600));
+            } else {
+                console.log('Sidebar is already collapsed.');
+            }
+        } catch (err) {
+            console.warn('Failed to collapse Cloudflare sidebar:', err.message);
+        }
+
         // Wait up to 3 seconds for either the login page to appear or the dashboard to load
         try {
             await page.waitForFunction(() => {
