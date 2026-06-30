@@ -40,6 +40,7 @@ services:
       - DISPLAY_HEIGHT=1080
     volumes:
       - ./chrome-config:/config
+      - ./docker-chrome-policy:/etc/chromium/policies:ro
     shm_size: 2gb
     security_opt:
       - seccomp:unconfined
