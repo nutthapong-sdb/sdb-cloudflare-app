@@ -4326,6 +4326,20 @@ export default function NTBCCFReportPage() {
                     await new Promise(r => setTimeout(r, 100));
                 }
 
+                // Check Cloudflare Authentication Status before doing anything else
+                checkCancelled();
+                try {
+                    console.log('Checking Cloudflare authentication status...');
+                    const authRes = await fetch('/api/ntbc-control-chrome');
+                    const authData = await authRes.json();
+                    if (authRes.status === 401 || authData.errorType === 'unauthenticated') {
+                        throw new Error('UNAUTHENTICATED_CLOUDFLARE');
+                    }
+                } catch (err) {
+                    if (err.message === 'UNAUTHENTICATED_CLOUDFLARE' || err.message === 'Force stopped by user') throw err;
+                    console.error('Initial Cloudflare auth check failed:', err);
+                }
+
                 // Helper to handle navigation and screenshot
                 const controlAndCapture = async (url, type, statusKey) => {
                     checkCancelled();
