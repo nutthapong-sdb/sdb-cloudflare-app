@@ -7,6 +7,15 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const accountId = searchParams.get('accountId');
 
+        // Mock mode check using the bind-mounted db directory
+        const fs = require('fs');
+        const path = require('path');
+        const mockModePath = path.join(process.cwd(), 'db', 'mock_capture.txt');
+        if (fs.existsSync(mockModePath)) {
+            console.log("ℹ️ [MOCK MODE] Simulating successful Chrome navigation...");
+            return Response.json({ success: true, redirectedUrl: 'https://dash.cloudflare.com/' });
+        }
+
         console.log(`Connecting to Chrome on port 9222. Target Account: ${accountId}`);
         const browser = await connectChrome();
         const pages = await browser.pages();

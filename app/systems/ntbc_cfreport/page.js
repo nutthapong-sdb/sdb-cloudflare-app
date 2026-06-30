@@ -4101,7 +4101,12 @@ export default function NTBCCFReportPage() {
         for (let i = 0; i < zonesToProcess.length; i++) {
             const currentZone = zonesToProcess[i];
             // Pass the grouped hosts for this zone
-            await processSingleZoneCapture(currentZone.zoneId, currentZone.accountId, currentZone.hosts, batchStartDate, batchEndDate, templateId, [], false, i, zonesToProcess.length);
+            const success = await processSingleZoneCapture(currentZone.zoneId, currentZone.accountId, currentZone.hosts, batchStartDate, batchEndDate, templateId, [], false, i, zonesToProcess.length);
+            
+            if (!success) {
+                console.log('Stopping batch queue processing due to failure or user cancellation.');
+                break;
+            }
             
             // Wait for download to finish
             await new Promise(resolve => {
@@ -4671,11 +4676,13 @@ export default function NTBCCFReportPage() {
             setTimeout(() => {
                 Swal.close();
             }, 1000);
+            return true;
 
         } catch (error) {
             if (error.message === 'UNAUTHENTICATED_CLOUDFLARE') {
                 setIsVncModalOpen(true);
-                return;
+                Swal.close();
+                return false;
             }
             if (error.message === 'Force stopped by user') {
                 console.log('Workflow force stopped by user.');
@@ -4688,7 +4695,7 @@ export default function NTBCCFReportPage() {
                     background: theme?.modalBg || '#111827',
                     color: theme?.text || '#fff'
                 });
-                return;
+                return false;
             }
             console.error('Workflow error:', error);
             statusMap.report = 'error';
@@ -4700,6 +4707,7 @@ export default function NTBCCFReportPage() {
                 background: theme?.modalBg || '#111827',
                 color: theme?.text || '#fff'
             });
+            return false;
         }
     };
 

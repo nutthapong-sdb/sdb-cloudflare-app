@@ -14,6 +14,63 @@ export async function GET(request) {
         const qYStart = searchParams.get('yStart');
         const qYEnd = searchParams.get('yEnd');
 
+        // Mock mode check using the bind-mounted db directory
+        const mockModePath = path.join(process.cwd(), 'db', 'mock_capture.txt');
+        if (fs.existsSync(mockModePath)) {
+            console.log(`ℹ️ [MOCK MODE] Simulating capture for type: ${type}...`);
+            const publicDir = path.join(process.cwd(), 'public');
+            
+            // Map types to filenames
+            const fileMapping = {
+                dns: 'captured-dns.png',
+                traffic: 'captured-traffic.png',
+                firewall: 'captured-firewall.png',
+                'security-rules': 'captured-security-rules.png',
+                argo: 'captured-argo.png',
+                speed: 'captured-speed.png',
+                'speed-mobile': 'captured-speed-mobile.png',
+                domains: 'captured-domains.png'
+            };
+            
+            const fileName = fileMapping[type] || 'captured-domains.png';
+            const filePath = path.join(publicDir, fileName);
+            
+            let finalBuffer;
+            if (fs.existsSync(filePath)) {
+                finalBuffer = fs.readFileSync(filePath);
+            } else {
+                // Fallback to a 1x1 transparent PNG if the file doesn't exist
+                finalBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+            }
+            
+            const responseData = {
+                success: true,
+                image: `data:image/png;base64,${finalBuffer.toString('base64')}`,
+                filePath: `/${fileName}?t=${Date.now()}`
+            };
+            
+            if (type === 'dns') {
+                responseData.dnsPages = [responseData.image];
+            }
+            
+            if (type === 'traffic') {
+                for (let i = 1; i <= 5; i++) {
+                    const subFile = `captured-traffic-sub${i}.png`;
+                    const subPath = path.join(publicDir, subFile);
+                    if (fs.existsSync(subPath)) {
+                        const subBuf = fs.readFileSync(subPath);
+                        responseData[`imageSub${i}`] = `data:image/png;base64,${subBuf.toString('base64')}`;
+                        responseData[`filePathSub${i}`] = `/${subFile}?t=${Date.now()}`;
+                    } else {
+                        responseData[`imageSub${i}`] = responseData.image;
+                        responseData[`filePathSub${i}`] = responseData.filePath;
+                    }
+                }
+            }
+            
+            return Response.json(responseData);
+        }
+
         console.log(`Connecting to Chrome on port 9222 for ${type} screenshot capture...`);
         const browser = await connectChrome();
         const pages = await browser.pages();

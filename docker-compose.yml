@@ -24,8 +24,8 @@ services:
       - NODE_ENV=production
       - CHROME_HOST=chrome-browser
     volumes:
-      - /home/nutthapong/sdb-data/db:/app/db
-      - /home/nutthapong/sdb-data/data:/app/app/data
+      - ./db:/app/db
+      - ./downloads:/app/app/data
     restart: unless-stopped
     depends_on:
       - chrome-browser
@@ -39,7 +39,7 @@ services:
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
     volumes:
-      - /home/nutthapong/sdb-data/chrome_config:/config
+      - ./chrome-config:/config
     shm_size: 2gb
     security_opt:
       - seccomp:unconfined

@@ -14,7 +14,107 @@ const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 const { setupBrowser, setupPage, login, log, colors, TMP_DOWNLOAD_DIR, BASE_URL } = require('../libs/ui-helper');
-const { selectDropdown } = require('../libs/gdcc-helper');
+
+async function selectModalDropdown(page, labelText, searchText) {
+    log(`   -> Selecting ${labelText}: ${searchText}`, colors.gray);
+    
+    // Debug all labels on the page first
+    const allLabels = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('label')).map(l => ({
+            text: l.textContent,
+            html: l.outerHTML
+        }));
+    });
+    log(`   [DEBUG] All labels currently in DOM:\n${JSON.stringify(allLabels, null, 2)}`, colors.yellow);
+
+    const dropdownRoot = await page.evaluateHandle((label) => {
+        const labels = Array.from(document.querySelectorAll('label'));
+        const targetLabel = labels.find(l => (l.textContent || '').toLowerCase().includes(label.toLowerCase()));
+        if (!targetLabel) return null;
+        // Let's find the parent wrapper div. We want the one containing the tabindex="0" div.
+        let parent = targetLabel.parentElement;
+        while (parent) {
+            if (parent.querySelector('div[tabindex="0"]')) {
+                return parent;
+            }
+            parent = parent.parentElement;
+        }
+        return targetLabel.closest('div');
+    }, labelText);
+
+    if (!dropdownRoot || !(await dropdownRoot.asElement())) {
+        throw new Error(`Could not find dropdown label: ${labelText}`);
+    }
+
+    const dropdownRootHtml = await page.evaluate(el => el.outerHTML, dropdownRoot);
+    log(`   [DEBUG] dropdownRoot HTML:\n${dropdownRootHtml}`, colors.yellow);
+
+    const trigger = await dropdownRoot.$('div[tabindex="0"]');
+    if (!trigger) {
+        throw new Error(`Could not find dropdown trigger for label: ${labelText}`);
+    }
+
+    await page.waitForFunction((el) => {
+        const t = (el.textContent || '').trim();
+        return t && !t.includes('Loading...');
+    }, { timeout: 30000 }, trigger);
+
+    let popupOpened = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+        await page.evaluate(el => el.click(), trigger);
+        await new Promise(r => setTimeout(r, 1000));
+        const hasInput = await dropdownRoot.$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
+        if (hasInput) {
+            popupOpened = true;
+            break;
+        }
+    }
+
+    if (!popupOpened) {
+        throw new Error(`Failed to open dropdown for label: ${labelText}`);
+    }
+
+    const searchInput = await dropdownRoot.$('input[placeholder="Search..."], input[placeholder="พิมพ์เพื่อค้นหา..."]');
+    await page.evaluate(input => {
+        input.focus();
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, searchInput);
+
+    await searchInput.type(searchText);
+    await new Promise(r => setTimeout(r, 1000));
+
+    await page.waitForFunction((root) => {
+        const container = root.querySelector('div[class*="absolute"]');
+        if (!container) return false;
+        const txt = (container.textContent || '').trim();
+        return txt && !txt.includes('Loading...') && !txt.includes('No results');
+    }, { timeout: 15000 }, dropdownRoot);
+
+    const clicked = await page.evaluate((root, searchStr) => {
+        const container = root.querySelector('div[class*="absolute"]');
+        if (!container) return false;
+        const options = Array.from(container.querySelectorAll('div.cursor-pointer, [onmousedown]'));
+        const lowerSearch = searchStr.toLowerCase();
+        for (const opt of options) {
+            const txt = (opt.textContent || '').trim().toLowerCase();
+            if (txt.includes(lowerSearch)) {
+                opt.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true }));
+                opt.click();
+                return true;
+            }
+        }
+        return false;
+    }, dropdownRoot, searchText);
+
+    if (!clicked) {
+        throw new Error(`Could not find option containing "${searchText}" in dropdown for "${labelText}"`);
+    }
+
+    await new Promise(r => setTimeout(r, 1500));
+    return true;
+}
 
 (async () => {
     log('🚀 Starting Test: NTBC CFReport Generate Report Sequential Workflow & Generation...', colors.cyan);
@@ -53,7 +153,7 @@ const { selectDropdown } = require('../libs/gdcc-helper');
         log('\n🔹 Step 3: Selecting Account and Domain...', colors.blue);
         log('   -> Selecting Account: softdebut POC', colors.gray);
 
-        const acctOk = await selectDropdown(page, 0, 'softdebut POC');
+        const acctOk = await selectModalDropdown(page, '1. Select Account', 'softdebut POC');
         if (!acctOk) throw new Error('Failed to select Account');
 
         // Select Zone
