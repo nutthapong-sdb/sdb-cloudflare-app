@@ -420,6 +420,10 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@SPEED_INDEX': safeData.speedIndex || '1,165 ms',
         '@SPEED_SCORE': safeData.speedScorePct || '97%',
         '@SPEED_LEVEL': safeData.speedLevel || 'ดีเยี่ยม',
+        '@SPEED_MOBILE_TTI': safeData.speedMobileTimeToInteractive || '5,924 ms',
+        '@SPEED_MOBILE_INDEX': safeData.speedMobileIndex || '3,259 ms',
+        '@SPEED_MOBILE_SCORE': safeData.speedMobileScorePct || '67%',
+        '@SPEED_MOBILE_LEVEL': safeData.speedMobileLevel || 'กลาง',
         '@AVG_TIME': avgTimeSec,
         '@BLOCK_PCT': blockPct,
         '@LOG_PCT': logPct,
@@ -1071,6 +1075,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [speedIndex, setSpeedIndex] = useState('1,165 ms');
     const [speedScorePct, setSpeedScorePct] = useState('97%');
     const [speedLevel, setSpeedLevel] = useState('ดีเยี่ยม');
+    const [speedMobileTimeToInteractive, setSpeedMobileTimeToInteractive] = useState('5,924 ms');
+    const [speedMobileIndex, setSpeedMobileIndex] = useState('3,259 ms');
+    const [speedMobileScorePct, setSpeedMobileScorePct] = useState('67%');
+    const [speedMobileLevel, setSpeedMobileLevel] = useState('กลาง');
     // Local states and handleCaptureScreenshot removed (lifted to parent NTBCCFReportPage)
 
     const downloadWordRef = useRef(null);
@@ -1208,7 +1216,11 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             speedTimeToInteractive,
             speedIndex,
             speedScorePct,
-            speedLevel
+            speedLevel,
+            speedMobileTimeToInteractive,
+            speedMobileIndex,
+            speedMobileScorePct,
+            speedMobileLevel
         }, new Date(), dashboardImage);
         console.log('DEBUG getProcessedHtml: processed html length =', html?.length);
         const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
@@ -1781,8 +1793,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                         </div>
 
                                         {/* Row 4: Speed Test Desktop */}
-                                        <div>
-                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Performance (@SPEED_TTI, @SPEED_INDEX, @SPEED_SCORE, @SPEED_LEVEL)</div>
+                                        <div className="mb-2 pb-2 border-b border-orange-100">
+                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Desktop (@SPEED_TTI, @SPEED_INDEX, @SPEED_SCORE, @SPEED_LEVEL)</div>
                                             <div className="flex gap-2 mb-1.5">
                                                 <div className="flex-1 relative">
                                                     <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
@@ -1792,7 +1804,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         onChange={(e) => setSpeedTimeToInteractive(e.target.value)}
                                                         className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         placeholder="1,221 ms"
-                                                        title="Time to Interactive"
+                                                        title="Desktop Time to Interactive"
                                                     />
                                                 </div>
                                                 <div className="flex-1 relative">
@@ -1803,7 +1815,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         onChange={(e) => setSpeedIndex(e.target.value)}
                                                         className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         placeholder="1,165 ms"
-                                                        title="Speed Index"
+                                                        title="Desktop Speed Index"
                                                     />
                                                 </div>
                                             </div>
@@ -1816,7 +1828,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         onChange={(e) => setSpeedScorePct(e.target.value)}
                                                         className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         placeholder="97%"
-                                                        title="Performance Score %"
+                                                        title="Desktop Performance Score %"
                                                     />
                                                 </div>
                                                 <div className="flex-1 relative">
@@ -1827,7 +1839,60 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         onChange={(e) => setSpeedLevel(e.target.value)}
                                                         className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         placeholder="ดีเยี่ยม"
-                                                        title="Performance Level"
+                                                        title="Desktop Performance Level"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 5: Speed Test Mobile */}
+                                        <div>
+                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Mobile (@SPEED_MOBILE_TTI, @SPEED_MOBILE_INDEX, @SPEED_MOBILE_SCORE, @SPEED_MOBILE_LEVEL)</div>
+                                            <div className="flex gap-2 mb-1.5">
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedMobileTimeToInteractive}
+                                                        onChange={(e) => setSpeedMobileTimeToInteractive(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="5,924 ms"
+                                                        title="Mobile Time to Interactive"
+                                                    />
+                                                </div>
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Idx</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedMobileIndex}
+                                                        onChange={(e) => setSpeedMobileIndex(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="3,259 ms"
+                                                        title="Mobile Speed Index"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Scr</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedMobileScorePct}
+                                                        onChange={(e) => setSpeedMobileScorePct(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="67%"
+                                                        title="Mobile Performance Score %"
+                                                    />
+                                                </div>
+                                                <div className="flex-1 relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Lvl</span>
+                                                    <input
+                                                        type="text"
+                                                        value={speedMobileLevel}
+                                                        onChange={(e) => setSpeedMobileLevel(e.target.value)}
+                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="กลาง"
+                                                        title="Mobile Performance Level"
                                                     />
                                                 </div>
                                             </div>
