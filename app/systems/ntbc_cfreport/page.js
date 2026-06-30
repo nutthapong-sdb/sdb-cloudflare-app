@@ -413,6 +413,9 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@TRAFFIC_CHANGE_PCT': safeData.trafficChangePct || '1.79%',
         '@DATA_TRANSFER_CHANGE_TEXT': safeData.dataTransferChangeText || 'ลดลง',
         '@DATA_TRANSFER_CHANGE_PCT': safeData.dataTransferChangePct || '17.43%',
+        '@ARGO_IMPROVEMENT_PCT': safeData.argoImprovementPct || '29.84%',
+        '@ARGO_RT_BEFORE': safeData.argoResponseTimeBefore || '1.15 s',
+        '@ARGO_RT_AFTER': safeData.argoResponseTimeAfter || '804 ms',
         '@AVG_TIME': avgTimeSec,
         '@BLOCK_PCT': blockPct,
         '@LOG_PCT': logPct,
@@ -1057,6 +1060,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [trafficChangePct, setTrafficChangePct] = useState('1.79%');
     const [dataTransferChangeText, setDataTransferChangeText] = useState('ลดลง');
     const [dataTransferChangePct, setDataTransferChangePct] = useState('17.43%');
+    const [argoImprovementPct, setArgoImprovementPct] = useState('29.84%');
+    const [argoResponseTimeBefore, setArgoResponseTimeBefore] = useState('1.15 s');
+    const [argoResponseTimeAfter, setArgoResponseTimeAfter] = useState('804 ms');
     // Local states and handleCaptureScreenshot removed (lifted to parent NTBCCFReportPage)
 
     const downloadWordRef = useRef(null);
@@ -1187,7 +1193,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             trafficChangeText,
             trafficChangePct,
             dataTransferChangeText,
-            dataTransferChangePct
+            dataTransferChangePct,
+            argoImprovementPct,
+            argoResponseTimeBefore,
+            argoResponseTimeAfter
         }, new Date(), dashboardImage);
         console.log('DEBUG getProcessedHtml: processed html length =', html?.length);
         const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
@@ -1664,7 +1673,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     {/* Traffic Comparison Config Panel */}
                                     <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
                                         <div className="text-[11px] font-bold text-orange-600 mb-2 uppercase tracking-wider">
-                                            Traffic Comparison Config
+                                            Report Text Variables Config
                                         </div>
                                         
                                         {/* Row 1: Requests */}
@@ -1694,7 +1703,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                         </div>
 
                                         {/* Row 2: Data Transfer */}
-                                        <div>
+                                        <div className="mb-2 pb-2 border-b border-orange-100">
                                             <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Data Transfer Trend (@DATA_TRANSFER_CHANGE_TEXT & @DATA_TRANSFER_CHANGE_PCT)</div>
                                             <div className="flex gap-3">
                                                 <div className="flex-1">
@@ -1714,6 +1723,46 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         onChange={(e) => setDataTransferChangePct(e.target.value)}
                                                         className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         placeholder="เช่น 17.43%"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 3: Argo Performance */}
+                                        <div>
+                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Argo Performance (@ARGO_IMPROVEMENT_PCT & RT before/after)</div>
+                                            <div className="flex gap-2">
+                                                <div className="flex-[4] relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Imp</span>
+                                                    <input
+                                                        type="text"
+                                                        value={argoImprovementPct}
+                                                        onChange={(e) => setArgoImprovementPct(e.target.value)}
+                                                        className="w-full text-xs p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="29.84%"
+                                                        title="Argo Response Time Improvement %"
+                                                    />
+                                                </div>
+                                                <div className="flex-[4] relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Bf</span>
+                                                    <input
+                                                        type="text"
+                                                        value={argoResponseTimeBefore}
+                                                        onChange={(e) => setArgoResponseTimeBefore(e.target.value)}
+                                                        className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="1.15 s"
+                                                        title="Response Time before Argo"
+                                                    />
+                                                </div>
+                                                <div className="flex-[4] relative">
+                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Af</span>
+                                                    <input
+                                                        type="text"
+                                                        value={argoResponseTimeAfter}
+                                                        onChange={(e) => setArgoResponseTimeAfter(e.target.value)}
+                                                        className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        placeholder="804 ms"
+                                                        title="Response Time after Argo"
                                                     />
                                                 </div>
                                             </div>
