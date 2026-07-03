@@ -49,11 +49,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
         log('\n🔹 Step 2: Selecting Account, Zone, and Subdomain filters...', colors.blue);
         await selectGDCCFilters(page);
 
-        log('\n🔹 Step 3: Clicking "Generate Dashboard" button to load data...', colors.blue);
-        await clickGenerateDashboard(page);
-        await new Promise(r => setTimeout(r, 2000));
-
-        log('\n🔹 Step 4: Opening Create Report modal...', colors.blue);
+        log('\n🔹 Step 3: Opening Create Report modal...', colors.blue);
         await page.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button'));
             const createBtn = btns.find(b => b.textContent.trim() === 'Create Report' && !b.disabled);
@@ -61,7 +57,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
         });
         await new Promise(r => setTimeout(r, 2000));
 
-        log('\n🔹 Step 5: Setting Date Range in Modal...', colors.blue);
+        log('\n🔹 Step 4: Setting Date Range in Modal...', colors.blue);
         await page.evaluate(() => {
             const inputs = Array.from(document.querySelectorAll('input[type="date"]'));
             inputs.forEach(input => input.removeAttribute('max'));
@@ -88,7 +84,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
             throw new Error('Could not find date input fields in modal');
         }
 
-        log('\n🔹 Step 6: Selecting No Subdomain (Domain Report mode)...', colors.blue);
+        log('\n🔹 Step 5: Selecting No Subdomain (Domain Report mode)...', colors.blue);
         await page.evaluate(() => {
             const labels = Array.from(document.querySelectorAll('label'));
             const noSubLabel = labels.find(lbl => lbl.textContent.trim().includes('No Subdomain'));
@@ -100,7 +96,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
         });
         await new Promise(r => setTimeout(r, 1000));
 
-        log('\n🔹 Step 7: Clicking "Generate Domain Report"...', colors.blue);
+        log('\n🔹 Step 6: Clicking "Generate Domain Report"...', colors.blue);
         const generateClicked = await page.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button'));
             const genBtn = btns.find(b => b.textContent.trim() === 'Generate Domain Report' && !b.disabled);
@@ -113,7 +109,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
         if (!generateClicked) throw new Error('Generate Domain Report button not found or disabled');
         log('   ✅ Generate Domain Report button clicked.', colors.green);
 
-        log('\n🔹 Step 8: Monitoring generation and waiting for download...', colors.blue);
+        log('\n🔹 Step 7: Monitoring generation and waiting for download...', colors.blue);
         const generateStartTime = Date.now();
         let downloadedFile = null;
 
@@ -157,7 +153,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
         log(`\n✅ Downloaded successfully: ${downloadedFile} (${fileSize.toLocaleString()} bytes)`, colors.green);
 
         // Read and parse downloaded document
-        log('🔹 Step 9: Verifying @ZONE_NAME resolution in downloaded document...', colors.blue);
+        log('🔹 Step 8: Verifying @ZONE_NAME resolution in downloaded document...', colors.blue);
         const docContent = fs.readFileSync(filePath, 'utf8');
         
         // Search for resolved domain name or unresolved @ZONE_NAME
