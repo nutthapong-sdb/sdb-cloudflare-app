@@ -324,12 +324,35 @@ const fetchSubdomainAnalytics = async (token, zoneId, host, since, until, hostTo
     };
 };
 
+// Helper to split a date range into smaller sub-ranges of at most maxDays duration
+const splitDateRangeIntoSubRanges = (startStr, endStr, maxDays = 15) => {
+    const subRanges = [];
+    let currentStart = new Date(`${startStr}T00:00:00.000Z`);
+    const finalEnd = new Date(`${endStr}T23:59:59.999Z`);
+
+    while (currentStart < finalEnd) {
+        let currentEnd = new Date(currentStart.getTime() + maxDays * 24 * 60 * 60 * 1000 - 1);
+        if (currentEnd > finalEnd) {
+            currentEnd = finalEnd;
+        }
+
+        subRanges.push({
+            start: currentStart,
+            end: currentEnd
+        });
+
+        // Set next chunk start to 1ms after currentEnd
+        currentStart = new Date(currentEnd.getTime() + 1);
+    }
+    return subRanges;
+};
+
 // ─── Merge multiple analytics chunks into one ────────────────────────────────
 // Concatenates time-based arrays; aggregates firewall dimensions to avoid duplicates
 const mergeChunks = (...chunks) => {
     const base = chunks[0];
     const merged = {
-        zoneSummary: base.zoneSummary || [], // Daily summary is identical across all time-slices of the same day
+        zoneSummary: [],
         zoneName: base.zoneName,
         accountName: base.accountName,
         httpRequestsAdaptiveGroups: [],
@@ -338,6 +361,9 @@ const mergeChunks = (...chunks) => {
         _fwRules: {}, _fwIPs: {}, _fwSources: {},
     };
     for (const chunk of chunks) {
+        if (chunk.zoneSummary) {
+            merged.zoneSummary.push(...chunk.zoneSummary);
+        }
         merged.httpRequestsAdaptiveGroups.push(...(chunk.httpRequestsAdaptiveGroups || []));
         merged.firewallActivity.push(...(chunk.firewallActivity || []));
         merged.hostRequestTotal += chunk.hostRequestTotal || 0;
@@ -1179,33 +1205,44 @@ export async function POST(request) {
                     console.log('🔹 Fetching live data from Cloudflare for missing ranges...', missingRanges);
                 }
 
+                const allChunksToMerge = [finalData];
+
                 for (const range of missingRanges) {
-                    const liveSince = new Date(`${range.start}T00:00:00.000Z`);
-                    const liveUntil = new Date(`${range.end}T23:59:59.999Z`);
-                    if (liveSince >= liveUntil) continue;
+                    // Split the missing range into sub-ranges of at most 15 days to respect Cloudflare GraphQL quotas
+                    const subRanges = splitDateRangeIntoSubRanges(range.start, range.end, 15);
+                    console.log(`🔹 Range ${range.start} to ${range.end} split into ${subRanges.length} sub-ranges.`);
 
-                    const liveHostRange = targetSubdomain && hostTotalRange
-                        ? {
-                            since: new Date(`${range.start}T00:00:00+07:00`),
-                            until: new Date(`${range.end}T00:00:00+07:00`)
+                    for (const subRange of subRanges) {
+                        const liveSince = subRange.start;
+                        const liveUntil = subRange.end;
+
+                        // Create local timezone strings for the subRange to match +07:00 exactly
+                        const startLocalStr = liveSince.toISOString().split('T')[0];
+                        const endLocalStr = liveUntil.toISOString().split('T')[0];
+
+                        const liveHostRange = targetSubdomain && hostTotalRange
+                            ? {
+                                since: new Date(`${startLocalStr}T00:00:00+07:00`),
+                                until: new Date(`${endLocalStr}T00:00:00+07:00`)
+                            }
+                            : null;
+
+                        if (liveHostRange?.until) {
+                            liveHostRange.until.setUTCDate(liveHostRange.until.getUTCDate() + 1);
                         }
-                        : null;
 
-                    if (liveHostRange?.until) {
-                        liveHostRange.until.setUTCDate(liveHostRange.until.getUTCDate() + 1);
+                        console.log(`   👉 Fetching live chunk: ${startLocalStr} to ${endLocalStr}`);
+                        const liveData = targetSubdomain
+                            ? await fetchSubdomainAnalytics(token, zoneId, targetSubdomain, liveSince, liveUntil, liveHostRange)
+                            : await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, liveUntil, liveHostRange);
+
+                        allChunksToMerge.push(liveData);
                     }
+                }
 
-                    const liveData = targetSubdomain
-                        ? await fetchSubdomainAnalytics(token, zoneId, targetSubdomain, liveSince, liveUntil, liveHostRange)
-                        : await fetchCloudflareAnalytics(token, zoneId, targetSubdomain, liveSince, liveUntil, liveHostRange);
-
-                    finalData.httpRequestsAdaptiveGroups.push(...liveData.httpRequestsAdaptiveGroups);
-                    finalData.zoneSummary.push(...liveData.zoneSummary);
-                    finalData.firewallActivity.push(...liveData.firewallActivity);
-                    finalData.firewallRules.push(...liveData.firewallRules);
-                    finalData.firewallIPs.push(...liveData.firewallIPs);
-                    finalData.firewallSources.push(...liveData.firewallSources);
-                    finalData.hostRequestTotal += liveData.hostRequestTotal || 0;
+                // Merge all chunks (historical sqlite data + all live chunks)
+                if (allChunksToMerge.length > 1) {
+                    finalData = mergeChunks(...allChunksToMerge);
                 }
 
                 console.log('🔹 API: Sending Traffic Response...');
@@ -1277,32 +1314,47 @@ export async function POST(request) {
                     }
                 `;
 
-                const variables = {
-                    zoneTag: zoneId,
-                    since: since.toISOString(),
-                    until: until.toISOString()
-                };
-                if (targetSubdomain) variables.host = targetSubdomain;
+                const startStr = since.toISOString().split('T')[0];
+                const endStr = until.toISOString().split('T')[0];
+                const subRanges = splitDateRangeIntoSubRanges(startStr, endStr, 15);
+                const combinedGroups = [];
 
-                const response = await axios({
-                    method: 'POST',
-                    url: `${CLOUDFLARE_API_BASE}/graphql`,
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    data: { query, variables }
-                });
+                for (const subRange of subRanges) {
+                    const chunkSince = subRange.start;
+                    const chunkUntil = subRange.end;
 
-                if (response.data?.errors) {
-                    console.warn('⚠️ Raw traffic GraphQL errors:', JSON.stringify(response.data.errors));
+                    const variables = {
+                        zoneTag: zoneId,
+                        since: chunkSince.toISOString(),
+                        until: chunkUntil.toISOString()
+                    };
+                    if (targetSubdomain) variables.host = targetSubdomain;
+
+                    const response = await axios({
+                        method: 'POST',
+                        url: `${CLOUDFLARE_API_BASE}/graphql`,
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        data: { query, variables }
+                    });
+
+                    if (response.data?.errors) {
+                        console.warn('⚠️ Raw traffic GraphQL errors:', JSON.stringify(response.data.errors));
+                    }
+
+                    const rawGroups = response.data?.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
+                    combinedGroups.push(...rawGroups);
                 }
 
-                const rawGroups = response.data?.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
+                // Slice to 8000 to match the original limit constraint
+                const finalGroups = combinedGroups.slice(0, 8000);
+
                 return NextResponse.json({
                     success: true,
                     data: {
-                        httpRequestsAdaptiveGroups: rawGroups
+                        httpRequestsAdaptiveGroups: finalGroups
                     }
                 });
             } catch (gqlError) {
