@@ -64,3 +64,4 @@ next-env.d.ts
 /chrome-config
 /public/captured-*.png
 /scratch/
+/scripts/tmp_downloads
