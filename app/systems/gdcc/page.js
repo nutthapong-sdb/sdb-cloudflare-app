@@ -17,7 +17,8 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -855,8 +856,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
-    // Use nullish coalescing to allow empty string (for empty templates)
-    const currentTemplate = template ?? DEFAULT_TEMPLATE;
+    const currentTemplate = (template && typeof template === 'string') ? template : DEFAULT_TEMPLATE;
 
     // Default to editing in static mode, preview in report mode
     const [isEditing, setIsEditing] = useState(false);
@@ -864,6 +864,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const reportContentRef = useRef(null);
     const editorRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showUnusedOnly, setShowUnusedOnly] = useState(false);
+    const [isVariablesCollapsed, setIsVariablesCollapsed] = useState(false);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -873,13 +875,18 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
     const filteredVariables = availableVariables.filter(v =>
-        v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.desc.toLowerCase().includes(searchTerm.toLowerCase())
+        v.category !== 'Screenshots' &&
+        v.category !== 'Traffic Screenshots' &&
+        (!showUnusedOnly || (typeof localTemplate === 'string' && !localTemplate.includes(v.name))) &&
+        (
+            v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            v.desc.toLowerCase().includes(searchTerm.toLowerCase())
+        )
     );
 
     // Sync local template when prop changes
     useEffect(() => {
-        setLocalTemplate(template ?? DEFAULT_TEMPLATE);
+        setLocalTemplate((template && typeof template === 'string') ? template : DEFAULT_TEMPLATE);
     }, [template, isOpen]);
 
     // Sync mode when opening
@@ -913,7 +920,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         () => `gdcc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
         [userKey, templateId]
     );
-    const [useThaiDigits, setUseThaiDigits] = useState(true);
+    const [useThaiDigits, setUseThaiDigits] = useState(false);
     const useAutoTOC = true;
 
     useEffect(() => {
@@ -923,6 +930,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
             if (storedDigits !== null) {
                 setUseThaiDigits(storedDigits === '1');
+            } else {
+                setUseThaiDigits(false);
             }
         } catch (_) {
             // ignore
@@ -1323,7 +1332,19 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
                         {isEditing ? (
-                            <div className="flex gap-4 h-full">
+                            <div className="flex gap-4 h-full relative">
+                                {/* If collapsed, show a floating vertical strip or button on the right edge */}
+                                {isVariablesCollapsed && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsVariablesCollapsed(false)}
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-l-md shadow-md flex flex-col items-center gap-1.5 transition-all py-3"
+                                        title="Expand Variables Panel"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider [writing-mode:vertical-lr] rotate-180">Variables</span>
+                                    </button>
+                                )}
                                 {/* Editor Section - Left */}
                                 <div className="flex-1 flex flex-col min-w-0">
                                     <div className="flex-1 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
@@ -1380,31 +1401,59 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     </div>
                                 </div>
                                 {/* Variables Section - Right */}
-                                <div className={`w-[40rem] flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg p-4 border overflow-hidden`}>
-                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center justify-between gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'}`}>
+                                <div
+                                    className={`flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg border overflow-hidden transition-all duration-300 ${
+                                        isVariablesCollapsed ? 'p-0 border-0 opacity-0' : 'p-4 opacity-100'
+                                    }`}
+                                    style={{
+                                        width: isVariablesCollapsed ? '0px' : '640px',
+                                        minWidth: isVariablesCollapsed ? '0px' : '640px'
+                                    }}
+                                >
+                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center justify-between gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'} flex-shrink-0 ${isVariablesCollapsed ? 'hidden' : ''}`}>
                                         <div className="flex items-center gap-2">
-                                            <span className={`${t.buttonPrimary || 'bg-blue-500 text-white'} px-2 py-1 rounded shadow-sm`}>Variables</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsVariablesCollapsed(true)}
+                                                className="p-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors mr-1 cursor-pointer flex items-center justify-center"
+                                                title="Collapse Panel"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
+                                            <span className={`font-bold ${t.text || 'text-gray-700'}`}>Variables</span>
                                             <span className={`text-xs ${t.subText || 'text-gray-500'}`}>Click to insert</span>
                                         </div>
-                                        <div className="relative">
-                                            <Search className="absolute left-2 top-1.5 w-3 h-3 text-gray-400" />
-                                            <input
-                                                type="text"
-                                                placeholder="Search variables..."
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
-                                            />
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-2 top-1.5 w-3 h-3 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search variables..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowUnusedOnly(!showUnusedOnly)}
+                                                className={`px-2 py-1 text-xs font-semibold rounded-md border transition-colors ${
+                                                    showUnusedOnly
+                                                        ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
+                                                        : `${t.buttonSecondary || 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}`
+                                                }`}
+                                            >
+                                                Unused Vars
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div className="flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar">
+                                    <div className={`flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar ${isVariablesCollapsed ? 'hidden' : ''}`}>
                                         <table className="w-full text-left text-xs border-collapse relative">
                                             <thead className={`sticky top-0 z-10 ${t.card || 'bg-gray-100'} border-b shadow-sm`}>
                                                 <tr>
-                                                    <th className="p-2 font-semibold w-[30%]">Variable</th>
-                                                    <th className="p-2 font-semibold w-[40%]">Description</th>
-                                                    <th className="p-2 font-semibold w-[30%]">Example</th>
+                                                    <th className="p-2 font-semibold w-[40%]">Variable</th>
+                                                    <th className="p-2 font-semibold w-[60%]">Description</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -1422,13 +1471,10 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                         <td className="p-2 text-gray-600 align-top">
                                                             {v.desc}
                                                         </td>
-                                                        <td className="p-2 font-mono text-gray-500 text-[10px] break-all align-top">
-                                                            {v.example}
-                                                        </td>
                                                     </tr>
                                                 )) : (
                                                     <tr>
-                                                        <td colSpan={3} className="p-4 text-center text-gray-500 italic">
+                                                        <td colSpan={2} className="p-4 text-center text-gray-500 italic">
                                                             No variables found matching &quot;{searchTerm}&quot;
                                                         </td>
                                                     </tr>
@@ -1498,6 +1544,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
     const [promotedHosts, setPromotedHosts] = useState(new Set());
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [exportThaiDigits, setExportThaiDigits] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
@@ -2024,6 +2071,18 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                         className={`flex-1 px-2 py-1.5 text-xs rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown.bg} ${t.dropdown.text || 'text-white'} ${t.dropdown.border}`}
                                     />
                                 </div>
+                                <div className="flex items-center gap-2 mt-2 pt-1 border-t border-gray-700/30">
+                                    <label className={`flex items-center gap-2 cursor-pointer text-xs ${t.subText}`}>
+                                        <input 
+                                            type="checkbox" 
+                                            id="batch-thai-digits-toggle"
+                                            checked={exportThaiDigits} 
+                                            onChange={e => setExportThaiDigits(e.target.checked)} 
+                                            className="rounded border-gray-600 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 bg-gray-800"
+                                        />
+                                        <span>Export using Thai Digits (เลขไทย)</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2159,7 +2218,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
                                 const promotedArray = Array.from(promotedHosts);
                                 // extra final arg: exportSeparated
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, zones);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, zones, exportThaiDigits);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.button} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -2187,7 +2246,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 }
 
                                 const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, zones);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, zones, exportThaiDigits);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -4074,7 +4133,7 @@ export default function GDCCPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = []) => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false) => {
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
@@ -4639,18 +4698,8 @@ export default function GDCCPage() {
                         const zoneSectionHtml = await getZoneSectionHtml(currentZoneId);
                         let combinedBody = `${zoneSectionHtml}<div class="page-break"></div>${reportHtml}`;
 
-                        // Retrieve Thai digits preference for batch report if stored, default to true
-                        const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
-                        const thaiDigitsPrefKey = `gdcc:templates:${userKey}:thaiDigits:${templateId}`;
-                        let useThaiDigits = true;
-                        if (typeof window !== 'undefined') {
-                            try {
-                                const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
-                                if (storedDigits !== null) {
-                                    useThaiDigits = storedDigits === '1';
-                                }
-                            } catch (_) {}
-                        }
+                        // Use exportThaiDigits parameter from the toggle
+                        let useThaiDigits = exportThaiDigits;
 
                         // Generate TOC
                         const hasTOCPlaceholder = combinedBody.includes('@TOC@') || combinedBody.includes('@TOC');
@@ -4889,17 +4938,8 @@ export default function GDCCPage() {
             updateOverlay('Finalizing...', selectedHosts.length, selectedHosts.length, 100, 'Packing final Word Document (.doc)...');
             await new Promise(r => setTimeout(r, 800)); // Small delay for effect
 
-            const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
-            const thaiDigitsPrefKey = `gdcc:templates:${userKey}:thaiDigits:${templateId}`;
-            let useThaiDigits = true;
-            if (typeof window !== 'undefined') {
-                try {
-                    const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
-                    if (storedDigits !== null) {
-                        useThaiDigits = storedDigits === '1';
-                    }
-                } catch (_) {}
-            }
+            // Use exportThaiDigits parameter from the toggle
+            let useThaiDigits = exportThaiDigits;
 
             // Resolve TOC on the combined html!
             let finalCombinedHtml = addAutomaticTOC(combinedHtml, true, useThaiDigits, true);

@@ -17,7 +17,8 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal, Monitor
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal, Monitor,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -1050,13 +1051,12 @@ const VncModal = ({ isOpen, onClose, theme }) => {
 };
 
 // 1. Report Modal Component
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot, autoDownloadWord = false, onAutoDownloadComplete }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot, autoDownloadWord = false, onAutoDownloadComplete, useThaiDigits, setUseThaiDigits }) => {
     // mode: 'report' | 'sub-template' | 'static-template' | 'middle-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
-    // Use nullish coalescing to allow empty string (for empty templates)
-    const currentTemplate = template ?? DEFAULT_TEMPLATE;
+    const currentTemplate = (template && typeof template === 'string') ? template : DEFAULT_TEMPLATE;
 
     // Default to editing in static mode, preview in report mode
     const [isEditing, setIsEditing] = useState(false);
@@ -1064,6 +1064,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const reportContentRef = useRef(null);
     const editorRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showUnusedOnly, setShowUnusedOnly] = useState(false);
+    const [isVariablesCollapsed, setIsVariablesCollapsed] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [trafficChangeText, setTrafficChangeText] = useState('เพิ่มขึ้น');
     const [trafficChangePct, setTrafficChangePct] = useState('1.79%');
@@ -1111,6 +1113,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const filteredVariables = availableVariables.filter(v =>
         v.category !== 'Screenshots' &&
         v.category !== 'Traffic Screenshots' &&
+        (!showUnusedOnly || (typeof localTemplate === 'string' && !localTemplate.includes(v.name))) &&
         (
             v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             v.desc.toLowerCase().includes(searchTerm.toLowerCase())
@@ -1119,7 +1122,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // Sync local template when prop changes
     useEffect(() => {
-        setLocalTemplate(template ?? DEFAULT_TEMPLATE);
+        setLocalTemplate((template && typeof template === 'string') ? template : DEFAULT_TEMPLATE);
     }, [template, isOpen]);
 
     // Sync mode when opening
@@ -1153,7 +1156,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         () => `ntbc:templates:${userKey}:thaiDigits:${templateId ? String(templateId) : 'default'}`,
         [userKey, templateId]
     );
-    const [useThaiDigits, setUseThaiDigits] = useState(true);
     const useAutoTOC = true;
 
     useEffect(() => {
@@ -1163,6 +1165,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             const storedDigits = localStorage.getItem(thaiDigitsPrefKey);
             if (storedDigits !== null) {
                 setUseThaiDigits(storedDigits === '1');
+            } else {
+                setUseThaiDigits(false);
             }
         } catch (_) {
             // ignore
@@ -1620,7 +1624,19 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                     <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto" style={{ fontFamily: '"TH SarabunPSK", "Sarabun", sans-serif' }}>
 
                         {isEditing ? (
-                            <div className="flex gap-4 h-full">
+                            <div className="flex gap-4 h-full relative">
+                                {/* If collapsed, show a floating vertical strip or button on the right edge */}
+                                {isVariablesCollapsed && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsVariablesCollapsed(false)}
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-l-md shadow-md flex flex-col items-center gap-1.5 transition-all py-3"
+                                        title="Expand Variables Panel"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider [writing-mode:vertical-lr] rotate-180">Variables</span>
+                                    </button>
+                                )}
                                 {/* Editor Section - Left */}
                                 <div className="flex-1 flex flex-col min-w-0">
                                     <div className="flex-1 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
@@ -1677,313 +1693,347 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                     </div>
                                 </div>
                                 {/* Variables Section - Right */}
-                                <div className={`w-[40rem] flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg p-4 border overflow-hidden`}>
-                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center justify-between gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'}`}>
+                                <div
+                                    className={`flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg border overflow-hidden transition-all duration-300 ${
+                                        isVariablesCollapsed ? 'p-0 border-0 opacity-0' : 'p-4 opacity-100'
+                                    }`}
+                                    style={{
+                                        width: isVariablesCollapsed ? '0px' : '640px',
+                                        minWidth: isVariablesCollapsed ? '0px' : '640px'
+                                    }}
+                                >
+                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center justify-between gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'} flex-shrink-0 ${isVariablesCollapsed ? 'hidden' : ''}`}>
                                         <div className="flex items-center gap-2">
-                                            <span className={`${t.buttonPrimary || 'bg-blue-500 text-white'} px-2 py-1 rounded shadow-sm`}>Variables</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsVariablesCollapsed(true)}
+                                                className="p-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors mr-1 cursor-pointer flex items-center justify-center"
+                                                title="Collapse Panel"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
+                                            <span className={`font-bold ${t.text || 'text-gray-700'}`}>Variables</span>
                                             <span className={`text-xs ${t.subText || 'text-gray-500'}`}>Click to insert</span>
                                         </div>
-                                        <div className="relative">
-                                            <Search className="absolute left-2 top-1.5 w-3 h-3 text-gray-400" />
-                                            <input
-                                                type="text"
-                                                placeholder="Search variables..."
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
-                                            />
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-2 top-1.5 w-3 h-3 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search variables..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowUnusedOnly(!showUnusedOnly)}
+                                                className={`px-2 py-1 text-xs font-semibold rounded-md border transition-colors ${
+                                                    showUnusedOnly
+                                                        ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
+                                                        : `${t.buttonSecondary || 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}`
+                                                }`}
+                                            >
+                                                Unused Vars
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* Traffic Comparison Config Panel */}
-                                    <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
-                                        <div className="text-[11px] font-bold text-orange-600 mb-2 uppercase tracking-wider">
-                                            Report Text Variables Config
-                                        </div>
-                                        
-                                        {/* Row 1: Requests */}
-                                        <div className="mb-2 pb-2 border-b border-orange-100">
-                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Requests Trend (@TRAFFIC_CHANGE_TEXT & @TRAFFIC_CHANGE_PCT)</div>
-                                            <div className="flex gap-3">
-                                                <div className="flex-1">
-                                                    <select
-                                                        value={trafficChangeText}
-                                                        onChange={(e) => setTrafficChangeText(e.target.value)}
-                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                    >
-                                                        <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
-                                                        <option value="ลดลง">ลดลง (Decrease)</option>
-                                                    </select>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="text"
-                                                        value={trafficChangePct}
-                                                        onChange={(e) => setTrafficChangePct(e.target.value)}
-                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="เช่น 1.79%"
-                                                    />
-                                                </div>
+                                    {/* Scrollable Container for all sections below header */}
+                                    <div className={`flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar ${isVariablesCollapsed ? 'hidden' : ''}`}>
+                                        {/* Traffic Comparison Config Panel */}
+                                        <div className="p-3 bg-orange-50 border border-orange-200 rounded-md">
+                                            <div className="text-[11px] font-bold text-orange-600 mb-2 uppercase tracking-wider">
+                                                Report Text Variables Config
                                             </div>
-                                        </div>
-
-                                        {/* Row 2: Data Transfer */}
-                                        <div className="mb-2 pb-2 border-b border-orange-100">
-                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Data Transfer Trend (@DATA_TRANSFER_CHANGE_TEXT & @DATA_TRANSFER_CHANGE_PCT)</div>
-                                            <div className="flex gap-3">
-                                                <div className="flex-1">
-                                                    <select
-                                                        value={dataTransferChangeText}
-                                                        onChange={(e) => setDataTransferChangeText(e.target.value)}
-                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                    >
-                                                        <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
-                                                        <option value="ลดลง">ลดลง (Decrease)</option>
-                                                    </select>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="text"
-                                                        value={dataTransferChangePct}
-                                                        onChange={(e) => setDataTransferChangePct(e.target.value)}
-                                                        className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="เช่น 17.43%"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 3: Argo Performance */}
-                                        <div className="mb-2 pb-2 border-b border-orange-100">
-                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Argo Performance (@ARGO_IMPROVEMENT_PCT & RT before/after)</div>
-                                            <div className="flex gap-2">
-                                                <div className="flex-[4] relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Imp</span>
-                                                    <input
-                                                        type="text"
-                                                        value={argoImprovementPct}
-                                                        onChange={(e) => setArgoImprovementPct(e.target.value)}
-                                                        className="w-full text-xs p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="29.84%"
-                                                        title="Argo Response Time Improvement %"
-                                                    />
-                                                </div>
-                                                <div className="flex-[4] relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Bf</span>
-                                                    <input
-                                                        type="text"
-                                                        value={argoResponseTimeBefore}
-                                                        onChange={(e) => setArgoResponseTimeBefore(e.target.value)}
-                                                        className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="1.15 s"
-                                                        title="Response Time before Argo"
-                                                    />
-                                                </div>
-                                                <div className="flex-[4] relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Af</span>
-                                                    <input
-                                                        type="text"
-                                                        value={argoResponseTimeAfter}
-                                                        onChange={(e) => setArgoResponseTimeAfter(e.target.value)}
-                                                        className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="804 ms"
-                                                        title="Response Time after Argo"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 4: Speed Test Desktop */}
-                                        <div className="mb-2 pb-2 border-b border-orange-100">
-                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Desktop (@SPEED_TTI, @SPEED_INDEX, @SPEED_SCORE, @SPEED_LEVEL)</div>
-                                            <div className="flex gap-2 mb-1.5">
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedTimeToInteractive}
-                                                        onChange={(e) => setSpeedTimeToInteractive(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="1,221 ms"
-                                                        title="Desktop Time to Interactive"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Idx</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedIndex}
-                                                        onChange={(e) => setSpeedIndex(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="1,165 ms"
-                                                        title="Desktop Speed Index"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Scr</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedScorePct}
-                                                        onChange={(e) => setSpeedScorePct(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="97%"
-                                                        title="Desktop Performance Score %"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Lvl</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedLevel}
-                                                        onChange={(e) => setSpeedLevel(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="ดีเยี่ยม"
-                                                        title="Desktop Performance Level"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 5: Speed Test Mobile */}
-                                        <div>
-                                            <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Mobile (@SPEED_MOBILE_TTI, @SPEED_MOBILE_INDEX, @SPEED_MOBILE_SCORE, @SPEED_MOBILE_LEVEL)</div>
-                                            <div className="flex gap-2 mb-1.5">
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedMobileTimeToInteractive}
-                                                        onChange={(e) => setSpeedMobileTimeToInteractive(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="5,924 ms"
-                                                        title="Mobile Time to Interactive"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Idx</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedMobileIndex}
-                                                        onChange={(e) => setSpeedMobileIndex(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="3,259 ms"
-                                                        title="Mobile Speed Index"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Scr</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedMobileScorePct}
-                                                        onChange={(e) => setSpeedMobileScorePct(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="67%"
-                                                        title="Mobile Performance Score %"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Lvl</span>
-                                                    <input
-                                                        type="text"
-                                                        value={speedMobileLevel}
-                                                        onChange={(e) => setSpeedMobileLevel(e.target.value)}
-                                                        className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
-                                                        placeholder="กลาง"
-                                                        title="Mobile Performance Level"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar">
-                                        <table className="w-full text-left text-xs border-collapse relative">
-                                            <thead className={`sticky top-0 z-10 ${t.card || 'bg-gray-100'} border-b shadow-sm`}>
-                                                <tr>
-                                                    <th className="p-2 font-semibold w-[30%]">Variable</th>
-                                                    <th className="p-2 font-semibold w-[40%]">Description</th>
-                                                    <th className="p-2 font-semibold w-[30%]">Example</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {filteredVariables.length > 0 ? filteredVariables.map((v) => (
-                                                    <tr
-                                                        key={v.name}
-                                                        onClick={() => editorRef.current?.insertContent(v.name)}
-                                                        className={`cursor-pointer hover:bg-blue-50 transition-colors group ${t.text || 'text-gray-700'}`}
-                                                        title={`Click to insert ${v.name}\nCategory: ${v.category}`}
-                                                    >
-                                                        <td className="p-2 font-mono text-blue-600 font-medium whitespace-nowrap group-hover:underline align-top">
-                                                            {v.name}
-                                                            <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
-                                                        </td>
-                                                        <td className="p-2 text-gray-600 align-top">
-                                                            {v.desc}
-                                                        </td>
-                                                        <td className="p-2 font-mono text-gray-500 text-[10px] break-all align-top">
-                                                            {v.example}
-                                                        </td>
-                                                    </tr>
-                                                )) : (
-                                                    <tr>
-                                                        <td colSpan={3} className="p-4 text-center text-gray-500 italic">
-                                                            No variables found matching &quot;{searchTerm}&quot;
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    {/* Link Variables Section */}
-                                    <div className="mt-4 pt-3 border-t border-gray-700/30 flex flex-col overflow-hidden max-h-[220px]">
-                                        <div className="text-[11px] font-bold text-orange-500 mb-2 uppercase tracking-wider">
-                                            Link Variables (Screenshots)
-                                        </div>
-                                        <div className="flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar">
-                                            <table className="w-full text-left text-xs border-collapse relative">
-                                                <thead className="sticky top-0 z-10 bg-gray-100 border-b shadow-sm">
-                                                    <tr>
-                                                        <th className="p-2 font-semibold w-[40%] text-orange-600">Variable</th>
-                                                        <th className="p-2 font-semibold w-[60%] text-orange-600">Description</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {[
-                                                        { name: '@captured_domain_page', desc: 'รูปภาพหน้าจอหน้ารวมโดเมน (Sites overview)', category: 'Screenshots' },
-                                                        { name: '@captured_dns_page', desc: 'รูปภาพหน้าจอรายการ DNS Records', category: 'Screenshots' },
-                                                        { name: '@captured_firewall_page', desc: 'รูปภาพหน้าจอความปลอดภัยและเหตุการณ์ WAF (Firewall Overview)', category: 'Screenshots' },
-                                                        { name: '@captured_security_rules_page', desc: 'รูปภาพหน้าจอรายการกฎความปลอดภัย (Security Custom Rules)', category: 'Screenshots' },
-                                                        { name: '@captured_argo_page', desc: 'รูปภาพหน้าจอการตั้งค่า Argo Smart Routing', category: 'Screenshots' },
-                                                        { name: '@captured_speed_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วเว็บไซต์ (Speed Test)', category: 'Screenshots' },
-                                                        { name: '@captured_speed_mobile_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วบนมือถือ (Speed Test Mobile)', category: 'Screenshots' },
-                                                        { name: '@captured_request_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Requests', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_data_transfer_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Data Transfer', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', category: 'Traffic Screenshots' },
-                                                        { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', category: 'Traffic Screenshots' }
-                                                    ].map((v) => (
-                                                        <tr
-                                                            key={v.name}
-                                                            onClick={() => editorRef.current?.insertContent(v.name)}
-                                                            className="cursor-pointer hover:bg-orange-50 transition-colors group text-gray-700"
-                                                            title={`Click to insert ${v.name}\nCategory: ${v.category}`}
+                                            
+                                            {/* Row 1: Requests */}
+                                            <div className="mb-2 pb-2 border-b border-orange-100">
+                                                <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Requests Trend (@TRAFFIC_CHANGE_TEXT & @TRAFFIC_CHANGE_PCT)</div>
+                                                <div className="flex gap-3">
+                                                    <div className="flex-1">
+                                                        <select
+                                                            value={trafficChangeText}
+                                                            onChange={(e) => setTrafficChangeText(e.target.value)}
+                                                            className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
                                                         >
-                                                            <td className="p-2 font-mono text-orange-600 font-medium whitespace-nowrap group-hover:underline align-top">
-                                                                {v.name}
-                                                                <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
-                                                            </td>
-                                                            <td className="p-2 text-gray-600 align-top">
-                                                                {v.desc}
-                                                            </td>
+                                                            <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
+                                                            <option value="ลดลง">ลดลง (Decrease)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <input
+                                                            type="text"
+                                                            value={trafficChangePct}
+                                                            onChange={(e) => setTrafficChangePct(e.target.value)}
+                                                            className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="เช่น 1.79%"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 2: Data Transfer */}
+                                            <div className="mb-2 pb-2 border-b border-orange-100">
+                                                <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Data Transfer Trend (@DATA_TRANSFER_CHANGE_TEXT & @DATA_TRANSFER_CHANGE_PCT)</div>
+                                                <div className="flex gap-3">
+                                                    <div className="flex-1">
+                                                        <select
+                                                            value={dataTransferChangeText}
+                                                            onChange={(e) => setDataTransferChangeText(e.target.value)}
+                                                            className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                        >
+                                                            <option value="เพิ่มขึ้น">เพิ่มขึ้น (Increase)</option>
+                                                            <option value="ลดลง">ลดลง (Decrease)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <input
+                                                            type="text"
+                                                            value={dataTransferChangePct}
+                                                            onChange={(e) => setDataTransferChangePct(e.target.value)}
+                                                            className="w-full text-xs p-1.5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="เช่น 17.43%"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: Argo Performance */}
+                                            <div className="mb-2 pb-2 border-b border-orange-100">
+                                                <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Argo Performance (@ARGO_IMPROVEMENT_PCT & RT before/after)</div>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-[4] relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Imp</span>
+                                                        <input
+                                                            type="text"
+                                                            value={argoImprovementPct}
+                                                            onChange={(e) => setArgoImprovementPct(e.target.value)}
+                                                            className="w-full text-xs p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="29.84%"
+                                                            title="Argo Response Time Improvement %"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-[4] relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Bf</span>
+                                                        <input
+                                                            type="text"
+                                                            value={argoResponseTimeBefore}
+                                                            onChange={(e) => setArgoResponseTimeBefore(e.target.value)}
+                                                            className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="1.15 s"
+                                                            title="Response Time before Argo"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-[4] relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Af</span>
+                                                        <input
+                                                            type="text"
+                                                            value={argoResponseTimeAfter}
+                                                            onChange={(e) => setArgoResponseTimeAfter(e.target.value)}
+                                                            className="w-full text-xs p-1.5 pl-5 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="804 ms"
+                                                            title="Response Time after Argo"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 4: Speed Test Desktop */}
+                                            <div className="mb-2 pb-2 border-b border-orange-100">
+                                                <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Desktop (@SPEED_TTI, @SPEED_INDEX, @SPEED_SCORE, @SPEED_LEVEL)</div>
+                                                <div className="flex gap-2 mb-1.5">
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedTimeToInteractive}
+                                                            onChange={(e) => setSpeedTimeToInteractive(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="1,221 ms"
+                                                            title="Desktop Time to Interactive"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Idx</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedIndex}
+                                                            onChange={(e) => setSpeedIndex(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="1,165 ms"
+                                                            title="Desktop Speed Index"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Scr</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedScorePct}
+                                                            onChange={(e) => setSpeedScorePct(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="97%"
+                                                            title="Desktop Performance Score %"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Lvl</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedLevel}
+                                                            onChange={(e) => setSpeedLevel(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="ดีเยี่ยม"
+                                                            title="Desktop Performance Level"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 5: Speed Test Mobile */}
+                                            <div>
+                                                <div className="text-[10px] font-semibold text-gray-500 mb-1 font-mono">Speed Mobile (@SPEED_MOBILE_TTI, @SPEED_MOBILE_INDEX, @SPEED_MOBILE_SCORE, @SPEED_MOBILE_LEVEL)</div>
+                                                <div className="flex gap-2 mb-1.5">
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">TTI</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedMobileTimeToInteractive}
+                                                            onChange={(e) => setSpeedMobileTimeToInteractive(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="5,924 ms"
+                                                            title="Mobile Time to Interactive"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Idx</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedMobileIndex}
+                                                            onChange={(e) => setSpeedMobileIndex(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="3,259 ms"
+                                                            title="Mobile Speed Index"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Scr</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedMobileScorePct}
+                                                            onChange={(e) => setSpeedMobileScorePct(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="67%"
+                                                            title="Mobile Performance Score %"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-1.5 top-2.5 text-[8px] text-gray-400 font-bold uppercase pointer-events-none">Lvl</span>
+                                                        <input
+                                                            type="text"
+                                                            value={speedMobileLevel}
+                                                            onChange={(e) => setSpeedMobileLevel(e.target.value)}
+                                                            className="w-full text-[11px] p-1.5 pl-6 bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-700 font-medium"
+                                                            placeholder="กลาง"
+                                                            title="Mobile Performance Level"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Text Variables Section */}
+                                        <div className="flex flex-col">
+                                            <div className="text-[11px] font-bold text-blue-600 mb-2 uppercase tracking-wider">
+                                                Text Variables (Blue)
+                                            </div>
+                                            <div className="border rounded-lg bg-white shadow-inner max-h-[250px] overflow-y-auto border-gray-200">
+                                                <table className="w-full text-left text-xs border-collapse relative">
+                                                    <thead className={`sticky top-0 z-10 ${t.card || 'bg-gray-100'} border-b shadow-sm`}>
+                                                        <tr>
+                                                            <th className="p-2 font-semibold w-[40%]">Variable</th>
+                                                            <th className="p-2 font-semibold w-[60%]">Description</th>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {filteredVariables.length > 0 ? filteredVariables.map((v) => (
+                                                            <tr
+                                                                key={v.name}
+                                                                onClick={() => editorRef.current?.insertContent(v.name)}
+                                                                className={`cursor-pointer hover:bg-blue-50 transition-colors group ${t.text || 'text-gray-700'}`}
+                                                                title={`Click to insert ${v.name}\nCategory: ${v.category}`}
+                                                            >
+                                                                <td className="p-2 font-mono text-blue-600 font-medium whitespace-nowrap group-hover:underline align-top">
+                                                                    {v.name}
+                                                                    <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
+                                                                </td>
+                                                                <td className="p-2 text-gray-600 align-top">
+                                                                    {v.desc}
+                                                                </td>
+                                                            </tr>
+                                                        )) : (
+                                                            <tr>
+                                                                <td colSpan={2} className="p-4 text-center text-gray-500 italic">
+                                                                    No variables found matching &quot;{searchTerm}&quot;
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        {/* Link Variables Section */}
+                                        <div className="pt-3 border-t border-gray-200 flex flex-col">
+                                            <div className="text-[11px] font-bold text-orange-500 mb-2 uppercase tracking-wider">
+                                                Link Variables (Screenshots)
+                                            </div>
+                                            <div className="border rounded-lg bg-white shadow-inner max-h-[220px] overflow-y-auto border-gray-200">
+                                                <table className="w-full text-left text-xs border-collapse relative">
+                                                    <thead className="sticky top-0 z-10 bg-gray-100 border-b shadow-sm">
+                                                        <tr>
+                                                            <th className="p-2 font-semibold w-[40%] text-orange-600">Variable</th>
+                                                            <th className="p-2 font-semibold w-[60%] text-orange-600">Description</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {[
+                                                            { name: '@captured_domain_page', desc: 'รูปภาพหน้าจอหน้ารวมโดเมน (Sites overview)', category: 'Screenshots' },
+                                                            { name: '@captured_dns_page', desc: 'รูปภาพหน้าจอรายการ DNS Records', category: 'Screenshots' },
+                                                            { name: '@captured_firewall_page', desc: 'รูปภาพหน้าจอความปลอดภัยและเหตุการณ์ WAF (Firewall Overview)', category: 'Screenshots' },
+                                                            { name: '@captured_security_rules_page', desc: 'รูปภาพหน้าจอรายการกฎความปลอดภัย (Security Custom Rules)', category: 'Screenshots' },
+                                                            { name: '@captured_argo_page', desc: 'รูปภาพหน้าจอการตั้งค่า Argo Smart Routing', category: 'Screenshots' },
+                                                            { name: '@captured_speed_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วเว็บไซต์ (Speed Test)', category: 'Screenshots' },
+                                                            { name: '@captured_speed_mobile_page', desc: 'รูปภาพหน้าจอผลการทดสอบความเร็วบนมือถือ (Speed Test Mobile)', category: 'Screenshots' },
+                                                            { name: '@captured_request_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Requests', category: 'Traffic Screenshots' },
+                                                            { name: '@captured_data_transfer_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Data Transfer', category: 'Traffic Screenshots' },
+                                                            { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', category: 'Traffic Screenshots' },
+                                                            { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', category: 'Traffic Screenshots' },
+                                                            { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', category: 'Traffic Screenshots' }
+                                                        ].map((v) => (
+                                                            <tr
+                                                                key={v.name}
+                                                                onClick={() => editorRef.current?.insertContent(v.name)}
+                                                                className="cursor-pointer hover:bg-orange-50 transition-colors group text-gray-700"
+                                                                title={`Click to insert ${v.name}\nCategory: ${v.category}`}
+                                                            >
+                                                                <td className="p-2 font-mono text-orange-600 font-medium whitespace-nowrap group-hover:underline align-top">
+                                                                    {v.name}
+                                                                    <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
+                                                                </td>
+                                                                <td className="p-2 text-gray-600 align-top">
+                                                                    {v.desc}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2051,6 +2101,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
+    const [exportThaiDigits, setExportThaiDigits] = useState(false);
     
     // Global Queue State
     const [batchQueue, setBatchQueue] = useState([]);
@@ -2235,6 +2286,18 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 <span className={`text-xs ${t.subText} w-10`}>End:</span>
                                 <input type="date" value={batchEndDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchEndDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
                             </div>
+                            <div className="flex items-center gap-2 mt-3 mb-1">
+                                <label className={`flex items-center gap-2 cursor-pointer text-xs ${t.subText}`}>
+                                    <input 
+                                        type="checkbox" 
+                                        id="batch-thai-digits-toggle"
+                                        checked={exportThaiDigits} 
+                                        onChange={e => setExportThaiDigits(e.target.checked)} 
+                                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 h-3.5 w-3.5"
+                                    />
+                                    <span>Export using Thai Digits (เลขไทย)</span>
+                                </label>
+                            </div>
                             <div className="flex items-center gap-1.5 mt-2 justify-end">
                                 <span className={`text-[10px] ${t.subText} font-bold mr-1 uppercase`}>Quick:</span>
                                 {[
@@ -2302,7 +2365,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
                 <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
                     <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
-                    <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
+                    <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId, [], null, false, [], exportThaiDigits); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
                         <FileText className="w-3 h-3" /> Start Processing Queue
                     </button>
                 </div>
@@ -3459,6 +3522,7 @@ export default function NTBCCFReportPage() {
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);
     const [isControlModalOpen, setIsControlModalOpen] = useState(false);
+    const [useThaiDigits, setUseThaiDigits] = useState(false);
 
     // Theme State
     const [currentTheme, setCurrentTheme] = useState('dark');
@@ -4205,7 +4269,8 @@ export default function NTBCCFReportPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false) => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false) => {
+        setUseThaiDigits(exportThaiDigits);
         setIsBatchModalOpen(false);
         router.push('/systems/ntbc_cfreport/control');
     };
@@ -4370,7 +4435,8 @@ export default function NTBCCFReportPage() {
         }
     };
 
-    const handleCaptureScreenshotConfirm = async (batchQueue, batchStartDate, batchEndDate, templateId = 'default') => {
+    const handleCaptureScreenshotConfirm = async (batchQueue, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false) => {
+        setUseThaiDigits(exportThaiDigits);
         setIsBatchModalOpen(false);
         if(!batchQueue || batchQueue.length === 0) return;
         
@@ -5522,6 +5588,8 @@ export default function NTBCCFReportPage() {
             <ReportModal
                 isOpen={isReportModalOpen}
                 onClose={() => setIsReportModalOpen(false)}
+                useThaiDigits={useThaiDigits}
+                setUseThaiDigits={setUseThaiDigits}
                 data={{
                     ...reportData,
                     zoneName: getZoneName(selectedZone, zones),

@@ -158,6 +158,10 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
     const handleSoftDelete = async (id, name) => {
         const tid = String(id);
 
+        if (tid === 'default') {
+            return Swal.fire('Cannot Delete', 'The system default template cannot be deleted or hidden.', 'warning');
+        }
+
         // Prevent hiding the last visible template, otherwise selectors become unusable.
         const visible = templates.filter(t => !isHidden(t.id));
         if (!isHidden(tid) && visible.length <= 1) {
@@ -497,17 +501,19 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                 <button onClick={() => setRenamingId(null)} className="p-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><X className="w-4 h-4" /></button>
                                             </div>
                                         ) : (
-                                             <div className="flex items-center gap-2 group/name">
-                                                 <h3 className={`font-semibold ${t.text || 'text-gray-200'}`}>{tmp.name}</h3>
-                                                {String(tmp.id) === String(defaultTemplateId) && <span className="px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 text-[10px] font-mono uppercase tracking-wider border border-blue-800">Default</span>}
-                                                {isHidden(tmp.id) && <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 text-[10px] font-mono uppercase tracking-wider border border-gray-700">Hidden</span>}
-                                                 <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
-                                                     <Edit2 className="w-3 h-3" />
-                                                 </button>
-                                             </div>
-                                         )}
-                                         <p className={`text-xs ${t.subText} mt-1 font-mono`}>ID: {tmp.id}</p>
-                                     </div>
+                                              <div className="flex items-center gap-2 group/name">
+                                                  <h3 className={`font-semibold ${t.text || 'text-gray-200'}`}>{tmp.name}</h3>
+                                                 {String(tmp.id) === String(defaultTemplateId) && <span className="px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 text-[10px] font-mono uppercase tracking-wider border border-blue-800">Default</span>}
+                                                 {isHidden(tmp.id) && <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 text-[10px] font-mono uppercase tracking-wider border border-gray-700">Hidden</span>}
+                                                  {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') && (
+                                                      <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
+                                                          <Edit2 className="w-3 h-3" />
+                                                      </button>
+                                                  )}
+                                              </div>
+                                          )}
+                                          <p className={`text-xs ${t.subText} mt-1 font-mono`}>ID: {tmp.id}</p>
+                                      </div>
 
                                       {/* Actions */}
                                       <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -525,14 +531,21 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                         </button>
 
                                          {/* Edit Content Button */}
-                                         <button
-                                             onClick={() => onEditDomain(tmp.id, tmp.name)}
-                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} border ${t.modalBorder} ${t.sectionHeader || 'bg-gray-900 border-gray-700'} transition-colors`}
-                                             title="Edit Domain Summary Report Structure"
-                                         >
-                                             <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
-                                             Edit Template
-                                         </button>
+                                         {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') ? (
+                                             <button
+                                                 onClick={() => onEditDomain(tmp.id, tmp.name)}
+                                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} border ${t.modalBorder} ${t.sectionHeader || 'bg-gray-900 border-gray-700'} transition-colors`}
+                                                 title="Edit Domain Summary Report Structure"
+                                             >
+                                                 <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
+                                                 Edit Template
+                                             </button>
+                                         ) : (
+                                             <div className={`px-3 py-1.5 text-xs text-gray-500 border border-gray-800 bg-gray-900/50 rounded flex items-center gap-1.5 cursor-not-allowed`} title="Default template can only be edited by Admins">
+                                                 <LayoutTemplate className="w-3.5 h-3.5 text-gray-600" />
+                                                 View-Only (Admin Edit Only)
+                                             </div>
+                                         )}
  
                                          {/* Export bundle */}
                                          <button
@@ -545,13 +558,15 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                          </button>
 
                                          {/* Delete (soft hide / restore) */}
-                                         <button
-                                             onClick={() => handleSoftDelete(tmp.id, tmp.name)}
-                                             className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
-                                             title={isHidden(tmp.id) ? 'Restore Template' : 'Delete Template (Hide)'}
-                                         >
-                                             <Trash2 className="w-4 h-4" />
-                                         </button>
+                                         {String(tmp.id) !== 'default' && (
+                                             <button
+                                                 onClick={() => handleSoftDelete(tmp.id, tmp.name)}
+                                                 className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
+                                                 title={isHidden(tmp.id) ? 'Restore Template' : 'Delete Template (Hide)'}
+                                             >
+                                                 <Trash2 className="w-4 h-4" />
+                                             </button>
+                                         )}
 
                                         {/* Hard delete */}
                                         {userRole === 'root' && String(tmp.id) !== 'default' && (
