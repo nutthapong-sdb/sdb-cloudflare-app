@@ -134,6 +134,16 @@ const formatThaiDate = (date) => {
     });
 };
 
+const parseDateInLocalTime = (dateStr, isEnd = false) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return null;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return isEnd ? new Date(y, m, d, 23, 59, 59, 999) : new Date(y, m, d, 0, 0, 0, 0);
+};
+
 const toThaiDigits = (input) => {
     if (!input) return input;
     const thai = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
@@ -344,8 +354,9 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Mode check removed here as we pass safeData specifically for processing
     let html = tmpl;
 
-    const startDate = safeData.startDate ? new Date(safeData.startDate + 'T00:00:00.000Z') : new Date(now.getTime() - 1440 * 60 * 1000);
-    const endDate = safeData.endDate ? new Date(Math.min(new Date(safeData.endDate + 'T23:59:59.999Z').getTime(), now.getTime())) : now;
+    const startDate = parseDateInLocalTime(safeData.startDate, false) || new Date(now.getTime() - 1440 * 60 * 1000);
+    const rawEndDate = parseDateInLocalTime(safeData.endDate, true);
+    const endDate = rawEndDate ? new Date(Math.min(rawEndDate.getTime(), now.getTime())) : now;
     const timeRangeStr = `${formatThaiDate(startDate)} - ${formatThaiDate(endDate)}`;
     const avgTimeSec = safeData.avgTime ? (safeData.avgTime / 1000).toFixed(3) : "0.000";
     const totalFirewall = (safeData.blockedEvents || 0) + (safeData.logEvents || 0);
@@ -958,8 +969,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         ...data  // Override defaults with actual data
     };
 
-    const sDate = safeData.startDate ? new Date(safeData.startDate + 'T00:00:00.000Z') : new Date(Date.now() - 1440 * 60 * 1000);
-    const eDate = safeData.endDate ? new Date(Math.min(new Date(safeData.endDate + 'T23:59:59.999Z').getTime(), Date.now())) : new Date();
+    const sDate = parseDateInLocalTime(safeData.startDate, false) || new Date(Date.now() - 1440 * 60 * 1000);
+    const rawEDate = parseDateInLocalTime(safeData.endDate, true);
+    const eDate = rawEDate ? new Date(Math.min(rawEDate.getTime(), Date.now())) : new Date();
     const timeRangeStr = `${formatThaiDate(sDate)} - ${formatThaiDate(eDate)}`;
     const avgTimeSec = safeData.avgTime ? (safeData.avgTime / 1000).toFixed(3) : "0.000";
     const totalFirewall = (safeData.blockedEvents || 0) + (safeData.logEvents || 0);

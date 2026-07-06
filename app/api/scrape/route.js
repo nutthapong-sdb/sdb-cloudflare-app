@@ -1855,22 +1855,22 @@ export async function POST(request) {
                     lockdownRes
                 ] = await Promise.all([
                     // Security Level
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/security_level`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/security_level`, { headers }).catch(() => ({ data: {} })),
                     // SSL/TLS Mode
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/ssl`, { headers }).catch(() => ({ data: {} })),
                     // Minimum TLS Version
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/min_tls_version`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/min_tls_version`, { headers }).catch(() => ({ data: {} })),
                     // TLS 1.3
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/tls_1_3`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/tls_1_3`, { headers }).catch(() => ({ data: {} })),
                     // DNS Records
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?per_page=1`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records?per_page=1`, { headers }).catch(() => ({ data: {} })),
                     // Leaked Credentials Check
                     axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/security_header`, { headers })
                         .catch(() => ({ data: { result: { value: 'unknown' } } })),
                     // Browser Integrity Check
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/browser_check`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/browser_check`, { headers }).catch(() => ({ data: {} })),
                     // Hotlink Protection
-                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/hotlink_protection`, { headers }),
+                    axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/settings/hotlink_protection`, { headers }).catch(() => ({ data: {} })),
                     // Zone Lockdown Rules
                     axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/lockdowns?per_page=1`, { headers })
                         .catch(() => ({ data: { result_info: { total_count: 0 } } }))
