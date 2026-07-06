@@ -4187,11 +4187,11 @@ export default function GDCCPage() {
 
         const getInactiveCaptureReason = () => {
             if (typeof document === 'undefined') return null;
+            if (typeof window !== 'undefined' && window.navigator.webdriver) {
+                return null;
+            }
             if (document.visibilityState !== 'visible') {
                 return 'Cannot capture dashboard snapshot because this tab is not visible. Please keep this page open and do not switch tabs or minimize/fold the screen during export.';
-            }
-            if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
-                return 'Cannot capture dashboard snapshot because this page is not active. Please keep this page focused and do not switch tabs during export.';
             }
             return null;
         };
@@ -4828,26 +4828,42 @@ export default function GDCCPage() {
                             if (inactiveReason) {
                                 throw new Error(inactiveReason);
                             }
-                            const captureWidth = dashboardRef.current.scrollWidth;
-                            const captureHeight = dashboardRef.current.scrollHeight;
+                            const captureWidth = dashboardRef.current.scrollWidth || 1200;
+                            const captureHeight = dashboardRef.current.scrollHeight || 800;
 
+                            console.log('📸 [Capture Debug] Starting screenshot capture, width:', captureWidth, 'height:', captureHeight);
                             // Race between screenshot and 45s timeout
                             imgData = await Promise.race([
-                                htmlToImage.toJpeg(dashboardRef.current, {
-                                    quality: 0.6,
-                                    backgroundColor: '#000000',
-                                    pixelRatio: 1.0,
-                                    width: captureWidth,
-                                    height: captureHeight,
-                                    cacheBust: true,
-                                    skipAutoScale: true,
-                                    style: {
-                                        width: `${captureWidth}px`,
-                                        height: `${captureHeight}px`
+                                new Promise(async (resolve, reject) => {
+                                    try {
+                                        const res = await htmlToImage.toJpeg(dashboardRef.current, {
+                                            quality: 0.6,
+                                            backgroundColor: '#000000',
+                                            pixelRatio: 1.0,
+                                            width: captureWidth,
+                                            height: captureHeight,
+                                            cacheBust: true,
+                                            style: {
+                                                width: `${captureWidth}px`,
+                                                height: `${captureHeight}px`
+                                            }
+                                        });
+                                        console.log('📸 [Capture Debug] htmlToImage.toJpeg completed successfully!');
+                                        resolve(res);
+                                    } catch (err) {
+                                        console.error('📸 [Capture Debug] htmlToImage.toJpeg failed:', err);
+                                        reject(err);
                                     }
                                 }),
-                                new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (45s)')), 45000))
+                                new Promise((_, reject) => {
+                                    const tid = setTimeout(() => {
+                                        console.warn('📸 [Capture Warning] 45s timeout fired inside Promise.race!');
+                                        reject(new Error('Screenshot timeout (45s)'));
+                                    }, 45000);
+                                    // Use window to keep track in case we want to clear it, but let it be
+                                })
                             ]);
+                            console.log('📸 [Capture Debug] Promise.race returned successfully!');
 
                             const screenEnd = performance.now();
                         } catch (imgError) {
@@ -5509,6 +5525,50 @@ export default function GDCCPage() {
 
 
 
+    const getRawInspectorRow = (item) => {
+        if (!item?.isSummary) {
+            return {
+                host: item.dimensions?.clientRequestHTTPHost || '-',
+                ip: item.dimensions?.clientIP || '-',
+                country: item.dimensions?.clientCountryName || '-',
+                status: item.dimensions?.edgeResponseStatus || '-',
+                device: item.dimensions?.clientDeviceType || '-',
+                count: item.count || 0,
+            };
+        }
+
+        const topHost = item.topHosts?.[0]?.key || item.zoneName || '-';
+        const topIp = item.topIps?.[0]?.key || '-';
+        const topCountry = item.totals?.countries?.[0]?.clientCountryName || '-';
+        const topStatus = Object.entries(item.statusDistribution || {})
+            .sort((a, b) => (b[1] || 0) - (a[1] || 0))[0]?.[0] || 'summary';
+
+        return {
+            host: topHost,
+            ip: topIp,
+            country: topCountry,
+            status: topStatus,
+            device: 'daily-summary',
+            count: item.totals?.requests || 0,
+        };
+    };
+
+    const rawInspectorRows = useMemo(() => {
+        const accMap = new Map();
+        rawData.forEach((item) => {
+            const row = getRawInspectorRow(item);
+            const key = [row.host, row.ip, row.country, row.status, row.device].join('|');
+            const existing = accMap.get(key);
+
+            if (existing) {
+                existing.count += Number(row.count || 0);
+            } else {
+                accMap.set(key, { key, ...row, count: Number(row.count || 0) });
+            }
+        });
+        return Array.from(accMap.values()).sort((a, b) => b.count - a.count);
+    }, [rawData]);
+
     if (!currentUser) return null;
 
     // Data for Report Modal
@@ -5551,47 +5611,7 @@ export default function GDCCPage() {
 
     const isActionDisabled = !selectedSubDomain || loadingStats;
 
-    const getRawInspectorRow = (item) => {
-        if (!item?.isSummary) {
-            return {
-                host: item.dimensions?.clientRequestHTTPHost || '-',
-                ip: item.dimensions?.clientIP || '-',
-                country: item.dimensions?.clientCountryName || '-',
-                status: item.dimensions?.edgeResponseStatus || '-',
-                device: item.dimensions?.clientDeviceType || '-',
-                count: item.count || 0,
-            };
-        }
 
-        const topHost = item.topHosts?.[0]?.key || item.zoneName || '-';
-        const topIp = item.topIps?.[0]?.key || '-';
-        const topCountry = item.totals?.countries?.[0]?.clientCountryName || '-';
-        const topStatus = Object.entries(item.statusDistribution || {})
-            .sort((a, b) => (b[1] || 0) - (a[1] || 0))[0]?.[0] || 'summary';
-
-        return {
-            host: topHost,
-            ip: topIp,
-            country: topCountry,
-            status: topStatus,
-            device: 'daily-summary',
-            count: item.totals?.requests || 0,
-        };
-    };
-
-    const rawInspectorRows = rawData.reduce((acc, item) => {
-        const row = getRawInspectorRow(item);
-        const key = [row.host, row.ip, row.country, row.status, row.device].join('|');
-        const existing = acc.find((entry) => entry.key === key);
-
-        if (existing) {
-            existing.count += Number(row.count || 0);
-        } else {
-            acc.push({ key, ...row, count: Number(row.count || 0) });
-        }
-
-        return acc;
-    }, []).sort((a, b) => b.count - a.count);
 
     return (
         <div className={`min-h-screen font-sans ${theme.bg} ${theme.text}`}>
@@ -6022,7 +6042,7 @@ export default function GDCCPage() {
                                     ) : (
                                         <table className={`w-full text-xs ${theme.subText || 'text-gray-400'}`}>
                                             <tbody>
-                                                {detailedAttackList.map((d, i) => (
+                                                {detailedAttackList.slice(0, 100).map((d, i) => (
                                                     <tr key={i} className={`border-b ${theme.dropdown?.border || 'border-gray-900/50'} ${theme.tableRowHover || 'hover:bg-gray-900'}`}>
                                                         <td className={`py-1 pl-2 font-mono ${theme.subText || 'text-gray-500'}`}>
                                                             {d.time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
