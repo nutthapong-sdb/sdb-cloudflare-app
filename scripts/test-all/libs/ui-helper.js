@@ -42,7 +42,13 @@ async function setupBrowser() {
         const isHeadless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
         return await puppeteer.launch({
             headless: isHeadless ? 'new' : false,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            args: [
+                '--no-sandbox', 
+                '--disable-setuid-sandbox',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding'
+            ],
             defaultViewport: null
         });
     }

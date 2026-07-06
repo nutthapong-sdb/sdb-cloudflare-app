@@ -3624,6 +3624,7 @@ export default function GDCCPage() {
         let zReq = 0, zBytes = 0, zCacheReq = 0, zCacheBytes = 0, zPageViews = 0, zUniques = 0;
         let zTopReq = [], zTopBytes = [];
 
+        console.log(`🔍 [Trace] calling callAPI for subdomain ${subdomain}...`);
         const result = await callAPI('get-traffic-analytics', {
             zoneId: zoneId,
             startDate: p_startDate,
@@ -3631,6 +3632,7 @@ export default function GDCCPage() {
             subdomain: isAllSubdomains ? null : subdomain,
             apiToken: currentUser?.cloudflare_api_token // Pass user token
         });
+        console.log(`🔍 [Trace] callAPI returned for subdomain ${subdomain}: success = ${result?.success}`);
 
         let filteredData = [];
         let totalReq = 0;
@@ -3703,6 +3705,7 @@ export default function GDCCPage() {
                     count: g.count
                 })).sort((a, b) => b.count - a.count).slice(0, 5);
 
+            console.log('🔍 [Trace] custom rules list set');
             setCustomRulesList(customList);
 
             // Extract Managed Rules
@@ -3715,6 +3718,7 @@ export default function GDCCPage() {
                     rule: `${g.dimensions.description} (${g.dimensions.ruleId})`,
                     count: g.count
                 })).sort((a, b) => b.count - a.count).slice(0, 5);
+            console.log('🔍 [Trace] managed rules list set');
             setManagedRulesList(managedList);
 
 
@@ -3742,6 +3746,7 @@ export default function GDCCPage() {
             sortedAttackers = Object.values(attackerMap)
                 .sort((a, b) => b.count - a.count)
                 .map(a => ({ ...a, type: Array.from(a.types).join(', ') }));
+            console.log('🔍 [Trace] top attackers set');
             setTopAttackers(sortedAttackers);
 
             // --- 4. TOP SOURCES ---
@@ -3749,6 +3754,7 @@ export default function GDCCPage() {
                 source: s.dimensions?.source || 'Unknown',
                 count: s.count
             })).sort((a, b) => b.count - a.count).slice(0, 5);
+            console.log('🔍 [Trace] top firewall sources set');
             setTopFirewallSources(sourcesList);
 
 
@@ -3813,6 +3819,7 @@ export default function GDCCPage() {
                     setCacheHitRequests(zCacheReq);
                     setCacheHitDataTransfer(zCacheBytes);
                 }
+                console.log('🔍 [Trace] zoneSummary processing finished');
             }
 
             if (!isAllSubdomains) {
@@ -3829,6 +3836,7 @@ export default function GDCCPage() {
             setZoneWideTopCountriesReq([]); setZoneWideTopCountriesBytes([]);
             setCustomRulesList([]); setManagedRulesList([]);
         }
+        console.log('🔍 [Trace] raw/live API traffic data call check starting...');
 
         if (!isGeneratingReport) {
             const liveRawResult = await callAPI('get-traffic-raw-live', {
@@ -3846,6 +3854,7 @@ export default function GDCCPage() {
         } else {
             setRawData(filteredData.filter(item => !item?.isSummary));
         }
+        console.log('🔍 [Trace] raw/live API traffic data call check finished. Processing chart data...');
         setTotalRequests(totalReq);
         setAvgResponseTime(weightedAvgTime);
 
@@ -3887,6 +3896,7 @@ export default function GDCCPage() {
         const attackBuckets = createBuckets();
         const httpCodeBuckets = createBuckets();
 
+        console.log('🔍 [Trace] throughputBuckets, attackBuckets, httpCodeBuckets map size:', throughputBuckets.size, alignedStart.toISOString(), alignedEnd.toISOString(), 'bucketSizeMs:', bucketSizeMs);
         // 2. FILL DATA & CALC PEAK
         const allCodes = new Set();
         let currentPeak = { count: 0, time: null };
@@ -3908,6 +3918,7 @@ export default function GDCCPage() {
                 });
 
                 // Populate Timeline from summary buckets
+                // console.log('🔍 [Trace] processing summary timeline for item:', item.report_date);
                 (item.hourlyTimeline || []).forEach(bucket => {
                     const hTime = new Date(item.report_date).setUTCHours(bucket.hour, 0, 0, 0);
                     const bTime = Math.floor(hTime / bucketSizeMs) * bucketSizeMs;
@@ -4024,6 +4035,7 @@ export default function GDCCPage() {
         });
 
         realAttackEvents.sort((a, b) => b.time - a.time);
+        console.log('🔍 [Trace] detailed attack list set');
         setDetailedAttackList(realAttackEvents);
 
         // Find Peak Attack (NEW)
@@ -4039,6 +4051,7 @@ export default function GDCCPage() {
         setPeakAttack({ time: peakAttackTimeStr, count: currentAttackPeak.count });
 
 
+        console.log('🔍 [Trace] peak calculations finished: peakTrafficStr =', peakTimeStr, 'peakHttpStatusStr =', peakHttpTimeStr, 'peakAttackStr =', peakAttackTimeStr);
         // 3. CONVERT TO ARRAY FOR CHARTS
         const formatTime = (d) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 
@@ -4065,6 +4078,7 @@ export default function GDCCPage() {
         setHttpStatusSeriesData({ data: httpStatusChartData, keys: sortedKeys });
 
 
+        console.log('🔍 [Trace] converted arrays for charts and keys successfully');
         // 4. TOP LISTS
         const toArray = (obj, keyName) => Object.entries(obj).map(([name, count]) => ({ [keyName]: name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
 
@@ -4074,6 +4088,7 @@ export default function GDCCPage() {
         setTopUserAgents(toArray(uaCounts, 'agent'));
         setTopHosts(toArray(hostCounts, 'host'));
 
+        console.log('🔍 [Trace] top lists set successfully');
         // Process Firewall Rules (Separate Managed and Custom)
         // 8. Top Firewall Sources (Categories like WAF, Security Level)
         const sourceMap = new Map();
@@ -4104,6 +4119,7 @@ export default function GDCCPage() {
             .map(([source, count]) => ({ source, count }))
             .sort((a, b) => b.count - a.count);
 
+        console.log('🔍 [Trace] top firewall sources/fwEvents processed successfully');
         setTopFirewallSources(topSourcesSorted);
 
         const stats = {
@@ -4141,8 +4157,10 @@ export default function GDCCPage() {
             firewallActivity: firewallActivity || []
         };
 
+        console.log(`🔍 [Trace] fetchAndApplyTrafficData finished processing for ${subdomain}. Setting loading stats to false...`);
         setLoadingStats(false);
         setHasGenerated(true); // Mark generation as complete
+        console.log(`🔍 [Trace] fetchAndApplyTrafficData returning stats for ${subdomain}`);
         return stats;
     };
 

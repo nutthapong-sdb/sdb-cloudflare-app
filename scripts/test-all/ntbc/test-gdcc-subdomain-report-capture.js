@@ -34,13 +34,26 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
     try {
         page = await setupPage(browser);
         
-        // Listen to console logs in browser
+        page.on('request', req => {
+            const url = req.url();
+            if (url.includes('/api/')) {
+                log(`   🌐 [Network Request] ${req.method()} ${url}`, colors.cyan);
+            }
+        });
+        page.on('response', res => {
+            const url = res.url();
+            if (url.includes('/api/')) {
+                log(`   🌐 [Network Response] ${res.status()} ${url} (${res.statusText()})`, res.status() >= 400 ? colors.red : colors.green);
+            }
+        });
+
         page.on('console', msg => {
             log(`   [Browser Console] ${msg.text()}`, colors.yellow);
         });
         page.on('pageerror', err => {
             log(`   [Browser Page Error] ${err.toString()}`, colors.red);
         });
+
 
         await login(page);
 
@@ -76,7 +89,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
                 setter.call(el, val);
                 el.dispatchEvent(new Event('input', { bubbles: true }));
                 el.dispatchEvent(new Event('change', { bubbles: true }));
-            }, batchDateInputs[0], '2026-06-29');
+            }, batchDateInputs[0], '2026-06-01');
 
             await page.evaluate((el, val) => {
                 const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -84,7 +97,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
                 el.dispatchEvent(new Event('input', { bubbles: true }));
                 el.dispatchEvent(new Event('change', { bubbles: true }));
             }, batchDateInputs[1], '2026-06-30');
-            log('   ✅ Dates set: 2026-06-29 to 2026-06-30', colors.green);
+            log('   ✅ Dates set: 2026-06-01 to 2026-06-30', colors.green);
         } else {
             throw new Error('Could not find date input fields in modal');
         }
