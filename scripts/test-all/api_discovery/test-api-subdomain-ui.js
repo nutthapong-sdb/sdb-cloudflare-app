@@ -67,7 +67,7 @@ function log(msg, color = colors.reset) {
 
     } catch (error) {
         log(`❌ Test Failed: ${error.message}`, colors.red);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

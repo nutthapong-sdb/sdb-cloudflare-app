@@ -333,7 +333,7 @@ async function selectModalDropdown(page, labelText, searchText) {
             }
         }
         if (error.stack) console.error(error.stack);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

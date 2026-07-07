@@ -151,13 +151,12 @@ async function testControlCenterUI() {
         }
 
         log('\n🎉 All System Control Center UI Tests Passed!', colors.green);
-        process.exit(0);
     } catch (e) {
         log(`❌ UI Test Failed: ${e.message}`, colors.red);
         if (page) {
             await takeScreenshot(page, 'control-center-ui-failure.png');
         }
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         if (browser) {
             await browser.close();

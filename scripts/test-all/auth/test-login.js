@@ -18,7 +18,7 @@ const { setupBrowser, setupPage, login, log, colors, BASE_URL } = require('../li
 
     } catch (e) {
         log(`❌ Login Test Failed: ${e.message}`, colors.red);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

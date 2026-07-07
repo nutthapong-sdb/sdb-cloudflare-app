@@ -1246,9 +1246,16 @@ export async function POST(request) {
                 }
 
                 console.log('🔹 API: Sending Traffic Response...');
-                return NextResponse.json({
+                const bodyStr = JSON.stringify({
                     success: true,
                     data: finalData
+                });
+                return new NextResponse(bodyStr, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(bodyStr).toString()
+                    }
                 });
 
             } catch (gqlError) {
@@ -1351,10 +1358,17 @@ export async function POST(request) {
                 // Slice to 8000 to match the original limit constraint
                 const finalGroups = combinedGroups.slice(0, 8000);
 
-                return NextResponse.json({
+                const bodyStr = JSON.stringify({
                     success: true,
                     data: {
                         httpRequestsAdaptiveGroups: finalGroups
+                    }
+                });
+                return new NextResponse(bodyStr, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(bodyStr).toString()
                     }
                 });
             } catch (gqlError) {

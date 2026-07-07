@@ -5127,6 +5127,7 @@ export default function GDCCPage() {
     const callAPI = async (action, params = {}, explicitToken = null) => {
         setLoading(true);
         try {
+            console.log(`[Trace callAPI] start fetch for action: ${action}`);
             const response = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5136,7 +5137,11 @@ export default function GDCCPage() {
                     apiToken: explicitToken || currentUser?.cloudflare_api_token || auth.getCurrentUser()?.cloudflare_api_token
                 }),
             });
-            const result = await response.json();
+            console.log(`[Trace callAPI] fetch completed, status: ${response.status}. reading text...`);
+            const text = await response.text();
+            console.log(`[Trace callAPI] text read successfully, length: ${text.length}. parsing json...`);
+            const result = JSON.parse(text);
+            console.log(`[Trace callAPI] json parsed successfully for action: ${action}`);
 
             if (!result.success) {
                 console.warn(`⚠️ API Result Failed [${action}]:`, result.message);

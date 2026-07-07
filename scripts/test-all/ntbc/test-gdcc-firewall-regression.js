@@ -138,7 +138,6 @@ const { selectGDCCFilters, navigateToGDCC } = require('../libs/gdcc-helper');
         log(`✅ Downloaded successfully: ${downloadedFile} (${fileSize.toLocaleString()} bytes)`, colors.green);
 
         log('\n🎉 GDCC Batch Report firewallRulesData Regression Test PASSED!', colors.green);
-        process.exit(0);
 
     } catch (error) {
         log(`❌ Regression Test FAILED: ${error.message}`, colors.red);
@@ -152,7 +151,7 @@ const { selectGDCCFilters, navigateToGDCC } = require('../libs/gdcc-helper');
             }
         }
         if (error.stack) console.error(error.stack);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

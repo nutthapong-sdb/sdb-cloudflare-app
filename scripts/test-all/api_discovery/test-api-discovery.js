@@ -94,7 +94,7 @@ const { selectCursorDropdown, GDCC_TEST_CONFIG } = require('../libs/gdcc-helper'
     } catch (e) {
         log(`❌ API Discovery Test Failed: ${e.message}`, colors.red);
         if (e.stack) console.error(e.stack);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

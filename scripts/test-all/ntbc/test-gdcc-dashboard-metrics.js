@@ -96,12 +96,11 @@ const { navigateToGDCC, selectGDCCFilters, clickGenerateDashboard } = require('.
         }
 
         log('\n🎉 SUCCESS: All dashboard cards successfully populated with values!', colors.green);
-        process.exit(0);
 
     } catch (error) {
         log(`\n❌ Test FAILED: ${error.message}`, colors.red);
         if (error.stack) console.error(error.stack);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

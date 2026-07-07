@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:gdcc-dashboard": "node scripts/test-all/ntbc/test-gdcc-dashboard-metrics.js",
     "test:gdcc-report": "node scripts/test-all/ntbc/test-gdcc-zone-name-live.js",
+    "test:gdcc-subdomain-report": "node scripts/test-all/ntbc/test-gdcc-subdomain-report-capture.js",
     "test:ntbc": "node scripts/test-all/ntbc/test-ntbc-cfreport-capture.js",
     "test:api-discovery": "node scripts/test-all/api_discovery/test-api.js",
     "test:firewall": "node scripts/test-all/firewall/test-firewall.js",

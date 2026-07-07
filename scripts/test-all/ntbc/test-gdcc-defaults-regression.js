@@ -126,12 +126,11 @@ const GDCC_TEST_CONFIG = {
         }, { timeout: 20000 });
 
         log('\n🎉 SUCCESS: All dashboard defaults saved and loaded successfully in cascade order!', colors.green);
-        process.exit(0);
 
     } catch (error) {
         log(`\n❌ Defaults test FAILED: ${error.message}`, colors.red);
         if (error.stack) console.error(error.stack);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
         await browser.close();
     }

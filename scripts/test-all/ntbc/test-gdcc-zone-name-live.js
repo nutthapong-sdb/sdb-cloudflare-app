@@ -171,16 +171,24 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
             console.log(snippet);
         }
 
-        log('\n🖥️  The browser is kept open for you to inspect everything.', colors.cyan);
-        await question('👉 Press [Enter] in the terminal when you are ready to close the browser and exit the test... ');
+        if (process.env.NON_INTERACTIVE !== '1') {
+            log('\n🖥️  The browser is kept open for you to inspect everything.', colors.cyan);
+            await question('👉 Press [Enter] in the terminal when you are ready to close the browser and exit the test... ');
+        } else {
+            log('\n🤖 Non-interactive mode: Closing browser automatically.', colors.cyan);
+        }
 
     } catch (error) {
         log(`❌ Test FAILED: ${error.message}`, colors.red);
         if (error.stack) console.error(error.stack);
-        await question('👉 Press [Enter] in the terminal to close the browser and exit... ');
+        if (process.env.NON_INTERACTIVE !== '1') {
+            await question('👉 Press [Enter] in the terminal to close the browser and exit... ');
+        }
     } finally {
         rl.close();
-        await browser.close();
+        try {
+            await browser.close();
+        } catch (e) {}
         log('👋 Browser closed. Test finished.', colors.cyan);
     }
 })();
