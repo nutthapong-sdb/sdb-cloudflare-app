@@ -204,7 +204,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                         <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                                             {job.status === 'completed' && job.file_name && (
                                                 <a
-                                                    href={`/reports/${job.file_name}`}
+                                                    href={`/api/gdcc/report-jobs?action=download&fileName=${job.file_name}`}
                                                     download
                                                     className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
                                                 >

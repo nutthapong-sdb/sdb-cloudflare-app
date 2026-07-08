@@ -13,6 +13,34 @@ export async function GET(request) {
         const id = searchParams.get('id');
         const userId = searchParams.get('userId');
 
+        if (action === 'download') {
+            const fileName = searchParams.get('fileName');
+            if (!fileName) {
+                return NextResponse.json({ success: false, message: 'Missing fileName' }, { status: 400 });
+            }
+            
+            // Clean/sanitize filename to prevent directory traversal
+            const safeFileName = path.basename(fileName).replace(/[^a-zA-Z0-9_\\-\\.]/g, '');
+            if (!safeFileName) {
+                return NextResponse.json({ success: false, message: 'Invalid fileName' }, { status: 400 });
+            }
+            
+            const filePath = path.join(process.cwd(), 'public', 'reports', safeFileName);
+            if (!fs.existsSync(filePath)) {
+                return NextResponse.json({ success: false, message: 'File not found' }, { status: 404 });
+            }
+            
+            const fileBuffer = fs.readFileSync(filePath);
+            const contentType = safeFileName.endsWith('.zip') ? 'application/zip' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            
+            return new NextResponse(fileBuffer, {
+                headers: {
+                    'Content-Disposition': `attachment; filename="${safeFileName}"`,
+                    'Content-Type': contentType
+                }
+            });
+        }
+
         if (action === 'delete') {
             if (!id) {
                 return NextResponse.json({ success: false, message: 'Missing ID' }, { status: 400 });
