@@ -8,6 +8,7 @@ import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loa
 import ManageTemplateModal from './ManageTemplateModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
+import BackgroundJobsModal from './BackgroundJobsModal';
 import SearchableDropdown from './SearchableDropdown';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
@@ -514,7 +515,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
         // Dashboard Screenshot Image
-        '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6" style="text-align: center;"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
+        '@DASHBOARD_IMAGE': dashboardImage ? `<img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -2228,9 +2229,9 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                     hostsToGenerate = Array.from(selected).filter(h => h !== NO_SUBDOMAIN);
                                 }
 
-                                const promotedArray = Array.from(promotedHosts);
+                                 const promotedArray = Array.from(promotedHosts);
                                 // extra final arg: exportSeparated
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, zones, exportThaiDigits);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, true, zones, exportThaiDigits, selectedAccountId);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.button} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -2258,7 +2259,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 }
 
                                 const promotedArray = Array.from(promotedHosts);
-                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, zones, exportThaiDigits);
+                                onConfirm(hostsToGenerate, batchStartDate, batchEndDate, selectedTemplateId, promotedArray, internalZoneId, false, zones, exportThaiDigits, selectedAccountId);
                             }}
                             disabled={selected.size === 0}
                             className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all text-xs flex items-center gap-2`}
@@ -3371,6 +3372,7 @@ export default function GDCCPage() {
     const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
+    const [isBackgroundJobsModalOpen, setIsBackgroundJobsModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -4164,11 +4166,118 @@ export default function GDCCPage() {
         return stats;
     };
 
-    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false) => {
+    const handleBatchReport = async (selectedHosts, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false, modalAccountId = null) => {
+        const isWorkerMode = (typeof window !== 'undefined' && (localStorage.getItem('gdcc_worker_mode') === 'true' || window.location.search.includes('mode=worker')));
+
+        if (!isWorkerMode) {
+            setIsBatchModalOpen(false);
+
+            const activeAccountId = modalAccountId || selectedAccount;
+            const accountObj = accounts.find(a => a.id === activeAccountId);
+            const accountName = accountObj?.name || 'Unknown';
+            
+            const activeZones = (batchModalZones && batchModalZones.length > 0) ? batchModalZones : zones;
+            const currentZoneId = zoneId || selectedZone;
+            const zoneObj = activeZones.find(z => z.id === currentZoneId);
+            const zoneName = zoneObj?.name || 'Unknown';
+
+            Swal.fire({
+                title: 'Starting Background Job...',
+                html: 'Please wait while we queue the report generation on the server...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+                background: '#111827',
+                color: '#fff'
+            });
+
+            try {
+                const res = await fetch('/api/gdcc/report-jobs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser?.id || 'anonymous',
+                        accountId: activeAccountId,
+                        accountName: accountName,
+                        zoneId: currentZoneId,
+                        zoneName: zoneName,
+                        subdomains: selectedHosts,
+                        startDate: batchStartDate,
+                        endDate: batchEndDate,
+                        templateId: templateId,
+                        promotedHosts: promotedHosts,
+                        exportSeparated: exportSeparated,
+                        exportThaiDigits: exportThaiDigits,
+                        userSession: currentUser
+                    })
+                });
+
+                const data = await res.json();
+                Swal.close();
+
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Job Queued!',
+                        html: `
+                            <div class="text-left space-y-2">
+                                <p>Report generation has started in the background on the server.</p>
+                                <p class="text-xs text-gray-400">You can safely close this browser tab, minimize the window, or navigate to other parts of the application. The system will handle the screenshot capture and Word document compilation automatically.</p>
+                            </div>
+                        `,
+                        icon: 'success',
+                        showCancelButton: true,
+                        confirmButtonText: 'View Progress',
+                        cancelButtonText: 'Close',
+                        confirmButtonColor: '#3B82F6',
+                        cancelButtonColor: '#4B5563',
+                        background: '#111827',
+                        color: '#fff'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            setIsBackgroundJobsModalOpen(true);
+                        }
+                    });
+                } else {
+                    throw new Error(data.message || 'Failed to start background job');
+                }
+            } catch (error) {
+                console.error('Failed to trigger background report:', error);
+                Swal.fire({
+                    title: 'Failed to start job',
+                    text: error.message,
+                    icon: 'error',
+                    background: '#111827',
+                    color: '#fff',
+                    confirmButtonColor: '#ef4444'
+                });
+            }
+            return;
+        }
+
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
-        const activeZones = (batchModalZones && batchModalZones.length > 0) ? batchModalZones : zones;
+        let resolvedBatchModalZones = batchModalZones;
+        if (isWorkerMode && modalAccountId) {
+            console.log('🔄 Worker mode: preloading accounts and zones for account:', modalAccountId);
+            try {
+                const accRes = await callAPI('get-account-info');
+                if (accRes && accRes.data) {
+                    setAccounts(accRes.data);
+                }
+                const zoneRes = await callAPI('list-zones', { accountId: modalAccountId });
+                if (zoneRes && zoneRes.data) {
+                    setZones(zoneRes.data);
+                    resolvedBatchModalZones = zoneRes.data;
+                }
+            } catch (err) {
+                console.error('❌ Worker mode: failed to preload accounts/zones:', err);
+            }
+        }
+
+        const activeZones = (resolvedBatchModalZones && resolvedBatchModalZones.length > 0) ? resolvedBatchModalZones : zones;
         const zoneDataCache = new Map();
         const getZoneData = async (zId) => {
             if (!zId) return { dns: [], settings: {} };
@@ -4205,6 +4314,7 @@ export default function GDCCPage() {
 
         const getInactiveCaptureReason = () => {
             if (typeof document === 'undefined') return null;
+            if (isWorkerMode) return null;
             if (typeof window !== 'undefined' && window.navigator.webdriver) {
                 return null;
             }
@@ -4223,6 +4333,15 @@ export default function GDCCPage() {
         // Overlay element handling via Swal
         const updateOverlay = (hostName, index, total, progress, statusMsg) => {
             const percentage = Math.round(progress);
+            if (typeof window !== 'undefined') {
+                window.__lastReportProgress = {
+                    progress: percentage,
+                    statusMsg,
+                    hostName,
+                    index,
+                    total
+                };
+            }
             Swal.update({
                 html: `
                     <div style="font-family: inherit;">
@@ -4413,7 +4532,7 @@ export default function GDCCPage() {
                     topManagedRules: zoneStats.topManagedRules,
                     topFirewallSources: zoneStats.topFirewallSources,
                     zoneName: getZoneName(defaultZoneId, activeZones) || '-',
-                    accountName: activeZones.find(z => z.id === defaultZoneId)?.account?.name || accounts.find(a => a.id === selectedAccount)?.name || '-',
+                    accountName: activeZones.find(z => z.id === defaultZoneId)?.account?.name || accounts.find(a => a.id === selectedAccount || a.id === modalAccountId)?.name || '-',
                     startDate: batchStartDate,
                     endDate: batchEndDate,
                     dnsRecords: localDnsRecords,
@@ -4481,7 +4600,7 @@ export default function GDCCPage() {
                 }
 
                 if (shouldGenerateCover) {
-                    combinedHtml += `<div class="page-break">${domainReportHtml}</div>`;
+                    combinedHtml += `<div>${domainReportHtml}</div><div style="page-break-after: always;"></div>`;
                 }
 
                 // If exporting separated files, we always need the zone section per file.
@@ -4556,7 +4675,7 @@ export default function GDCCPage() {
                         topManagedRules: zoneStats.topManagedRules,
                         topFirewallSources: zoneStats.topFirewallSources,
                         zoneName: activeZones.find(z => z.id === zId)?.name || '-',
-                        accountName: activeZones.find(z => z.id === zId)?.account?.name || accounts.find(a => a.id === selectedAccount)?.name || '-',
+                        accountName: activeZones.find(z => z.id === zId)?.account?.name || accounts.find(a => a.id === selectedAccount || a.id === modalAccountId)?.name || '-',
                         startDate: batchStartDate,
                         endDate: batchEndDate,
                         dnsRecords: localDnsRecords,
@@ -4727,7 +4846,7 @@ export default function GDCCPage() {
                         updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 85, 'Packing .doc and adding to .zip...');
 
                         const zoneSectionHtml = await getZoneSectionHtml(currentZoneId);
-                        let combinedBody = `${zoneSectionHtml}<div class="page-break"></div>${reportHtml}`;
+                        let combinedBody = `${zoneSectionHtml}<div style="page-break-after: always;"></div>${reportHtml}`;
 
                         // Use exportThaiDigits parameter from the toggle
                         let useThaiDigits = exportThaiDigits;
@@ -4758,6 +4877,11 @@ export default function GDCCPage() {
                 }
 
                 updateOverlay('Finalizing...', selectedHosts.length, selectedHosts.length, 100, 'Generating .zip file...');
+                const zipBase64 = await zip.generateAsync({ type: 'base64' });
+                if (typeof window !== 'undefined') {
+                    window.__lastBatchReportZIPBase64 = zipBase64;
+                    window.__lastBatchReportReady = true;
+                }
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 const zipName = `batch_reports_separated_${new Date().getTime()}.zip`;
 
@@ -4970,8 +5094,11 @@ export default function GDCCPage() {
                     const hostTotalTime = ((performance.now() - hostStartTime) / 1000).toFixed(2);
                     console.log(`✅ Host [${i + 1}/${selectedHosts.length}] completed in ${hostTotalTime}s`);
 
-                    // Add to combined HTML with page break
-                    combinedHtml += `<div class="${i === selectedHosts.length - 1 ? '' : 'page-break'}">${reportHtml}</div>`;
+                    // Add to combined HTML without wrapping in page-break div (which html-to-docx discards)
+                    combinedHtml += `<div>${reportHtml}</div>`;
+                    if (i < selectedHosts.length - 1) {
+                        combinedHtml += `<div style="page-break-after: always;"></div>`;
+                    }
                     processedCount++;
 
                 } catch (hostError) {
@@ -5011,13 +5138,15 @@ export default function GDCCPage() {
                     window.__lastBatchReportReady = true;
                 }
 
-                const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-                const a = document.createElement("a");
-                a.href = source;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                if (!isWorkerMode) {
+                    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+                    const a = document.createElement("a");
+                    a.href = source;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
             } catch (error) {
                 console.error('Batch Word export error:', error);
                 throw error;
@@ -5397,6 +5526,12 @@ export default function GDCCPage() {
         });
     }, []);
 
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.__handleBatchReport = handleBatchReport;
+        }
+    }, [handleBatchReport]);
+
     // -- TEMPLATE MANAGEMENT STATE --
     const [isManageTemplateModalOpen, setIsManageTemplateModalOpen] = useState(false);
     const [templateToEditId, setTemplateToEditId] = useState('default');
@@ -5723,6 +5858,16 @@ export default function GDCCPage() {
                                         >
                                             <Users className="w-3 h-3" /> Department
                                         </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsBackgroundJobsModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
+                                        >
+                                            <Clock className="w-3 h-3" /> Background Jobs
+                                        </button>
                                         </div>
                                     {/* Theme Settings (Refactored to Submenu) */}
                                     <div className="relative">
@@ -5847,6 +5992,13 @@ export default function GDCCPage() {
                 isOpen={isAutoReportModalOpen}
                 onClose={() => setIsAutoReportModalOpen(false)}
                 accounts={accounts}
+                theme={theme}
+                currentUser={currentUser}
+            />
+
+            <BackgroundJobsModal
+                isOpen={isBackgroundJobsModalOpen}
+                onClose={() => setIsBackgroundJobsModalOpen(false)}
                 theme={theme}
                 currentUser={currentUser}
             />
