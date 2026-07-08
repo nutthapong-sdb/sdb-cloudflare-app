@@ -25,7 +25,7 @@ const { log, colors, BASE_URL } = require('../libs/ui-helper');
             subdomains: ['service.sesalpglpn.go.th'],
             startDate: '2026-06-18',
             endDate: '2026-06-24',
-            templateId: '1783484869911',
+            templateId: 'default',
             promotedHosts: [],
             exportSeparated: false,
             exportThaiDigits: false,
