@@ -40,6 +40,29 @@ export async function POST(request) {
 
         // Pre-process HTML content to convert local image URLs into base64 strings so they render in the downloaded Word file
         if (html) {
+            // Clean up any tables nested inside p, span, or div tags, which html-to-docx would discard
+            let cleanedHtml = html;
+            let previousHtml;
+            do {
+                previousHtml = cleanedHtml;
+                cleanedHtml = cleanedHtml.replace(/<p[^>]*>\s*(<table[\s\S]*?<\/table>)\s*<\/p>/gi, '$1');
+                cleanedHtml = cleanedHtml.replace(/<span[^>]*>\s*(<table[\s\S]*?<\/table>)\s*<\/span>/gi, '$1');
+                cleanedHtml = cleanedHtml.replace(/<div[^>]*>\s*(<table[\s\S]*?<\/table>)\s*<\/div>/gi, '$1');
+            } while (cleanedHtml !== previousHtml);
+            
+            // Clean up any inline style width on td/th elements to prevent html-to-docx crash
+            // We find any <td style="... width: XXX; ..."> and convert it to <td style="..." width="XXX">
+            cleanedHtml = cleanedHtml.replace(/(<(?:td|th)\b[^>]*\bstyle=["'])([^"']*?)\bwidth:\s*([^;]+);?\s*([^"']*)(["'])/gi, (match, prefix, styleStart, widthVal, styleEnd, suffix) => {
+                const newStyle = (styleStart + styleEnd).trim().replace(/;\s*;/g, ';');
+                if (match.includes(' width=')) {
+                    return `${prefix}${newStyle}${suffix}`;
+                } else {
+                    return `${prefix}${newStyle}${suffix} width="${widthVal.trim()}"`;
+                }
+            });
+
+            html = cleanedHtml;
+
             const fsNode = require('fs');
             const pathNode = require('path');
             const publicDir = pathNode.join(process.cwd(), 'public');
@@ -53,6 +76,9 @@ export async function POST(request) {
             
             while ((match = imgTagRegex.exec(html)) !== null) {
                 let rawSrc = match[1];
+                if (rawSrc.startsWith('data:')) {
+                    continue;
+                }
                 console.log(`🔍 Found image tag with src: "${rawSrc}"`);
                 
                 // Decode URL entities (e.g. %20, %3F, etc.)
