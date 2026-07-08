@@ -1370,6 +1370,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             init={{
                                                 height: '100%',
                                                 menubar: false,
+                                                font_family_formats: 'TH Sarabun=TH SarabunPSK, Sarabun, sans-serif; Arial=arial,helvetica,sans-serif; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times;',
+                                                content_style: '@import url(\'https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap\'); body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 plugins: [
                                                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
@@ -1379,8 +1381,6 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                     'bold italic forecolor | alignleft aligncenter ' +
                                                     'alignright alignjustify | bullist numlist outdent indent | ' +
                                                     'image table | removeformat | help',
-                                                line_height_formats: '1 1.15 1.5 2 2.5 3',
-                                                content_style: 'body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 forced_root_block: 'p',
                                                 nonbreaking_force_tab: true,
                                                 image_title: true,
