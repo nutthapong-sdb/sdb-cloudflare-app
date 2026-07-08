@@ -32,8 +32,11 @@ ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
-# Install LibreOffice and standard fonts for server-side HTML to DOCX conversion
-RUN apk add --no-cache libreoffice font-cantarell ttf-dejavu ttf-droid ttf-freefont ttf-liberation
+# Configure Puppeteer to use Alpine's system Chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Install Chromium, LibreOffice, and standard fonts for server-side HTML to DOCX and Puppeteer screenshotting
+RUN apk add --no-cache chromium libreoffice font-cantarell ttf-dejavu ttf-droid ttf-freefont ttf-liberation
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
