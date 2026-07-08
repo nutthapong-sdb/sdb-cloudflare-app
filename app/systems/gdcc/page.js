@@ -1031,7 +1031,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "/* Define Page Size and Margins (Standard) */" +
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; white-space: pre-wrap; }" +
+            "body { font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; white-space: pre-wrap; }" +
             "img { max-width: 100%; height: auto; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
@@ -4415,7 +4415,7 @@ export default function GDCCPage() {
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
+            "body { font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +
@@ -4430,7 +4430,7 @@ export default function GDCCPage() {
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
+            "body { font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 16pt; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +

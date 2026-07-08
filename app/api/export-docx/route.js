@@ -121,7 +121,8 @@ export async function POST(request) {
             console.log('🔄 Converting to DOCX using html-to-docx...');
             // html-to-docx returns a Buffer/Uint8Array
             docxBuffer = await HTMLtoDOCX(String(html), null, {
-                // Keep defaults; avoid fancy options for stability
+                font: 'TH Sarabun PSK',
+                fontSize: 32
             });
         } catch (e) {
             console.warn('html-to-docx failed, falling back to LibreOffice:', e?.message || e);
