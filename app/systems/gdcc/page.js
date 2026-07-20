@@ -3360,6 +3360,129 @@ const DEFAULT_CONFIG = {
     subDomain: ""
 };
 
+export async function generateDashboardImages(imgData, parentElement) {
+    if (!imgData || !parentElement) {
+        return { main: imgData };
+    }
+
+    const findCardByTitle = (parent, title) => {
+        const divs = Array.from(parent.querySelectorAll('div, p, span, h3, h4'));
+        const target = divs.find(d => {
+            const txt = (d.textContent || '').trim().toLowerCase();
+            return txt === title.toLowerCase();
+        });
+        if (target) {
+            let p = target.parentElement;
+            while (p && p !== parent) {
+                if (p.className.includes('border') || p.className.includes('bg-') || p.className.includes('rounded')) {
+                    return p;
+                }
+                p = p.parentElement;
+            }
+            return target;
+        }
+        return null;
+    };
+
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const parentRect = parentElement.getBoundingClientRect();
+                const scaleX = img.width / parentRect.width;
+                const scaleY = img.height / parentRect.height;
+
+                const cropElement = (elOrRect, padding = 12) => {
+                    let rect;
+                    if (elOrRect && elOrRect.getBoundingClientRect) {
+                        rect = elOrRect.getBoundingClientRect();
+                    } else {
+                        rect = elOrRect;
+                    }
+                    if (!rect) return null;
+
+                    const left = Math.max(0, rect.left - parentRect.left - padding);
+                    const top = Math.max(0, rect.top - parentRect.top - padding);
+                    const width = Math.min(parentRect.width - left, rect.width + padding * 2);
+                    const height = Math.min(parentRect.height - top, rect.height + padding * 2);
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width * scaleX;
+                    canvas.height = height * scaleY;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(
+                        img,
+                        left * scaleX,
+                        top * scaleY,
+                        width * scaleX,
+                        height * scaleY,
+                        0,
+                        0,
+                        canvas.width,
+                        canvas.height
+                    );
+                    return canvas.toDataURL('image/jpeg', 0.85);
+                };
+
+                const cropCombined = (el1, el2, padding = 12) => {
+                    if (!el1 && !el2) return null;
+                    if (!el1) return cropElement(el2, padding);
+                    if (!el2) return cropElement(el1, padding);
+
+                    const r1 = el1.getBoundingClientRect();
+                    const r2 = el2.getBoundingClientRect();
+
+                    const left = Math.min(r1.left, r2.left);
+                    const top = Math.min(r1.top, r2.top);
+                    const right = Math.max(r1.right, r2.right);
+                    const bottom = Math.max(r1.bottom, r2.bottom);
+
+                    const combinedRect = {
+                        left,
+                        top,
+                        width: right - left,
+                        height: bottom - top
+                    };
+                    return cropElement(combinedRect, padding);
+                };
+
+                const cardTotalReq = findCardByTitle(parentElement, 'Total Requests');
+                const cardTrafficVol = findCardByTitle(parentElement, 'Traffic Volume');
+                const cardAvgResponse = findCardByTitle(parentElement, 'Avg Response Time (TTFB)');
+                const cardBlockedEvents = findCardByTitle(parentElement, 'Blocked Events');
+                const cardFwActions = findCardByTitle(parentElement, 'Top Firewall Actions');
+                const cardTopUrls = findCardByTitle(parentElement, 'Top URLs');
+                const cardTopClientIps = findCardByTitle(parentElement, 'Top Client IPs');
+                const cardTopUserAgents = findCardByTitle(parentElement, 'Top User Agents');
+                const cardAttackPrevention = findCardByTitle(parentElement, 'Attack Prevention History (Block/Challenge)');
+                const cardTopWafRules = findCardByTitle(parentElement, 'Top WAF Rules');
+                const cardTop5Attackers = findCardByTitle(parentElement, 'Top 5 Attackers');
+
+                resolve({
+                    main: imgData,
+                    totalRequestsTrafficVolume: cropCombined(cardTotalReq, cardTrafficVol),
+                    avgResponseTime: cropElement(cardAvgResponse),
+                    blockedEventsFirewallActions: cropCombined(cardBlockedEvents, cardFwActions),
+                    topUrls: cropElement(cardTopUrls),
+                    topClientIps: cropElement(cardTopClientIps),
+                    topUserAgents: cropElement(cardTopUserAgents),
+                    attackPreventionHistory: cropElement(cardAttackPrevention),
+                    topWafRules: cropElement(cardTopWafRules),
+                    top5Attackers: cropElement(cardTop5Attackers)
+                });
+            } catch (err) {
+                console.error('Error generating cropped dashboard images:', err);
+                resolve({ main: imgData });
+            }
+        };
+        img.onerror = (err) => {
+            console.error('Error loading image for dashboard crops:', err);
+            resolve({ main: imgData });
+        };
+        img.src = imgData;
+    });
+}
+
 // --- MAIN COMPONENT ---
 
 export default function GDCCPage() {
@@ -4495,6 +4618,7 @@ export default function GDCCPage() {
 
             // Generate Cover Page if we have a defaultZoneId
             if (defaultZoneId) {
+                console.log('📸 [Cover Page Start] entry:', { defaultZoneId, selectedHosts, shouldGenerateCover: !(selectedHosts.length > 0 && promotedHosts.length > 0) });
                 // Prepare basic data for Domain Report using current state/props + zoneSettings if available
                 updateOverlay('Preparing Document...', 0, selectedHosts.length, 5, 'Fetching zone configurations...');
 
@@ -4504,7 +4628,6 @@ export default function GDCCPage() {
                 const localDnsRecords = defaultZoneData.dns;
                 const localZoneSettings = defaultZoneData.settings;
 
-                // Use verified LOCAL data
                 // Fetch Zone-Wide Stats FIRST (Fix: stats is not defined)
                 updateOverlay('Preparing Document...', 0, selectedHosts.length, 8, 'Fetching Zone-wide Statistics...');
                 const zoneStats = await fetchAndApplyTrafficData('ALL_SUBDOMAINS', defaultZoneId, batchStartDate, batchEndDate) || {
@@ -4516,6 +4639,59 @@ export default function GDCCPage() {
                     zoneWideTopCountriesBytes: [],
                     fwEvents: { total: 0, managed: 0, custom: 0, bic: 0, access: 0 }
                 };
+
+                let zoneImgData = null;
+                const isCoverNeeded = !(selectedHosts.length > 0 && promotedHosts.length > 0);
+                if (isCoverNeeded || selectedHosts.length === 0) {
+                    console.log('📸 [Cover Capture] Starting cover page/domain screenshot capture flow...');
+                    updateOverlay('Preparing Document...', 0, selectedHosts.length, 10, 'Rendering Domain Overview Dashboard...');
+                    setSelectedSubDomain('ALL_SUBDOMAINS');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    console.log('📸 [Cover Capture] dashboardRef.current is:', dashboardRef.current ? 'PRESENT' : 'NULL');
+                    if (dashboardRef.current) {
+                        updateOverlay('Preparing Document...', 0, selectedHosts.length, 15, 'Capturing Domain Overview Snapshot...');
+                        try {
+                            const captureWidth = dashboardRef.current.scrollWidth || 1200;
+                            const captureHeight = dashboardRef.current.scrollHeight || 800;
+                            console.log(`📸 [Cover Capture] captureWidth: ${captureWidth}, captureHeight: ${captureHeight}. calling htmlToImage.toJpeg...`);
+                            let rawImg = await Promise.race([
+                                new Promise(async (resolve, reject) => {
+                                    try {
+                                        const res = await htmlToImage.toJpeg(dashboardRef.current, {
+                                            quality: 0.6,
+                                            backgroundColor: '#000000',
+                                            pixelRatio: 1.0,
+                                            width: captureWidth,
+                                            height: captureHeight,
+                                            cacheBust: true,
+                                            style: {
+                                                width: `${captureWidth}px`,
+                                                height: `${captureHeight}px`
+                                            }
+                                        });
+                                        console.log('📸 [Cover Capture] htmlToImage.toJpeg completed successfully!');
+                                        resolve(res);
+                                    } catch (err) {
+                                        console.error('📸 [Cover Capture] htmlToImage.toJpeg failed:', err);
+                                        reject(err);
+                                    }
+                                }),
+                                new Promise((_, reject) => setTimeout(() => {
+                                    console.warn('📸 [Cover Capture] 45s screenshot timeout fired!');
+                                    reject(new Error('Domain screenshot timeout (45s)'));
+                                }, 45000))
+                            ]);
+                            if (rawImg) {
+                                console.log('📸 [Cover Capture] htmlToImage returned image data. Generating cropped card images...');
+                                zoneImgData = await generateDashboardImages(rawImg, dashboardRef.current);
+                                console.log('📸 [Cover Capture] generateDashboardImages completed successfully!');
+                            }
+                        } catch (err) {
+                            console.error('📸 [Cover Capture] Error capturing domain overview dashboard screenshot:', err);
+                        }
+                    }
+                }
 
                 const domainReportData = {
                     domain: activeZones.find(z => z.id === defaultZoneId)?.name,
@@ -4593,11 +4769,11 @@ export default function GDCCPage() {
                     fwEvents: zoneStats.fwEvents
                 };
 
-                let domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
+                let domainReportHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), zoneImgData || dashboardImage);
 
                 // Add Middle Report to the Domain Report section (once)
                 if (middleReportTemplateContent) {
-                    const middleHtml = processTemplate(middleReportTemplateContent, domainReportData, new Date(), null);
+                    const middleHtml = processTemplate(middleReportTemplateContent, domainReportData, new Date(), zoneImgData || dashboardImage);
                     domainReportHtml = `${domainReportHtml}${middleHtml}`;
                 }
 
@@ -4726,9 +4902,9 @@ export default function GDCCPage() {
                         fwEvents: zoneStats.fwEvents
                     };
 
-                    let zoneHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), null);
+                    let zoneHtml = processTemplate(domainTemplateContent, domainReportData, new Date(), dashboardImage);
                     if (middleReportTemplateContent) {
-                        const middleHtml = processTemplate(middleReportTemplateContent, domainReportData, new Date(), null);
+                        const middleHtml = processTemplate(middleReportTemplateContent, domainReportData, new Date(), dashboardImage);
                         zoneHtml = `${zoneHtml}${middleHtml}`;
                     }
 
@@ -5976,8 +6152,8 @@ export default function GDCCPage() {
                     dnsRecords: dnsRecords || []
                 }}
                 dashboardImage={dashboardImage}
-                template={reportModalMode === 'static-template' ? staticReportTemplate : reportModalMode === 'middle-template' ? middleReportTemplate : reportTemplate}
-                onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : reportModalMode === 'middle-template' ? handleSaveMiddleTemplate : handleSaveTemplate}
+                template={reportModalMode === 'static-template' ? staticReportTemplate : reportModalMode === 'middle-template' ? middleReportTemplate : (selectedSubDomain === 'ALL_SUBDOMAINS' ? staticReportTemplate : reportTemplate)}
+                onSaveTemplate={reportModalMode === 'static-template' ? handleSaveStaticTemplate : reportModalMode === 'middle-template' ? handleSaveMiddleTemplate : (selectedSubDomain === 'ALL_SUBDOMAINS' ? handleSaveStaticTemplate : handleSaveTemplate)}
                 onGenerate={captureAndGenerateReport} // NEW PROP
                 mode={reportModalMode}
                 theme={theme}
