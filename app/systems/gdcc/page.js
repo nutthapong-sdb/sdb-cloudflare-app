@@ -514,8 +514,17 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@TOP_HOST_VAL': safeData.topHosts && safeData.topHosts.length > 0 ? safeData.topHosts[0].host : '-',
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
-        // Dashboard Screenshot Image
-        '@DASHBOARD_IMAGE': dashboardImage ? `<img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        // Dashboard Screenshot Images
+        '@DASHBOARD_IMAGE': (dashboardImage && typeof dashboardImage === 'string') ? `<img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" />` : (dashboardImage && dashboardImage.main) ? `<img src="${dashboardImage.main}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME': (dashboardImage && dashboardImage.totalRequestsTrafficVolume) ? `<img src="${dashboardImage.totalRequestsTrafficVolume}" alt="Total Requests and Traffic Volume" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_AVG_RESPONSE_TIME': (dashboardImage && dashboardImage.avgResponseTime) ? `<img src="${dashboardImage.avgResponseTime}" alt="Avg Response Time" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS': (dashboardImage && dashboardImage.blockedEventsFirewallActions) ? `<img src="${dashboardImage.blockedEventsFirewallActions}" alt="Blocked Events and Firewall Actions" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_URLS': (dashboardImage && dashboardImage.topUrls) ? `<img src="${dashboardImage.topUrls}" alt="Top URLs" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_CLIENT_IPS': (dashboardImage && dashboardImage.topClientIps) ? `<img src="${dashboardImage.topClientIps}" alt="Top Client IPs" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_USER_AGENTS': (dashboardImage && dashboardImage.topUserAgents) ? `<img src="${dashboardImage.topUserAgents}" alt="Top User Agents" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_ATTACK_PREVENTION_HISTORY': (dashboardImage && dashboardImage.attackPreventionHistory) ? `<img src="${dashboardImage.attackPreventionHistory}" alt="Attack Prevention History" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_WAF_RULES': (dashboardImage && dashboardImage.topWafRules) ? `<img src="${dashboardImage.topWafRules}" alt="Top WAF Rules" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_5_ATTACKERS': (dashboardImage && dashboardImage.top5Attackers) ? `<img src="${dashboardImage.top5Attackers}" alt="Top 5 Attackers" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -4795,63 +4804,7 @@ export default function GDCCPage() {
                                 ]);
 
                                 if (imgData && dashboardRef.current) {
-                                    console.log('✂️ [Capture Debug] Starting dynamic crop of Total Requests + Traffic Volume...');
-                                    try {
-                                        const cards = Array.from(dashboardRef.current.querySelectorAll('.pdf-card'));
-                                        const reqCard = cards.find(c => {
-                                            const h3 = c.querySelector('h3');
-                                            return h3 && h3.textContent.trim().toUpperCase().includes('TOTAL REQUESTS');
-                                        });
-                                        const trafficCard = cards.find(c => {
-                                            const h3 = c.querySelector('h3');
-                                            return h3 && h3.textContent.trim().toUpperCase().includes('TRAFFIC VOLUME');
-                                        });
-
-                                        if (reqCard && trafficCard) {
-                                            imgData = await new Promise((resolveCrop) => {
-                                                const img = new Image();
-                                                img.onload = () => {
-                                                    try {
-                                                        const parentRect = dashboardRef.current.getBoundingClientRect();
-                                                        const reqRect = reqCard.getBoundingClientRect();
-                                                        const trafficRect = trafficCard.getBoundingClientRect();
-
-                                                        const padding = 12;
-                                                        const left = Math.max(0, Math.min(reqRect.left, trafficRect.left) - parentRect.left - padding);
-                                                        const top = Math.max(0, Math.min(reqRect.top, trafficRect.top) - parentRect.top - padding);
-                                                        const right = Math.min(parentRect.width, Math.max(reqRect.right, trafficRect.right) - parentRect.left + padding);
-                                                        const bottom = Math.min(parentRect.height, Math.max(reqRect.bottom, trafficRect.bottom) - parentRect.top + padding);
-                                                        
-                                                        const w = right - left;
-                                                        const h = bottom - top;
-
-                                                        const canvas = document.createElement('canvas');
-                                                        canvas.width = w;
-                                                        canvas.height = h;
-                                                        
-                                                        const ctx = canvas.getContext('2d');
-                                                        ctx.drawImage(img, left, top, w, h, 0, 0, w, h);
-                                                        
-                                                        const croppedBase64 = canvas.toDataURL('image/jpeg', 0.85);
-                                                        console.log('✂️ [Capture Debug] Dynamic crop completed successfully!');
-                                                        resolveCrop(croppedBase64);
-                                                    } catch (err) {
-                                                        console.error('✂️ [Capture Debug] Canvas crop failed:', err);
-                                                        resolveCrop(imgData);
-                                                    }
-                                                };
-                                                img.onerror = (err) => {
-                                                    console.error('✂️ [Capture Debug] Image load failed for crop:', err);
-                                                    resolveCrop(imgData);
-                                                };
-                                                img.src = imgData;
-                                            });
-                                        } else {
-                                            console.warn('✂️ [Capture Warning] Could not find Total Requests or Traffic Volume card for crop.');
-                                        }
-                                    } catch (cropErr) {
-                                        console.error('✂️ [Capture Debug] Crop execution error:', cropErr);
-                                    }
+                                    imgData = await generateDashboardImages(imgData, dashboardRef.current);
                                 }
                             } catch (imgError) {
                                 const inactiveReason = getInactiveCaptureReason();
@@ -5068,63 +5021,7 @@ export default function GDCCPage() {
                             console.log('📸 [Capture Debug] Promise.race returned successfully!');
  
                             if (imgData && dashboardRef.current) {
-                                console.log('✂️ [Capture Debug] Starting dynamic crop of Total Requests + Traffic Volume...');
-                                try {
-                                    const cards = Array.from(dashboardRef.current.querySelectorAll('.pdf-card'));
-                                    const reqCard = cards.find(c => {
-                                        const h3 = c.querySelector('h3');
-                                        return h3 && h3.textContent.trim().toUpperCase().includes('TOTAL REQUESTS');
-                                    });
-                                    const trafficCard = cards.find(c => {
-                                        const h3 = c.querySelector('h3');
-                                        return h3 && h3.textContent.trim().toUpperCase().includes('TRAFFIC VOLUME');
-                                    });
-
-                                    if (reqCard && trafficCard) {
-                                        imgData = await new Promise((resolveCrop) => {
-                                            const img = new Image();
-                                            img.onload = () => {
-                                                try {
-                                                    const parentRect = dashboardRef.current.getBoundingClientRect();
-                                                    const reqRect = reqCard.getBoundingClientRect();
-                                                    const trafficRect = trafficCard.getBoundingClientRect();
-
-                                                    const padding = 12;
-                                                    const left = Math.max(0, Math.min(reqRect.left, trafficRect.left) - parentRect.left - padding);
-                                                    const top = Math.max(0, Math.min(reqRect.top, trafficRect.top) - parentRect.top - padding);
-                                                    const right = Math.min(parentRect.width, Math.max(reqRect.right, trafficRect.right) - parentRect.left + padding);
-                                                    const bottom = Math.min(parentRect.height, Math.max(reqRect.bottom, trafficRect.bottom) - parentRect.top + padding);
-                                                    
-                                                     const w = right - left;
-                                                     const h = bottom - top;
-
-                                                    const canvas = document.createElement('canvas');
-                                                    canvas.width = w;
-                                                    canvas.height = h;
-                                                    
-                                                    const ctx = canvas.getContext('2d');
-                                                    ctx.drawImage(img, left, top, w, h, 0, 0, w, h);
-                                                    
-                                                    const croppedBase64 = canvas.toDataURL('image/jpeg', 0.85);
-                                                    console.log('✂️ [Capture Debug] Dynamic crop completed successfully!');
-                                                    resolveCrop(croppedBase64);
-                                                } catch (err) {
-                                                    console.error('✂️ [Capture Debug] Canvas crop failed:', err);
-                                                    resolveCrop(imgData);
-                                                }
-                                            };
-                                            img.onerror = (err) => {
-                                                console.error('✂️ [Capture Debug] Image load failed for crop:', err);
-                                                resolveCrop(imgData);
-                                            };
-                                            img.src = imgData;
-                                        });
-                                    } else {
-                                        console.warn('✂️ [Capture Warning] Could not find Total Requests or Traffic Volume card for crop.');
-                                    }
-                                } catch (cropErr) {
-                                    console.error('✂️ [Capture Debug] Crop execution error:', cropErr);
-                                }
+                                imgData = await generateDashboardImages(imgData, dashboardRef.current);
                             }
 
                             const screenEnd = performance.now();
@@ -5768,7 +5665,8 @@ export default function GDCCPage() {
                 }
             });
 
-            setDashboardImage(imgData);
+            const dashboardImages = await generateDashboardImages(imgData, element);
+            setDashboardImage(dashboardImages);
 
             // Close the loading popup
             Swal.close();

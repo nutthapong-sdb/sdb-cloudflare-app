@@ -51,6 +51,15 @@ export const REPORT_VARIABLES = [
     { name: '@TOTAL_DATA_TRANSFER', desc: 'ปริมาณการโอนย้ายข้อมูลทั้งหมด (Data Transfer)', example: '2.46 TB', category: 'Stats' },
     { name: '@PAGE_BREAK@', desc: 'ตัวคั่นหน้ากระดาษ (Word)', example: '<br page-break.../>', category: 'Format' },
     { name: '@DASHBOARD_IMAGE@', desc: 'รูปภาพ Dashboard Snapshot', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME@', desc: 'รูปภาพการ์ด Total Requests + Traffic Volume', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_AVG_RESPONSE_TIME@', desc: 'รูปภาพการ์ด Avg Response Time (TTFB)', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS@', desc: 'รูปภาพการ์ด Blocked Events + Top Firewall Actions', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_TOP_URLS@', desc: 'รูปภาพการ์ด Top URLs', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_TOP_CLIENT_IPS@', desc: 'รูปภาพการ์ด Top Client IPs', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_TOP_USER_AGENTS@', desc: 'รูปภาพการ์ด Top User Agents', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_ATTACK_PREVENTION_HISTORY@', desc: 'รูปภาพการ์ด Attack Prevention History', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_TOP_WAF_RULES@', desc: 'รูปภาพการ์ด Top WAF Rules', example: '<img>', category: 'Format' },
+    { name: '@DASHBOARD_TOP_5_ATTACKERS@', desc: 'รูปภาพการ์ด Top 5 Attackers', example: '<img>', category: 'Format' },
     { name: '@TOC@', desc: 'สารบัญอัตโนมัติ (เลือกวางจุดใดก็ได้ในเทมเพลต)', example: '<div>...</div>', category: 'Format' },
 ];
 
