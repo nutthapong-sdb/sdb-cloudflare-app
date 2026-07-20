@@ -4659,9 +4659,9 @@ export default function GDCCPage() {
                                 new Promise(async (resolve, reject) => {
                                     try {
                                         const res = await htmlToImage.toJpeg(dashboardRef.current, {
-                                            quality: 0.6,
+                                            quality: 0.95,
                                             backgroundColor: '#000000',
-                                            pixelRatio: 1.0,
+                                            pixelRatio: 2.0,
                                             width: captureWidth,
                                             height: captureHeight,
                                             cacheBust: true,
@@ -4964,9 +4964,9 @@ export default function GDCCPage() {
                                 const captureHeight = dashboardRef.current.scrollHeight;
                                 imgData = await Promise.race([
                                     htmlToImage.toJpeg(dashboardRef.current, {
-                                        quality: 0.6,
+                                        quality: 0.95,
                                         backgroundColor: '#000000',
-                                        pixelRatio: 1.0,
+                                        pixelRatio: 2.0,
                                         width: captureWidth,
                                         height: captureHeight,
                                         cacheBust: true,
@@ -5168,9 +5168,9 @@ export default function GDCCPage() {
                                 new Promise(async (resolve, reject) => {
                                     try {
                                         const res = await htmlToImage.toJpeg(dashboardRef.current, {
-                                            quality: 0.6,
+                                            quality: 0.95,
                                             backgroundColor: '#000000',
-                                            pixelRatio: 1.0,
+                                            pixelRatio: 2.0,
                                             width: captureWidth,
                                             height: captureHeight,
                                             cacheBust: true,
@@ -5828,9 +5828,9 @@ export default function GDCCPage() {
             const captureWidth = element.scrollWidth;
             const captureHeight = element.scrollHeight;
             const imgData = await htmlToImage.toJpeg(element, {
-                quality: 0.8,
+                quality: 0.95,
                 backgroundColor: '#000000',
-                pixelRatio: 1.5,
+                pixelRatio: 2.0,
                 width: captureWidth,
                 height: captureHeight,
                 cacheBust: true,

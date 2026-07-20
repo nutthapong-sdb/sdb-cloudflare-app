@@ -49,6 +49,13 @@ async function selectGDCCDropdown(page, labelText, searchText) {
         const trigger = root.querySelector('div[tabindex="0"]');
         if (!trigger) return false;
 
+        // Wait for trigger text to load (not "Loading...")
+        for (let i = 0; i < 100; i++) {
+            const txt = (trigger.textContent || '').trim();
+            if (txt && !txt.includes('Loading...')) break;
+            await new Promise(r => setTimeout(r, 200));
+        }
+
         // Repeatedly click trigger every 300ms until options list is opened
         let container = null;
         for (let i = 0; i < 30; i++) {
