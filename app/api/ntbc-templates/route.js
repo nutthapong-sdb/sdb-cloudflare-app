@@ -38,16 +38,21 @@ export async function GET() {
                 const domainPath = path.join(templatesDir, `ntbc_t_${safeId}_domain.json`);
                 const middlePath = path.join(templatesDir, `ntbc_t_${safeId}_middle.json`);
                 
-                const [subExists, domainExists, middleExists] = await Promise.all([
-                    fs.access(subPath).then(() => true).catch(() => false),
-                    fs.access(domainPath).then(() => true).catch(() => false),
-                    fs.access(middlePath).then(() => true).catch(() => false)
-                ]);
+                // Read and check if all three files are valid JSON and contain a template structure
+                const fileChecks = await Promise.all([subPath, domainPath, middlePath].map(async (filePath) => {
+                    try {
+                        const content = await fs.readFile(filePath, 'utf8');
+                        const data = JSON.parse(content);
+                        return data !== null && typeof data === 'object';
+                    } catch (e) {
+                        return false;
+                    }
+                }));
 
-                if (subExists && domainExists && middleExists) {
+                if (fileChecks.every(check => check === true)) {
                     validTemplates.push(t);
                 } else {
-                    console.warn(`⚠️ NTBC Template ${t.name} (ID: ${t.id}) is missing physical files. Hiding from list.`);
+                    console.warn(`⚠️ NTBC Template ${t.name} (ID: ${t.id}) is missing physical files or has corrupt JSON. Hiding from list.`);
                 }
             } catch (e) {
                 // Skip if error checking

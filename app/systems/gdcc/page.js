@@ -4463,7 +4463,7 @@ export default function GDCCPage() {
                 middleReportTemplateContent = await loadMiddleTemplate(tid);
                 subReportTemplateContent = await loadTemplate(tid);
 
-                if (!domainTemplateContent || !subReportTemplateContent || middleReportTemplateContent === null) {
+                if (domainTemplateContent === null || subReportTemplateContent === null || middleReportTemplateContent === null) {
                     throw new Error('Template file is empty or invalid (ID: ' + tid + ')');
                 }
                 updateOverlay('Preparing Document...', 0, selectedHosts.length, 2, 'Loaded Report Templates');
