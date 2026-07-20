@@ -6,16 +6,6 @@ require('dotenv').config({ path: ['.env.local', '.env'] });
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8002';
 
-// Template file paths
-const dataDir = path.join(__dirname, '../app/data');
-const downloadsDir = path.join(__dirname, '../downloads');
-
-const subTemplatePath1 = path.join(dataDir, 'gdcc_reportTemplate.json');
-const staticTemplatePath1 = path.join(dataDir, 'gdcc_staticReportTemplate.json');
-
-const subTemplatePath2 = path.join(downloadsDir, 'gdcc_reportTemplate.json');
-const staticTemplatePath2 = path.join(downloadsDir, 'gdcc_staticReportTemplate.json');
-
 async function setupBrowser() {
     try {
         const dns = require('dns');
@@ -113,45 +103,7 @@ async function selectGDCCDropdown(page, labelText, searchText) {
 }
 
 async function run() {
-    // 0. Backup original templates
-    console.log('Backing up original template files...');
-    const originalSubTemplate1 = fs.existsSync(subTemplatePath1) ? fs.readFileSync(subTemplatePath1, 'utf8') : null;
-    const originalStaticTemplate1 = fs.existsSync(staticTemplatePath1) ? fs.readFileSync(staticTemplatePath1, 'utf8') : null;
-    const originalSubTemplate2 = fs.existsSync(subTemplatePath2) ? fs.readFileSync(subTemplatePath2, 'utf8') : null;
-    const originalStaticTemplate2 = fs.existsSync(staticTemplatePath2) ? fs.readFileSync(staticTemplatePath2, 'utf8') : null;
-
-    // Write E2E test templates containing the target placeholder
-    console.log('Writing test templates to filesystem (both host and container mounted paths)...');
-    const subJson = JSON.stringify({
-        template: `
-            <html>
-            <body>
-                <h1>Subdomain Report</h1>
-                <p>Total Requests + Traffic Volume:</p>
-                <div>@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME@</div>
-            </body>
-            </html>
-        `
-    }, null, 2);
-
-    const staticJson = JSON.stringify({
-        template: `
-            <html>
-            <body>
-                <h1>Domain Report (Static)</h1>
-                <p>Total Requests + Traffic Volume:</p>
-                <div>@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME@</div>
-            </body>
-            </html>
-        `
-    }, null, 2);
-
-    fs.writeFileSync(subTemplatePath1, subJson);
-    fs.writeFileSync(staticTemplatePath1, staticJson);
-    
-    fs.writeFileSync(subTemplatePath2, subJson);
-    fs.writeFileSync(staticTemplatePath2, staticJson);
-
+    console.log('Starting E2E verification using actual GDCC templates from system...');
     const browser = await setupBrowser();
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
@@ -203,12 +155,11 @@ async function run() {
         console.log('Waiting for dropdown labels to appear...');
         await page.waitForSelector('label', { visible: true, timeout: 15000 });
         console.log('Waiting 6 seconds for initial API load...');
-        await new Promise(r => setTimeout(r, 6000));
-
         console.log('Enabling worker mode in localStorage to force client-side generation...');
         await page.evaluate(() => {
             localStorage.setItem('gdcc_worker_mode', 'true');
         });
+        await new Promise(r => setTimeout(r, 6000));
 
         // Select Account and Zone
         await selectGDCCDropdown(page, 'Select Account', '7 Solutions');
@@ -243,13 +194,20 @@ async function run() {
         });
         await new Promise(r => setTimeout(r, 2000));
 
-        console.log('Explicitly choosing "Default Template" in modal select dropdown...');
+        console.log('Selecting "GDCC" template in select dropdown...');
         await page.evaluate(() => {
             const select = document.querySelector('select');
             if (select) {
-                select.value = 'default';
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                console.log('Set select dropdown value to "default"');
+                // Find option containing GDCC
+                const options = Array.from(select.querySelectorAll('option'));
+                const gdccOption = options.find(opt => opt.textContent.includes('GDCC'));
+                if (gdccOption) {
+                    select.value = gdccOption.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log(`Set select dropdown value to "${gdccOption.value}" (GDCC)`);
+                } else {
+                    console.log('GDCC option NOT found in select!');
+                }
             } else {
                 console.log('Select dropdown NOT found in modal!');
             }
@@ -278,19 +236,36 @@ async function run() {
         await page.waitForFunction(() => window.__lastBatchReportReady === true, { timeout: 60000 });
 
         const domainContent = await page.evaluate(() => window.__lastBatchReportHTML);
-        const isStaticTemplate = domainContent.includes('Domain Report (Static)');
-        const hasDomainImage = domainContent.includes('src="data:image/jpeg;base64,');
-        console.log(`  Is Domain Template used? ${isStaticTemplate}`);
-        console.log(`  Contains Base64 Image? ${hasDomainImage}`);
         
-        // Always save the generated domain report HTML for inspection
-        fs.writeFileSync(path.join(__dirname, '../debug_domain_report.html'), domainContent);
-        console.log(`Saved generated domain report HTML with base64 images to: debug_domain_report.html`);
+        // Verify all 9 cropped dashboard card variables are replaced and not present
+        const targetVariables = [
+            '@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME@',
+            '@DASHBOARD_AVG_RESPONSE_TIME@',
+            '@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS@',
+            '@DASHBOARD_TOP_URLS@',
+            '@DASHBOARD_TOP_CLIENT_IPS@',
+            '@DASHBOARD_TOP_USER_AGENTS@',
+            '@DASHBOARD_ATTACK_PREVENTION_HISTORY@',
+            '@DASHBOARD_TOP_WAF_RULES@',
+            '@DASHBOARD_TOP_5_ATTACKERS@'
+        ];
 
-        if (!isStaticTemplate || !hasDomainImage) {
-            console.log('Domain Report content preview:');
-            console.log(domainContent.substring(0, 2000));
-            throw new Error('Test Case 1 Failed: Image or Template incorrect.');
+        console.log('Verifying variable replacement...');
+        const missingVars = [];
+        targetVariables.forEach(v => {
+            if (domainContent.includes(v)) {
+                missingVars.push(v);
+            }
+        });
+
+        const base64Count = (domainContent.match(/src="data:image\/jpeg;base64,/g) || []).length +
+                            (domainContent.match(/src="data:image\/png;base64,/g) || []).length;
+
+        console.log(`  Missing variables found: ${missingVars.length === 0 ? 'None (All successfully replaced!)' : missingVars.join(', ')}`);
+        console.log(`  Contains Base64 Images? ${base64Count > 0} (${base64Count} images found)`);
+
+        if (missingVars.length > 0 || base64Count < 9) {
+            throw new Error(`Test Case 1 Failed: Expected all 9 variables replaced and base64 images present. Variables remaining: ${missingVars.length}, Base64 images found: ${base64Count}`);
         }
         console.log('✅ TEST CASE 1 PASSED!');
 
@@ -323,13 +298,19 @@ async function run() {
         });
         await new Promise(r => setTimeout(r, 2000));
 
-        console.log('Explicitly choosing "Default Template" in modal select dropdown...');
+        console.log('Selecting "GDCC" template in select dropdown...');
         await page.evaluate(() => {
             const select = document.querySelector('select');
             if (select) {
-                select.value = 'default';
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                console.log('Set select dropdown value to "default"');
+                const options = Array.from(select.querySelectorAll('option'));
+                const gdccOption = options.find(opt => opt.textContent.includes('GDCC'));
+                if (gdccOption) {
+                    select.value = gdccOption.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log(`Set select dropdown value to "${gdccOption.value}" (GDCC)`);
+                } else {
+                    console.log('GDCC option NOT found in select!');
+                }
             } else {
                 console.log('Select dropdown NOT found in modal!');
             }
@@ -358,8 +339,8 @@ async function run() {
         await page.waitForFunction(() => window.__lastBatchReportReady === true, { timeout: 60000 });
 
         const subContent = await page.evaluate(() => window.__lastBatchReportHTML);
-        const isSubTemplate = subContent.includes('Subdomain Report');
-        const hasSubImage = subContent.includes('src="data:image/jpeg;base64,');
+        const isSubTemplate = subContent.includes('ภาพรายงานการใช้งานและความปลอดภัย') || subContent.includes('Cloudflare');
+        const hasSubImage = subContent.includes('src="data:image/jpeg;base64,') || subContent.includes('src="data:image/png;base64,');
         console.log(`  Is Subdomain Template used? ${isSubTemplate}`);
         console.log(`  Contains Base64 Image? ${hasSubImage}`);
 
@@ -374,14 +355,6 @@ async function run() {
         process.exit(1);
     } finally {
         await browser.close();
-        
-        // Restore original templates
-        console.log('Restoring original templates...');
-        if (originalSubTemplate1) fs.writeFileSync(subTemplatePath1, originalSubTemplate1);
-        if (originalStaticTemplate1) fs.writeFileSync(staticTemplatePath1, originalStaticTemplate1);
-        if (originalSubTemplate2) fs.writeFileSync(subTemplatePath2, originalSubTemplate2);
-        if (originalStaticTemplate2) fs.writeFileSync(staticTemplatePath2, originalStaticTemplate2);
-        console.log('Restored original templates successfully.');
     }
 }
 
