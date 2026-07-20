@@ -211,6 +211,16 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                                     <Download className="w-3.5 h-3.5" /> Download
                                                 </a>
                                             )}
+                                            {job.status === 'failed' && (
+                                                <a
+                                                    href={`/reports/error_screenshot_${job.id}.png`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/30 text-red-400 border border-red-900/30 hover:border-red-900/50 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
+                                                >
+                                                    📸 View Screenshot
+                                                </a>
+                                            )}
                                             <button
                                                 onClick={(e) => handleDeleteJob(job.id, e)}
                                                 className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-500/20"
