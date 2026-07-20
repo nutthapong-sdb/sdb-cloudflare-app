@@ -4388,6 +4388,7 @@ export default function GDCCPage() {
             return;
         }
 
+        window.__isBatchGenerating = true;
         setIsGeneratingReport(true);
         setIsBatchModalOpen(false);
 
@@ -4646,7 +4647,7 @@ export default function GDCCPage() {
                     console.log('📸 [Cover Capture] Starting cover page/domain screenshot capture flow...');
                     updateOverlay('Preparing Document...', 0, selectedHosts.length, 10, 'Rendering Domain Overview Dashboard...');
                     setSelectedSubDomain('ALL_SUBDOMAINS');
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 4000));
                     
                     console.log('📸 [Cover Capture] dashboardRef.current is:', dashboardRef.current ? 'PRESENT' : 'NULL');
                     if (dashboardRef.current) {
@@ -4951,7 +4952,7 @@ export default function GDCCPage() {
 
                         // 2) Render settle + capture
                         updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 45, 'Capturing Dashboard Snapshot...');
-                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        await new Promise(resolve => setTimeout(resolve, 4000));
 
                         let imgData = null;
                         if (dashboardRef.current) {
@@ -5148,7 +5149,7 @@ export default function GDCCPage() {
 
                     // 2. Wait for animations and rendering
                     updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 40, 'Rendering Dashboard UI...');
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 4000));
 
                     // 3. Capture Screenshot
                     updateOverlay(host, i + 1, selectedHosts.length, baseProgress + 60, 'Capturing Dashboard Snapshot...');
@@ -5406,6 +5407,7 @@ export default function GDCCPage() {
             // Re-enable the button if an error occurs
             setIsGeneratingReport(false);
         } finally {
+            window.__isBatchGenerating = false;
             setIsGeneratingReport(false);
         }
     };
@@ -5677,6 +5679,10 @@ export default function GDCCPage() {
 
     // 4. Subdomain Selected -> Fetch Traffic
     useEffect(() => {
+        if (typeof window !== 'undefined' && window.__isBatchGenerating) {
+            console.log('🔄 [Trace] Skipping resetDashboardData in useEffect because __isBatchGenerating is true');
+            return;
+        }
         if (!selectedSubDomain) { resetDashboardData(); return; }
         // Manual Generation Requested: Do not auto-fetch on selection change
         // Only reset data to avoid showing stale data for wrong domain
