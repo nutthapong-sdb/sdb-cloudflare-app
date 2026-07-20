@@ -5195,6 +5195,10 @@ export default function GDCCPage() {
 
             console.log('Error details:', { message: errorMsg, stack: errorStack, fullError: error });
 
+            if (typeof window !== 'undefined') {
+                window.__lastBatchReportError = errorMsg;
+            }
+
             Swal.fire({
                 title: 'Batch Report Error',
                 html: `<div style="text-align: left;">

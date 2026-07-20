@@ -2189,7 +2189,35 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
         return () => { isMounted = false; };
     }, [selectedAccountId, isOpen]);
 
-    const handleSetDefaultAccount = () => { if(selectedAccountId) localStorage.setItem('ntbc:default:accountId', selectedAccountId); };
+    const handleSetDefaultAccount = (e) => {
+        console.log('--- handleSetDefaultAccount CALLED ---, selectedAccountId:', selectedAccountId);
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (selectedAccountId) {
+            localStorage.setItem('ntbc:default:accountId', selectedAccountId);
+            Swal.fire({
+                title: 'Default Account Set',
+                text: 'This account will be loaded by default in the future.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                background: theme?.modalBg || '#111827',
+                color: theme?.text || '#fff'
+            });
+        } else {
+            Swal.fire({
+                title: 'No Account Selected',
+                text: 'Please select an account first.',
+                icon: 'warning',
+                timer: 1500,
+                showConfirmButton: false,
+                background: theme?.modalBg || '#111827',
+                color: theme?.text || '#fff'
+            });
+        }
+    };
 
     const toggleZone = (zoneId) => {
         const next = new Set(selectedZones);
@@ -2254,7 +2282,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                     {/* Left Column: Selection */}
                     <div className="space-y-4">
                         <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} grid grid-cols-1 gap-4`}>
-                            <SearchableDropdown theme={theme} icon={<Key className="w-3.5 h-3.5 text-blue-400" />} label="1. Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name }))} value={selectedAccountId} onChange={setSelectedAccountId} rightAction={<button onClick={handleSetDefaultAccount} className="text-[10px] text-purple-400 uppercase">Set Default</button>} loading={loading && accounts.length === 0} />
+                            <SearchableDropdown theme={theme} icon={<Key className="w-3.5 h-3.5 text-blue-400" />} label="1. Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name }))} value={selectedAccountId} onChange={setSelectedAccountId} rightAction={<button type="button" onClick={handleSetDefaultAccount} className="text-[10px] text-purple-400 hover:text-purple-300 font-semibold cursor-pointer uppercase transition-colors">Set Default</button>} loading={loading && accounts.length === 0} />
                         </div>
                         
                         {/* Zones List */}

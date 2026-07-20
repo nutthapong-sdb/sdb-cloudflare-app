@@ -21,7 +21,40 @@ export async function GET() {
     try {
         await ensureDir();
         const content = await fs.readFile(registryFile, 'utf8');
-        return Response.json(JSON.parse(content));
+        const templates = JSON.parse(content);
+
+        // Filter out templates where the content files don't actually exist
+        const validTemplates = [];
+        for (const t of templates) {
+            if (t.id === 'default') {
+                validTemplates.push(t);
+                continue;
+            }
+            try {
+                const safeId = path.basename(t.id).replace(/[^a-zA-Z0-9_-]/g, '');
+                if (!safeId) continue;
+                
+                const subPath = path.join(templatesDir, `ntbc_t_${safeId}_sub.json`);
+                const domainPath = path.join(templatesDir, `ntbc_t_${safeId}_domain.json`);
+                const middlePath = path.join(templatesDir, `ntbc_t_${safeId}_middle.json`);
+                
+                const [subExists, domainExists, middleExists] = await Promise.all([
+                    fs.access(subPath).then(() => true).catch(() => false),
+                    fs.access(domainPath).then(() => true).catch(() => false),
+                    fs.access(middlePath).then(() => true).catch(() => false)
+                ]);
+
+                if (subExists && domainExists && middleExists) {
+                    validTemplates.push(t);
+                } else {
+                    console.warn(`⚠️ NTBC Template ${t.name} (ID: ${t.id}) is missing physical files. Hiding from list.`);
+                }
+            } catch (e) {
+                // Skip if error checking
+            }
+        }
+
+        return Response.json(validTemplates);
     } catch (error) {
         // If file doesn't exist, return default only
         return Response.json([{ id: 'default', name: 'NTBC Default' }]);

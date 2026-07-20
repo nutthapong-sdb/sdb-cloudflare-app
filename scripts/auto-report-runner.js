@@ -490,6 +490,12 @@ require('dotenv').config({ path: '.env.local' });
 
                 if (sourceHTML) break;
 
+                // Check for error
+                const errorMsg = await page.evaluate(() => window.__lastBatchReportError).catch(() => null);
+                if (errorMsg) {
+                    throw new Error(`Report generation failed: ${errorMsg}`);
+                }
+
                 if (Date.now() - lastDebugAt > 15000) {
                     const elapsed = Math.round((Date.now() - start) / 1000);
                     // Heartbeat check
