@@ -267,6 +267,31 @@ async function run() {
         if (missingVars.length > 0 || base64Count < 9) {
             throw new Error(`Test Case 1 Failed: Expected all 9 variables replaced and base64 images present. Variables remaining: ${missingVars.length}, Base64 images found: ${base64Count}`);
         }
+
+        // Save debug HTML
+        const htmlPath = path.join(__dirname, '../debug_domain_report.html');
+        fs.writeFileSync(htmlPath, domainContent);
+        console.log(`Saved generated domain report HTML with base64 images to: ${htmlPath}`);
+
+        // Export to Word docx
+        console.log('Calling API to export DOCX for Test Case 1...');
+        try {
+            const response = await axios.post(`${BASE_URL}/api/export-docx`, {
+                html: domainContent,
+                filename: 'gdcc_real_domain_report.docx',
+                title: 'GDCC Real Domain Report'
+            }, {
+                responseType: 'arraybuffer'
+            });
+
+            const docxBuffer = Buffer.from(response.data);
+            const destPath = path.join(__dirname, '../gdcc_real_domain_report.docx');
+            fs.writeFileSync(destPath, docxBuffer);
+            console.log(`✅ Word document successfully generated and saved to: ${destPath}`);
+        } catch (err) {
+            console.log('⚠️ Export DOCX API failed:', err.message || err);
+        }
+
         console.log('✅ TEST CASE 1 PASSED!');
 
         // --- TEST CASE 2: Subdomain Template ("app.7connect.co.th") ---
