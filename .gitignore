@@ -49,6 +49,10 @@ next-env.d.ts
 # Local runtime data (do not commit)
 /app/data/templates.json
 /app/data/templates/
+/downloads/templates.json
+/downloads/templates/
+*.docx
+*.html
 
 # SQLite transient files
 *.db-shm
