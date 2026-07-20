@@ -4793,6 +4793,66 @@ export default function GDCCPage() {
                                     }),
                                     new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (45s)')), 45000))
                                 ]);
+
+                                if (imgData && dashboardRef.current) {
+                                    console.log('✂️ [Capture Debug] Starting dynamic crop of Total Requests + Traffic Volume...');
+                                    try {
+                                        const cards = Array.from(dashboardRef.current.querySelectorAll('.pdf-card'));
+                                        const reqCard = cards.find(c => {
+                                            const h3 = c.querySelector('h3');
+                                            return h3 && h3.textContent.trim().toUpperCase().includes('TOTAL REQUESTS');
+                                        });
+                                        const trafficCard = cards.find(c => {
+                                            const h3 = c.querySelector('h3');
+                                            return h3 && h3.textContent.trim().toUpperCase().includes('TRAFFIC VOLUME');
+                                        });
+
+                                        if (reqCard && trafficCard) {
+                                            imgData = await new Promise((resolveCrop) => {
+                                                const img = new Image();
+                                                img.onload = () => {
+                                                    try {
+                                                        const parentRect = dashboardRef.current.getBoundingClientRect();
+                                                        const reqRect = reqCard.getBoundingClientRect();
+                                                        const trafficRect = trafficCard.getBoundingClientRect();
+
+                                                        const padding = 12;
+                                                        const left = Math.max(0, Math.min(reqRect.left, trafficRect.left) - parentRect.left - padding);
+                                                        const top = Math.max(0, Math.min(reqRect.top, trafficRect.top) - parentRect.top - padding);
+                                                        const right = Math.min(parentRect.width, Math.max(reqRect.right, trafficRect.right) - parentRect.left + padding);
+                                                        const bottom = Math.min(parentRect.height, Math.max(reqRect.bottom, trafficRect.bottom) - parentRect.top + padding);
+                                                        
+                                                        const w = right - left;
+                                                        const h = bottom - top;
+
+                                                        const canvas = document.createElement('canvas');
+                                                        canvas.width = w;
+                                                        canvas.height = h;
+                                                        
+                                                        const ctx = canvas.getContext('2d');
+                                                        ctx.drawImage(img, left, top, w, h, 0, 0, w, h);
+                                                        
+                                                        const croppedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                                                        console.log('✂️ [Capture Debug] Dynamic crop completed successfully!');
+                                                        resolveCrop(croppedBase64);
+                                                    } catch (err) {
+                                                        console.error('✂️ [Capture Debug] Canvas crop failed:', err);
+                                                        resolveCrop(imgData);
+                                                    }
+                                                };
+                                                img.onerror = (err) => {
+                                                    console.error('✂️ [Capture Debug] Image load failed for crop:', err);
+                                                    resolveCrop(imgData);
+                                                };
+                                                img.src = imgData;
+                                            });
+                                        } else {
+                                            console.warn('✂️ [Capture Warning] Could not find Total Requests or Traffic Volume card for crop.');
+                                        }
+                                    } catch (cropErr) {
+                                        console.error('✂️ [Capture Debug] Crop execution error:', cropErr);
+                                    }
+                                }
                             } catch (imgError) {
                                 const inactiveReason = getInactiveCaptureReason();
                                 if (inactiveReason) {
@@ -5006,6 +5066,66 @@ export default function GDCCPage() {
                                 })
                             ]);
                             console.log('📸 [Capture Debug] Promise.race returned successfully!');
+ 
+                            if (imgData && dashboardRef.current) {
+                                console.log('✂️ [Capture Debug] Starting dynamic crop of Total Requests + Traffic Volume...');
+                                try {
+                                    const cards = Array.from(dashboardRef.current.querySelectorAll('.pdf-card'));
+                                    const reqCard = cards.find(c => {
+                                        const h3 = c.querySelector('h3');
+                                        return h3 && h3.textContent.trim().toUpperCase().includes('TOTAL REQUESTS');
+                                    });
+                                    const trafficCard = cards.find(c => {
+                                        const h3 = c.querySelector('h3');
+                                        return h3 && h3.textContent.trim().toUpperCase().includes('TRAFFIC VOLUME');
+                                    });
+
+                                    if (reqCard && trafficCard) {
+                                        imgData = await new Promise((resolveCrop) => {
+                                            const img = new Image();
+                                            img.onload = () => {
+                                                try {
+                                                    const parentRect = dashboardRef.current.getBoundingClientRect();
+                                                    const reqRect = reqCard.getBoundingClientRect();
+                                                    const trafficRect = trafficCard.getBoundingClientRect();
+
+                                                    const padding = 12;
+                                                    const left = Math.max(0, Math.min(reqRect.left, trafficRect.left) - parentRect.left - padding);
+                                                    const top = Math.max(0, Math.min(reqRect.top, trafficRect.top) - parentRect.top - padding);
+                                                    const right = Math.min(parentRect.width, Math.max(reqRect.right, trafficRect.right) - parentRect.left + padding);
+                                                    const bottom = Math.min(parentRect.height, Math.max(reqRect.bottom, trafficRect.bottom) - parentRect.top + padding);
+                                                    
+                                                     const w = right - left;
+                                                     const h = bottom - top;
+
+                                                    const canvas = document.createElement('canvas');
+                                                    canvas.width = w;
+                                                    canvas.height = h;
+                                                    
+                                                    const ctx = canvas.getContext('2d');
+                                                    ctx.drawImage(img, left, top, w, h, 0, 0, w, h);
+                                                    
+                                                    const croppedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                                                    console.log('✂️ [Capture Debug] Dynamic crop completed successfully!');
+                                                    resolveCrop(croppedBase64);
+                                                } catch (err) {
+                                                    console.error('✂️ [Capture Debug] Canvas crop failed:', err);
+                                                    resolveCrop(imgData);
+                                                }
+                                            };
+                                            img.onerror = (err) => {
+                                                console.error('✂️ [Capture Debug] Image load failed for crop:', err);
+                                                resolveCrop(imgData);
+                                            };
+                                            img.src = imgData;
+                                        });
+                                    } else {
+                                        console.warn('✂️ [Capture Warning] Could not find Total Requests or Traffic Volume card for crop.');
+                                    }
+                                } catch (cropErr) {
+                                    console.error('✂️ [Capture Debug] Crop execution error:', cropErr);
+                                }
+                            }
 
                             const screenEnd = performance.now();
                         } catch (imgError) {
