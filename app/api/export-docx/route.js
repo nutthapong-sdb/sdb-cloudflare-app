@@ -60,6 +60,61 @@ export async function POST(request) {
                     return `${prefix}${newStyle}${suffix} width="${widthVal.trim()}"`;
                 }
             });
+            
+            // Ensure <table> tags are centered and have raw border attributes for LibreOffice compatibility
+            cleanedHtml = cleanedHtml.replace(/<table\b([^>]*)>/gi, (tableTag) => {
+                let tag = tableTag;
+                
+                // Add align="center" if not present
+                if (!/\balign=/i.test(tag)) {
+                    tag = tag.replace('<table', '<table align="center"');
+                }
+                
+                // Add border="1" if not present
+                if (!/\bborder=/i.test(tag)) {
+                    tag = tag.replace('<table', '<table border="1"');
+                }
+                
+                // Add inline border-collapse if style is present, or add a style attribute
+                if (/\bstyle=["']/i.test(tag)) {
+                    tag = tag.replace(/\bstyle=["']([^"']*)["']/i, (match, styleContent) => {
+                        let newStyle = styleContent;
+                        if (!/\bborder-collapse/i.test(newStyle)) {
+                            newStyle += '; border-collapse: collapse';
+                        }
+                        if (!/\bborder\s*:/i.test(newStyle)) {
+                            newStyle += '; border: 1px solid #000000';
+                        }
+                        return `style="${newStyle.trim().replace(/^;+/g, '').replace(/;+/g, ';')}"`;
+                    });
+                } else {
+                    tag = tag.replace('<table', '<table style="border-collapse: collapse; border: 1px solid #000000;"');
+                }
+                
+                return tag;
+            });
+
+            // Inline the border styles to all th/td tags to ensure LibreOffice renders all cell borders completely
+            cleanedHtml = cleanedHtml.replace(/<(td|th)\b([^>]*)>/gi, (cellTag, tagName, attributes) => {
+                let newCellTag = cellTag;
+                
+                if (/\bstyle=["']/i.test(newCellTag)) {
+                    newCellTag = newCellTag.replace(/\bstyle=["']([^"']*)["']/i, (match, styleContent) => {
+                        let newStyle = styleContent;
+                        if (!/\bborder\s*:/i.test(newStyle)) {
+                            newStyle += '; border: 1px solid #000000';
+                        }
+                        if (!/\bpadding\s*:/i.test(newStyle)) {
+                            newStyle += '; padding: 5px';
+                        }
+                        return `style="${newStyle.trim().replace(/^;+/g, '').replace(/;+/g, ';')}"`;
+                    });
+                } else {
+                    newCellTag = `<${tagName} ${attributes} style="border: 1px solid #000000; padding: 5px;">`;
+                }
+                
+                return newCellTag;
+            });
 
             // Normalize img tags to ensure width/height are in inline style (supported by html-to-docx)
             // and raw attributes (required by LibreOffice to avoid distortion)
