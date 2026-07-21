@@ -237,69 +237,48 @@ export async function POST(request) {
 
         let docxBuffer = null;
 
-        // ---------------------------------------------------------
-        // Cross-Platform Conversion Logic (Headless)
-        // ---------------------------------------------------------
-        // IMPORTANT: Do not use Microsoft Word/AppleScript here.
-        // That opens the Word app on the host and is not "normal download" behavior.
+        // 1) First try LibreOffice CLI. It has highest formatting/layout fidelity (respects line-height, margins, page breaks, etc.)
+        const tmpDir = path.join(os.tmpdir(), 'WordConversion');
+        await fs.mkdir(tmpDir, { recursive: true });
 
-        // 1) First try pure-JS HTML -> DOCX. No external apps/binaries.
+        const timestamp = Date.now();
+        const safeBaseName = `api_report_${timestamp}`;
+        const inputPath = path.join(tmpDir, `${safeBaseName}.html`);
+        const outputPath = path.join(tmpDir, `${safeBaseName}.docx`);
+        tempInputPath = inputPath;
+        tempOutputPath = outputPath;
+
         try {
-            console.log('🔄 Converting to DOCX using html-to-docx...');
-            // html-to-docx returns a Buffer/Uint8Array
-            docxBuffer = await HTMLtoDOCX(String(html), null, {
-                font: 'TH Sarabun PSK',
-                fontSize: 32
-            });
-        } catch (e) {
-            console.warn('html-to-docx failed, falling back to LibreOffice:', e?.message || e);
-            docxBuffer = null;
-        }
-
-        // 2) Try libreoffice-convert (in-memory, headless).
-        if (!docxBuffer) {
-            try {
-                console.log('🔄 Converting to DOCX using libreoffice-convert...');
-                const input = Buffer.from(String(html), 'utf-8');
-                docxBuffer = await convertAsync(input, '.docx');
-            } catch (e) {
-                console.warn('libreoffice-convert failed, falling back to soffice CLI:', e?.message || e);
-                docxBuffer = null;
-            }
-        }
-
-        // 3) Fallback to LibreOffice CLI if convertAsync isn't available.
-        if (!docxBuffer) {
-            const tmpDir = path.join(os.tmpdir(), 'WordConversion');
-            await fs.mkdir(tmpDir, { recursive: true });
-
-            const timestamp = Date.now();
-            const safeBaseName = `api_report_${timestamp}`;
-            const inputPath = path.join(tmpDir, `${safeBaseName}.html`);
-            const outputPath = path.join(tmpDir, `${safeBaseName}.docx`);
-            tempInputPath = inputPath;
-            tempOutputPath = outputPath;
-
+            console.log(`🔄 Writing temporary HTML for LibreOffice: ${inputPath}`);
             await fs.writeFile(inputPath, html, 'utf-8');
 
             const command = `soffice --headless --infilter="HTML Document" --convert-to "docx:MS Word 2007 XML" --outdir "${tmpDir}" "${inputPath}"`;
             console.log(`LibreOffice Command: ${command}`);
 
-            try {
-                const { stderr } = await execAsync(command, { env: { ...process.env, HOME: '/tmp' } });
-                if (stderr) console.warn(`LibreOffice Stderr: ${stderr}`);
-            } catch (cmdErr) {
-                console.error('LibreOffice Exec failed:', cmdErr);
-                throw new Error(`LibreOffice failed: ${cmdErr.message}`);
-            }
+            const { stderr } = await execAsync(command, { env: { ...process.env, HOME: '/tmp' } });
+            if (stderr) console.warn(`LibreOffice Stderr: ${stderr}`);
 
-            try {
-                await fs.access(outputPath);
-            } catch {
-                throw new Error('Conversion failed: Output file not created by LibreOffice.');
-            }
-
+            await fs.access(outputPath);
             docxBuffer = await fs.readFile(outputPath);
+            console.log('🔄 Conversion successful using LibreOffice CLI.');
+        } catch (loError) {
+            console.warn('LibreOffice CLI conversion failed or not available, falling back to html-to-docx:', loError?.message || loError);
+            docxBuffer = null;
+        }
+
+        // 2) Fallback to html-to-docx if LibreOffice is not available
+        if (!docxBuffer) {
+            try {
+                console.log('🔄 Converting to DOCX using html-to-docx...');
+                // html-to-docx returns a Buffer/Uint8Array
+                docxBuffer = await HTMLtoDOCX(String(html), null, {
+                    font: 'TH Sarabun PSK',
+                    fontSize: 32
+                });
+            } catch (e) {
+                console.error('html-to-docx conversion failed:', e?.message || e);
+                throw e;
+            }
         }
 
         console.log(`✅ API Conversion successful. Buffer length: ${docxBuffer.length}`);
