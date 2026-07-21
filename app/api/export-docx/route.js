@@ -292,6 +292,19 @@ export async function POST(request) {
                     console.log(`   ✅ Inlined successfully: "${rawSrc.substring(0, 60)}..."`);
                 }
             }
+            // Force TH Sarabun font-family on all elements to ensure all elements (including h1/h2/h3) render in TH Sarabun
+            const fontOverrideStyle = `<style>
+                * { font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif !important; }
+                h1, h2, h3, h4, h5, h6, p, span, div, table, tr, td, th, a, li, ul, ol {
+                    font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif !important;
+                }
+            </style>`;
+            if (modifiedHtml.includes('</head>')) {
+                modifiedHtml = modifiedHtml.replace('</head>', `${fontOverrideStyle}</head>`);
+            } else {
+                modifiedHtml = fontOverrideStyle + modifiedHtml;
+            }
+
             html = modifiedHtml;
         }
 
