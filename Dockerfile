@@ -36,7 +36,19 @@ ENV NODE_ENV production
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Install Chromium, LibreOffice, and standard fonts for server-side HTML to DOCX and Puppeteer screenshotting
-RUN apk add --no-cache chromium libreoffice font-cantarell ttf-dejavu ttf-droid ttf-freefont ttf-liberation
+RUN apk add --no-cache chromium libreoffice font-cantarell ttf-dejavu ttf-droid ttf-freefont ttf-liberation fontconfig
+
+# Download and install TH Sarabun PSK & New fonts for LibreOffice rendering
+RUN mkdir -p /usr/share/fonts/truetype/sarabun && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunNew.ttf" "https://github.com/epsilonxe/SIPAFonts/raw/master/THSarabunNew.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunNew-Bold.ttf" "https://github.com/epsilonxe/SIPAFonts/raw/master/THSarabunNew%20Bold.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunNew-Italic.ttf" "https://github.com/epsilonxe/SIPAFonts/raw/master/THSarabunNew%20Italic.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunNew-BoldItalic.ttf" "https://github.com/epsilonxe/SIPAFonts/raw/master/THSarabunNew%20BoldItalic.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunPSK-Regular.ttf" "https://github.com/SarabunConsortium/TH-Sarabun-PSK/raw/master/THSarabunPSK%20Regular.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunPSK-Bold.ttf" "https://github.com/SarabunConsortium/TH-Sarabun-PSK/raw/master/THSarabunPSK%20Bold.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunPSK-Italic.ttf" "https://github.com/SarabunConsortium/TH-Sarabun-PSK/raw/master/THSarabunPSK%20Italic.ttf" && \
+    wget -qO "/usr/share/fonts/truetype/sarabun/THSarabunPSK-BoldItalic.ttf" "https://github.com/SarabunConsortium/TH-Sarabun-PSK/raw/master/THSarabunPSK%20BoldItalic.ttf" && \
+    fc-cache -fv
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
