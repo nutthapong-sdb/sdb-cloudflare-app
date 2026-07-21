@@ -256,6 +256,17 @@ async function run() {
         });
         await new Promise(r => setTimeout(r, 1500));
 
+        // Reload page to reset all React states cleanly
+        log('Reloading page to cleanly reset React state for the second run...', colors.blue);
+        await page.reload({ waitUntil: 'networkidle2' });
+        await new Promise(r => setTimeout(r, 2000));
+
+        log('Re-selecting Account, Zone and Subdomains...', colors.blue);
+        await selectGDCCFilters(page, {
+            account_name: '7 Solutions',
+            zone_name: '7connect.co.th',
+            subdomain: 'ALL_SUBDOMAINS'
+        });
 
         // --- SUBCASE 2B: Set Width to 5px and Export ---
         await setImageSizeSettingInUI(5);

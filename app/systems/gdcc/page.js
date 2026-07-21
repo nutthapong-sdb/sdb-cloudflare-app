@@ -4752,7 +4752,7 @@ export default function GDCCPage() {
                 }
 
                 const domainReportData = {
-                    domain: (selectedHosts && selectedHosts.length > 0) ? selectedHosts.map(h => typeof h === 'string' ? h : (h.name || '')).join(', ') : "-",
+                    domain: (selectedHosts && selectedHosts.length > 0) ? selectedHosts.map(h => typeof h === 'string' ? h : (h.name || '')).join(', ') : (getZoneName(defaultZoneId, activeZones) || "-"),
                     totalRequests: zoneStats.totalRequests,
                     totalDataTransfer: zoneStats.totalDataTransfer,
                     pageViews: zoneStats.pageViews,
