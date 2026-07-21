@@ -6,6 +6,7 @@ import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
 import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates } from '@/app/utils/templateApi';
 import ManageTemplateModal from './ManageTemplateModal';
+import ImageSettingsModal from './ImageSettingsModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import BackgroundJobsModal from './BackgroundJobsModal';
@@ -27,6 +28,20 @@ import Swal from 'sweetalert2';
 import { THEMES } from '@/app/utils/themes';
 import { Editor } from '@tinymce/tinymce-react';
 import { REPORT_VARIABLES, STATIC_VARIABLES } from './variableDefinitions';
+const safeToJpeg = async (element, options) => {
+    console.log('📸 [safeToJpeg] called. window.__mockHtmlToImage exists:', typeof window !== 'undefined' && !!window.__mockHtmlToImage);
+    if (typeof window !== 'undefined' && window.__mockHtmlToImage) {
+        try {
+            const res = await window.__mockHtmlToImage(element, options);
+            console.log('📸 [safeToJpeg] mock returned successfully, length:', res ? res.length : 0);
+            return res;
+        } catch (e) {
+            console.error('📸 [safeToJpeg] mock threw an error:', e);
+            throw e;
+        }
+    }
+    return htmlToImage.toJpeg(element, options);
+};
 
 // --- CONSTANTS ---
 // --- CONSTANTS ---
@@ -358,6 +373,30 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Mode check removed here as we pass safeData specifically for processing
     let html = tmpl;
 
+    let imageWidths = {
+        '@DASHBOARD_IMAGE': 504,
+        '@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME': 504,
+        '@DASHBOARD_AVG_RESPONSE_TIME': 504,
+        '@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS': 504,
+        '@DASHBOARD_TOP_URLS': 504,
+        '@DASHBOARD_TOP_CLIENT_IPS': 504,
+        '@DASHBOARD_TOP_USER_AGENTS': 504,
+        '@DASHBOARD_ATTACK_PREVENTION_HISTORY': 504,
+        '@DASHBOARD_TOP_WAF_RULES': 504,
+        '@DASHBOARD_TOP_5_ATTACKERS': 504
+    };
+    if (typeof window !== 'undefined') {
+        try {
+            const stored = localStorage.getItem('gdcc:cropped-image-widths');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                imageWidths = { ...imageWidths, ...parsed };
+            }
+        } catch (e) {
+            console.error('Failed to load image widths:', e);
+        }
+    }
+
     const startDate = parseDateInLocalTime(safeData.startDate, false) || new Date(now.getTime() - 1440 * 60 * 1000);
     const rawEndDate = parseDateInLocalTime(safeData.endDate, true);
     const endDate = rawEndDate ? new Date(Math.min(rawEndDate.getTime(), now.getTime())) : now;
@@ -518,16 +557,16 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
         // Dashboard Screenshot Images
-        '@DASHBOARD_IMAGE': (dashboardImage && typeof dashboardImage === 'string') ? `<img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" />` : (dashboardImage && dashboardImage.main) ? `<img src="${dashboardImage.main}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME': (dashboardImage && dashboardImage.totalRequestsTrafficVolume) ? `<img src="${dashboardImage.totalRequestsTrafficVolume}" alt="Total Requests and Traffic Volume" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_AVG_RESPONSE_TIME': (dashboardImage && dashboardImage.avgResponseTime) ? `<img src="${dashboardImage.avgResponseTime}" alt="Avg Response Time" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS': (dashboardImage && dashboardImage.blockedEventsFirewallActions) ? `<img src="${dashboardImage.blockedEventsFirewallActions}" alt="Blocked Events and Firewall Actions" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_TOP_URLS': (dashboardImage && dashboardImage.topUrls) ? `<img src="${dashboardImage.topUrls}" alt="Top URLs" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_TOP_CLIENT_IPS': (dashboardImage && dashboardImage.topClientIps) ? `<img src="${dashboardImage.topClientIps}" alt="Top Client IPs" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_TOP_USER_AGENTS': (dashboardImage && dashboardImage.topUserAgents) ? `<img src="${dashboardImage.topUserAgents}" alt="Top User Agents" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_ATTACK_PREVENTION_HISTORY': (dashboardImage && dashboardImage.attackPreventionHistory) ? `<img src="${dashboardImage.attackPreventionHistory}" alt="Attack Prevention History" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_TOP_WAF_RULES': (dashboardImage && dashboardImage.topWafRules) ? `<img src="${dashboardImage.topWafRules}" alt="Top WAF Rules" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
-        '@DASHBOARD_TOP_5_ATTACKERS': (dashboardImage && dashboardImage.top5Attackers) ? `<img src="${dashboardImage.top5Attackers}" alt="Top 5 Attackers" width="504" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_IMAGE': (dashboardImage && typeof dashboardImage === 'string') ? `<img src="${dashboardImage}" alt="Dashboard Snapshot" width="${imageWidths['@DASHBOARD_IMAGE']}" style="height: auto; display: block; margin: 0 auto;" />` : (dashboardImage && dashboardImage.main) ? `<img src="${dashboardImage.main}" alt="Dashboard Snapshot" width="${imageWidths['@DASHBOARD_IMAGE']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME': (dashboardImage && dashboardImage.totalRequestsTrafficVolume) ? `<img src="${dashboardImage.totalRequestsTrafficVolume}" alt="Total Requests and Traffic Volume" width="${imageWidths['@DASHBOARD_TOTAL_REQUESTS_TRAFFIC_VOLUME']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_AVG_RESPONSE_TIME': (dashboardImage && dashboardImage.avgResponseTime) ? `<img src="${dashboardImage.avgResponseTime}" alt="Avg Response Time" width="${imageWidths['@DASHBOARD_AVG_RESPONSE_TIME']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS': (dashboardImage && dashboardImage.blockedEventsFirewallActions) ? `<img src="${dashboardImage.blockedEventsFirewallActions}" alt="Blocked Events and Firewall Actions" width="${imageWidths['@DASHBOARD_BLOCKED_EVENTS_FIREWALL_ACTIONS']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_URLS': (dashboardImage && dashboardImage.topUrls) ? `<img src="${dashboardImage.topUrls}" alt="Top URLs" width="${imageWidths['@DASHBOARD_TOP_URLS']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_CLIENT_IPS': (dashboardImage && dashboardImage.topClientIps) ? `<img src="${dashboardImage.topClientIps}" alt="Top Client IPs" width="${imageWidths['@DASHBOARD_TOP_CLIENT_IPS']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_USER_AGENTS': (dashboardImage && dashboardImage.topUserAgents) ? `<img src="${dashboardImage.topUserAgents}" alt="Top User Agents" width="${imageWidths['@DASHBOARD_TOP_USER_AGENTS']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_ATTACK_PREVENTION_HISTORY': (dashboardImage && dashboardImage.attackPreventionHistory) ? `<img src="${dashboardImage.attackPreventionHistory}" alt="Attack Prevention History" width="${imageWidths['@DASHBOARD_ATTACK_PREVENTION_HISTORY']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_WAF_RULES': (dashboardImage && dashboardImage.topWafRules) ? `<img src="${dashboardImage.topWafRules}" alt="Top WAF Rules" width="${imageWidths['@DASHBOARD_TOP_WAF_RULES']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
+        '@DASHBOARD_TOP_5_ATTACKERS': (dashboardImage && dashboardImage.top5Attackers) ? `<img src="${dashboardImage.top5Attackers}" alt="Top 5 Attackers" width="${imageWidths['@DASHBOARD_TOP_5_ATTACKERS']}" style="height: auto; display: block; margin: 0 auto;" />` : '',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -880,7 +919,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
-    const currentTemplate = (template && typeof template === 'string') ? template : DEFAULT_TEMPLATE;
+    const currentTemplate = (typeof template === 'string') ? template : '';
 
     // Default to editing in static mode, preview in report mode
     const [isEditing, setIsEditing] = useState(false);
@@ -910,7 +949,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // Sync local template when prop changes
     useEffect(() => {
-        setLocalTemplate((template && typeof template === 'string') ? template : DEFAULT_TEMPLATE);
+        setLocalTemplate((typeof template === 'string') ? template : '');
     }, [template, isOpen]);
 
     // Sync mode when opening
@@ -994,7 +1033,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const domainDisplay = safeData.domain === 'ALL_SUBDOMAINS' ? `ทุก Subdomain ของ Domain ${safeData.zoneName || '...'}` : safeData.domain;
 
     const getProcessedHtml = (isForExport = false) => {
-        const baseTmpl = isEditing ? localTemplate : (template ?? DEFAULT_TEMPLATE);
+        const baseTmpl = isEditing ? localTemplate : (template ?? '');
         // Even for static template, we want to process date variables
         let html = processTemplate(baseTmpl, safeData, new Date(), dashboardImage);
         const hasTOCPlaceholder = html.includes('@TOC@') || html.includes('@TOC');
@@ -1251,8 +1290,18 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 
 
-    const handleSave = () => {
+    const handleSave = async () => {
         let contentToSave = localTemplate;
+
+        // Convert any TinyMCE blob images to Base64 before saving
+        if (editorRef.current) {
+            try {
+                await editorRef.current.uploadImages();
+                contentToSave = editorRef.current.getContent();
+            } catch (uploadError) {
+                console.error('Error uploading/inlining images in TinyMCE:', uploadError);
+            }
+        }
 
         // Cleanup empty table rows logic
         if (typeof DOMParser !== 'undefined') {
@@ -3364,6 +3413,9 @@ const DEFAULT_CONFIG = {
 };
 
 export async function generateDashboardImages(imgData, parentElement) {
+    if (typeof window !== 'undefined' && window.__mockGenerateDashboardImages) {
+        return window.__mockGenerateDashboardImages(imgData, parentElement);
+    }
     if (!imgData || !parentElement) {
         return { main: imgData };
     }
@@ -3499,7 +3551,7 @@ export default function GDCCPage() {
 
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-    const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
+    const [reportTemplate, setReportTemplate] = useState('');
     const [staticReportTemplate, setStaticReportTemplate] = useState(''); // Will be loaded from JSON file only
     const [middleReportTemplate, setMiddleReportTemplate] = useState('');
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) | 'static-template' | 'middle-template'
@@ -3508,6 +3560,7 @@ export default function GDCCPage() {
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
     const [isBackgroundJobsModalOpen, setIsBackgroundJobsModalOpen] = useState(false);
+    const [isImageSettingsModalOpen, setIsImageSettingsModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -4345,7 +4398,8 @@ export default function GDCCPage() {
                         promotedHosts: promotedHosts,
                         exportSeparated: exportSeparated,
                         exportThaiDigits: exportThaiDigits,
-                        userSession: currentUser
+                        userSession: currentUser,
+                        imageWidths: typeof window !== 'undefined' ? localStorage.getItem('gdcc:cropped-image-widths') : null
                     })
                 });
 
@@ -4662,7 +4716,7 @@ export default function GDCCPage() {
                             let rawImg = await Promise.race([
                                 new Promise(async (resolve, reject) => {
                                     try {
-                                        const res = await htmlToImage.toJpeg(dashboardRef.current, {
+                                        const res = await safeToJpeg(dashboardRef.current, {
                                             quality: 0.9,
                                             backgroundColor: '#000000',
                                             pixelRatio: 1.5,
@@ -4698,7 +4752,7 @@ export default function GDCCPage() {
                 }
 
                 const domainReportData = {
-                    domain: activeZones.find(z => z.id === defaultZoneId)?.name,
+                    domain: (selectedHosts && selectedHosts.length > 0) ? selectedHosts.map(h => typeof h === 'string' ? h : (h.name || '')).join(', ') : "-",
                     totalRequests: zoneStats.totalRequests,
                     totalDataTransfer: zoneStats.totalDataTransfer,
                     pageViews: zoneStats.pageViews,
@@ -4966,22 +5020,19 @@ export default function GDCCPage() {
                                 }
                                 const captureWidth = dashboardRef.current.scrollWidth;
                                 const captureHeight = dashboardRef.current.scrollHeight;
-                                imgData = await Promise.race([
-                                    htmlToImage.toJpeg(dashboardRef.current, {
-                                        quality: 0.9,
-                                        backgroundColor: '#000000',
-                                        pixelRatio: 1.5,
-                                        width: captureWidth,
-                                        height: captureHeight,
-                                        cacheBust: true,
-                                        skipAutoScale: true,
-                                        style: {
-                                            width: `${captureWidth}px`,
-                                            height: `${captureHeight}px`
-                                        }
-                                    }),
-                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (45s)')), 45000))
-                                ]);
+                                imgData = await safeToJpeg(dashboardRef.current, {
+                                    quality: 0.9,
+                                    backgroundColor: '#000000',
+                                    pixelRatio: 1.5,
+                                    width: captureWidth,
+                                    height: captureHeight,
+                                    cacheBust: true,
+                                    skipAutoScale: true,
+                                    style: {
+                                        width: `${captureWidth}px`,
+                                        height: `${captureHeight}px`
+                                    }
+                                });
 
                                 if (imgData && dashboardRef.current) {
                                     imgData = await generateDashboardImages(imgData, dashboardRef.current);
@@ -5171,7 +5222,7 @@ export default function GDCCPage() {
                             imgData = await Promise.race([
                                 new Promise(async (resolve, reject) => {
                                     try {
-                                        const res = await htmlToImage.toJpeg(dashboardRef.current, {
+                                                                                const res = await safeToJpeg(dashboardRef.current, {
                                             quality: 0.9,
                                             backgroundColor: '#000000',
                                             pixelRatio: 1.5,
@@ -5722,10 +5773,10 @@ export default function GDCCPage() {
 
         // Load Templates
         loadTemplate().then(tmpl => {
-            if (tmpl) setReportTemplate(tmpl);
+            if (tmpl !== null) setReportTemplate(tmpl);
         });
         loadStaticTemplate().then(tmpl => {
-            if (tmpl) setStaticReportTemplate(tmpl);
+            if (tmpl !== null) setStaticReportTemplate(tmpl);
         });
         loadMiddleTemplate().then(tmpl => {
             if (tmpl !== null) setMiddleReportTemplate(tmpl);
@@ -5836,7 +5887,7 @@ export default function GDCCPage() {
             const element = dashboardRef.current;
             const captureWidth = element.scrollWidth;
             const captureHeight = element.scrollHeight;
-            const imgData = await htmlToImage.toJpeg(element, {
+            const imgData = await safeToJpeg(element, {
                 quality: 0.9,
                 backgroundColor: '#000000',
                 pixelRatio: 1.5,
@@ -6075,6 +6126,16 @@ export default function GDCCPage() {
                                         >
                                             <Clock className="w-3 h-3" /> Background Jobs
                                         </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsImageSettingsModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
+                                        >
+                                            <Settings className="w-3 h-3" /> Image Size Settings
+                                        </button>
                                         </div>
                                     {/* Theme Settings (Refactored to Submenu) */}
                                     <div className="relative">
@@ -6220,6 +6281,12 @@ export default function GDCCPage() {
                 subdomains={subDomains.map(s => s.value)}
                 accounts={accounts}
                 currentUser={currentUser}
+            />
+
+            <ImageSettingsModal
+                isOpen={isImageSettingsModalOpen}
+                onClose={() => setIsImageSettingsModalOpen(false)}
+                theme={theme}
             />
 
             <SyncHistoryModal

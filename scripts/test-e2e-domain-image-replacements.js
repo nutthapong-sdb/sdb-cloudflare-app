@@ -179,26 +179,51 @@ async function run() {
             return Array.from(document.querySelectorAll('label, span')).some(el => el.textContent.includes('app.7connect.co.th'));
         }, { timeout: 20000 });
 
-        console.log('Waiting 5 additional seconds to ensure all metadata (Zone settings etc.) have finished loading...');
-        await new Promise(r => setTimeout(r, 5000));
-
-        console.log('Selecting "No Subdomain" checkbox...');
-        await page.evaluate(() => {
-            const label = Array.from(document.querySelectorAll('label')).find(el => el.textContent.includes('No Subdomain'));
-            if (label) {
-                console.log('Found No Subdomain label, clicking it directly...');
-                label.click();
-            } else {
-                console.log('No Subdomain label NOT found!');
-            }
-        });
+        console.log('Waiting for subdomains list and metadata to finish loading...');
+        await page.waitForFunction(() => {
+            const modal = document.querySelector('div[class*="fixed"]');
+            return modal && !modal.textContent.includes('Loading subdomains...') && !modal.textContent.includes('Loading...');
+        }, { timeout: 30000 });
         await new Promise(r => setTimeout(r, 2000));
+
+        console.log('Selecting "No Subdomain" checkbox with retry verification...');
+        for (let attempt = 1; attempt <= 5; attempt++) {
+            await page.evaluate(() => {
+                const label = Array.from(document.querySelectorAll('label')).find(el => el.textContent.includes('No Subdomain'));
+                if (label) {
+                    const span = label.querySelector('span');
+                    if (span) {
+                        console.log('Found No Subdomain label span, clicking...');
+                        span.click();
+                    } else {
+                        console.log('Found No Subdomain label, clicking directly...');
+                        label.click();
+                    }
+                } else {
+                    console.log('No Subdomain label NOT found!');
+                }
+            });
+            await new Promise(r => setTimeout(r, 1500));
+            const buttonText = await page.evaluate(() => {
+                const modal = document.querySelector('div[class*="fixed"]');
+                if (!modal) return '';
+                const buttons = Array.from(modal.querySelectorAll('button'));
+                const btn = buttons.find(b => b.textContent.includes('Generate Domain Report') || b.textContent.includes('Generate Report'));
+                return btn ? btn.textContent.trim() : '';
+            });
+            console.log(`Current modal export button text: "${buttonText}"`);
+            if (buttonText === 'Generate Domain Report') {
+                console.log('✅ Success: "Generate Domain Report" button detected!');
+                break;
+            } else {
+                console.log(`Attempt ${attempt}: "Generate Domain Report" button not detected yet, retrying click...`);
+            }
+        }
 
         console.log('Selecting "GDCC" template in select dropdown...');
         await page.evaluate(() => {
             const select = document.querySelector('select');
             if (select) {
-                // Find option containing GDCC
                 const options = Array.from(select.querySelectorAll('option'));
                 const gdccOption = options.find(opt => opt.textContent.includes('GDCC'));
                 if (gdccOption) {
@@ -212,7 +237,7 @@ async function run() {
                 console.log('Select dropdown NOT found in modal!');
             }
         });
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 2000));
 
         console.log('Resetting global worker variables...');
         await page.evaluate(() => {
@@ -220,20 +245,25 @@ async function run() {
             window.__lastBatchReportHTML = null;
         });
 
-        console.log('Clicking "Generate Domain Report" button...');
+        console.log('Clicking "Generate Domain Report" button inside the modal...');
         await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button'));
-            const exportBtn = buttons.find(b => b.textContent.includes('Generate Domain Report'));
+            const modal = document.querySelector('div[class*="fixed"]');
+            if (!modal) {
+                console.log('Modal wrapper not found!');
+                return;
+            }
+            const buttons = Array.from(modal.querySelectorAll('button'));
+            const exportBtn = buttons.find(b => b.textContent.trim() === 'Generate Domain Report');
             if (exportBtn) {
-                console.log('Found Generate Domain Report button, clicking...');
+                console.log('Found Generate Domain Report button in modal, clicking...');
                 exportBtn.click();
             } else {
-                console.log('Generate Domain Report button NOT found! Available buttons:', buttons.map(b => b.textContent.trim()).join(' | '));
+                console.log('Generate Domain Report button NOT found in modal! Available buttons:', buttons.map(b => b.textContent.trim()).join(' | '));
             }
         });
 
         console.log('Waiting for Domain Report completion in worker mode...');
-        await page.waitForFunction(() => window.__lastBatchReportReady === true, { timeout: 60000 });
+        await page.waitForFunction(() => window.__lastBatchReportReady === true, { timeout: 120000 });
 
         const domainContent = await page.evaluate(() => window.__lastBatchReportHTML);
         

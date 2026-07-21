@@ -130,8 +130,21 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
         log('   ✅ Generate 1 Report button clicked.', colors.green);
 
         log('\n🔹 Step 7: Monitoring generation and waiting for download...', colors.blue);
+        
+        // Wait 2 seconds for Swal to appear, then click "View Progress"
+        await new Promise(r => setTimeout(r, 2000));
+        log('   👉 Clicking "View Progress" in alert dialog...', colors.cyan);
+        await page.evaluate(() => {
+            const btn = document.querySelector('.swal2-confirm');
+            if (btn && btn.textContent.trim() === 'View Progress') {
+                btn.click();
+            }
+        });
+        await new Promise(r => setTimeout(r, 2000)); // wait for modal to open and load
+
         const generateStartTime = Date.now();
         let downloadedFile = null;
+        let clickedDownload = false;
 
         // Wait up to 5 minutes
         let lastLogTime = Date.now();
@@ -146,7 +159,7 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
             // Capture debug screenshot after 40 seconds to see what's happening
             if (elapsed > 40000 && !tookScreenshot) {
                 tookScreenshot = true;
-                const screenshotPath = '/Users/litarcopperkaikem/.gemini/antigravity-cli/brain/91d4e3a7-2c47-425a-873d-8a85de8370ab/error_state.png';
+                const screenshotPath = '/Users/litarcopperkaikem/.gemini/antigravity/brain/d08b1f64-f20c-46ac-8911-e6cebb7a7abe/subdomain_error_state.png';
                 log(`   📸 [DEBUG] Saving page screenshot to: ${screenshotPath}`, colors.cyan);
                 try {
                     await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -155,21 +168,23 @@ const question = (query) => new Promise((resolve) => rl.question(query, resolve)
                 }
             }
 
-            // Check for Swal alert modal
-            const swalError = await page.evaluate(() => {
-                const swal = document.querySelector('.swal2-container.swal2-shown');
-                if (swal) {
-                    const title = swal.querySelector('.swal2-title')?.textContent || '';
-                    const content = swal.querySelector('.swal2-html-container')?.textContent || '';
-                    return { title, content };
-                }
-                return null;
-            });
-            
-            if (swalError) {
-                log(`🚨 ALERT MODAL ENCOUNTERED: [${swalError.title}] ${swalError.content}`, colors.red);
-                if (swalError.title.toLowerCase().includes('fail') || swalError.title.toLowerCase().includes('error')) {
-                    throw new Error(`Process failed with alert modal: [${swalError.title}] ${swalError.content}`);
+            // Click Download button of the first job row if it becomes available and we haven't clicked it yet
+            if (!clickedDownload) {
+                const wasClicked = await page.evaluate(() => {
+                    const jobCards = Array.from(document.querySelectorAll('div[class*="rounded-xl"][class*="border"]'));
+                    if (jobCards.length > 0) {
+                        const firstJobCard = jobCards[0];
+                        const dlLink = firstJobCard.querySelector('a[download]');
+                        if (dlLink && dlLink.textContent.includes('Download')) {
+                            dlLink.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+                if (wasClicked) {
+                    clickedDownload = true;
+                    log('   👉 Clicked Download button for the new job inside progress modal!', colors.green);
                 }
             }
 

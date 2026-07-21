@@ -61,6 +61,66 @@ export async function POST(request) {
                 }
             });
 
+            // Normalize img tags to ensure width/height are in inline style (supported by html-to-docx)
+            cleanedHtml = cleanedHtml.replace(/<img\b([^>]*)>/gi, (imgTag) => {
+                const widthAttrMatch = imgTag.match(/\bwidth=["']?(\d+)(?:px)?["']?/i);
+                const heightAttrMatch = imgTag.match(/\bheight=["']?(\d+)(?:px|%)?["']?/i);
+                
+                let width = widthAttrMatch ? parseInt(widthAttrMatch[1], 10) : null;
+                let height = heightAttrMatch ? heightAttrMatch[1] : null;
+
+                const styleAttrMatch = imgTag.match(/\bstyle=["']([^"']*)["']/i);
+                let styleContent = styleAttrMatch ? styleAttrMatch[1] : '';
+
+                const styleWidthMatch = styleContent.match(/\bwidth:\s*([^;]+)/i);
+                const styleHeightMatch = styleContent.match(/\bheight:\s*([^;]+)/i);
+
+                if (styleWidthMatch) {
+                    const wVal = styleWidthMatch[1].trim();
+                    const numMatch = wVal.match(/^(\d+)(?:px)?$/);
+                    if (numMatch) {
+                        width = parseInt(numMatch[1], 10);
+                    } else {
+                        width = wVal;
+                    }
+                }
+                if (styleHeightMatch) {
+                    height = styleHeightMatch[1].trim();
+                }
+
+                let cleanedTag = imgTag
+                    .replace(/\bstyle=["']([^"']*)["']/gi, '')
+                    .replace(/\bwidth=["']?([^"']*)["']?/gi, '')
+                    .replace(/\bheight=["']?([^"']*)["']?/gi, '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .replace(/\/?>$/, '');
+
+                let newStyles = [];
+                
+                if (width !== null) {
+                    const widthStr = typeof width === 'number' ? `${width}px` : width;
+                    newStyles.push(`width: ${widthStr}`);
+                }
+                if (height !== null) {
+                    const heightStr = /^\d+$/.test(height) ? `${height}px` : height;
+                    newStyles.push(`height: ${heightStr}`);
+                }
+
+                if (styleContent) {
+                    const parts = styleContent.split(';');
+                    parts.forEach(part => {
+                        const trimmed = part.trim();
+                        if (trimmed && !trimmed.toLowerCase().startsWith('width') && !trimmed.toLowerCase().startsWith('height')) {
+                            newStyles.push(trimmed);
+                        }
+                    });
+                }
+
+                const finalStyle = newStyles.join('; ');
+                return `${cleanedTag} style="${finalStyle}" />`;
+            });
+
             html = cleanedHtml;
 
             const fsNode = require('fs');
@@ -69,58 +129,99 @@ export async function POST(request) {
             
             console.log("📄 Pre-processing HTML images for Word export...");
             
-            // Search for any img tag and inspect its src attribute
-            const imgTagRegex = /<img[^>]+src=["']([^"']+)["']/gi;
-            let match;
-            let modifiedHtml = html;
-            
-            while ((match = imgTagRegex.exec(html)) !== null) {
-                let rawSrc = match[1];
-                if (rawSrc.startsWith('data:')) {
-                    continue;
+            const inlineImageSource = async (src) => {
+                if (src.startsWith('data:')) {
+                    return src;
                 }
-                console.log(`🔍 Found image tag with src: "${rawSrc}"`);
                 
-                // Decode URL entities (e.g. %20, %3F, etc.)
-                let decodedSrc = rawSrc;
+                let decodedSrc = src;
                 try {
-                    decodedSrc = decodeURIComponent(rawSrc);
-                } catch (e) {
-                    console.warn(`Could not decode URI components of src: ${rawSrc}`);
-                }
-                
-                // Extract clean filename from query string or folder path
-                let imgFile = decodedSrc;
-                if (imgFile.includes('?')) {
-                    imgFile = imgFile.split('?')[0];
-                }
-                if (imgFile.includes('/')) {
-                    imgFile = imgFile.substring(imgFile.lastIndexOf('/') + 1);
-                }
-                
-                console.log(`   Cleaned filename target: "${imgFile}"`);
-                
-                if (imgFile.startsWith('captured-') && imgFile.endsWith('.png')) {
-                    const localImgPath = pathNode.join(publicDir, imgFile);
-                    console.log(`   Looking for local image file at: "${localImgPath}"`);
-                    
+                    decodedSrc = decodeURIComponent(src);
+                } catch (e) {}
+
+                // 1) Relative local paths (e.g. /tinymce/plugins/... or /captured-dashboard.png)
+                if (decodedSrc.startsWith('/') && !decodedSrc.startsWith('//')) {
+                    const localImgPath = pathNode.join(publicDir, decodedSrc);
                     try {
                         if (fsNode.existsSync(localImgPath)) {
                             const imgBuffer = fsNode.readFileSync(localImgPath);
-                            const imgBase64 = imgBuffer.toString('base64');
-                            
-                            // Replace this exact raw src attribute in the HTML
-                            const dataUri = `data:image/png;base64,${imgBase64}`;
-                            // Use direct string replace to be safe against regex escaping issues
-                            modifiedHtml = modifiedHtml.split(`src="${rawSrc}"`).join(`src="${dataUri}"`);
-                            modifiedHtml = modifiedHtml.split(`src='${rawSrc}'`).join(`src='${dataUri}'`);
-                            console.log(`   ✅ Successfully inlined local image "${imgFile}"`);
-                        } else {
-                            console.warn(`   ❌ Image file does NOT exist on disk: "${localImgPath}"`);
+                            const mimeType = decodedSrc.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                            return `data:${mimeType};base64,${imgBuffer.toString('base64')}`;
                         }
                     } catch (err) {
-                        console.warn(`   ❌ Error reading image file "${imgFile}":`, err.message);
+                        console.warn(`Failed to read local relative image: ${localImgPath}`, err.message);
                     }
+                }
+                
+                // 2) Absolute local host URLs or external remote URLs
+                if (decodedSrc.startsWith('http://') || decodedSrc.startsWith('https://')) {
+                    try {
+                        const urlObj = new URL(decodedSrc);
+                        // Check if it points to localhost or standard development port
+                        if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1' || urlObj.port === '8002') {
+                            const localImgPath = pathNode.join(publicDir, urlObj.pathname);
+                            if (fsNode.existsSync(localImgPath)) {
+                                const imgBuffer = fsNode.readFileSync(localImgPath);
+                                const mimeType = urlObj.pathname.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                                return `data:${mimeType};base64,${imgBuffer.toString('base64')}`;
+                            }
+                        }
+                    } catch (e) {}
+
+                    // Fetch remote or external URL with a timeout safety gate
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 5000);
+                        const res = await fetch(decodedSrc, { signal: controller.signal });
+                        clearTimeout(timeoutId);
+                        
+                        if (res.ok) {
+                            const arrayBuffer = await res.arrayBuffer();
+                            const buffer = Buffer.from(arrayBuffer);
+                            const mime = res.headers.get('content-type') || 'image/jpeg';
+                            return `data:${mime};base64,${buffer.toString('base64')}`;
+                        }
+                    } catch (err) {
+                        console.warn(`Failed to fetch remote image: ${decodedSrc}`, err.message);
+                    }
+                }
+
+                // 3) Fallback: search by basename directly in public folder (e.g. captured-dashboard.png)
+                let imgFile = decodedSrc;
+                if (imgFile.includes('?')) imgFile = imgFile.split('?')[0];
+                if (imgFile.includes('/')) imgFile = imgFile.substring(imgFile.lastIndexOf('/') + 1);
+                
+                const fallbackPath = pathNode.join(publicDir, imgFile);
+                try {
+                    if (fsNode.existsSync(fallbackPath)) {
+                        const imgBuffer = fsNode.readFileSync(fallbackPath);
+                        const mimeType = imgFile.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                        return `data:${mimeType};base64,${imgBuffer.toString('base64')}`;
+                    }
+                } catch (e) {}
+
+                return src;
+            };
+
+            const imgTagRegex = /<img[^>]+src=["']([^"']+)["']/gi;
+            let match;
+            let modifiedHtml = html;
+            const srcList = new Set();
+            
+            while ((match = imgTagRegex.exec(html)) !== null) {
+                srcList.add(match[1]);
+            }
+            
+            for (const rawSrc of srcList) {
+                if (rawSrc.startsWith('data:')) {
+                    continue;
+                }
+                console.log(`🔍 Processing image tag with src: "${rawSrc}"`);
+                const dataUri = await inlineImageSource(rawSrc);
+                if (dataUri !== rawSrc) {
+                    modifiedHtml = modifiedHtml.split(`src="${rawSrc}"`).join(`src="${dataUri}"`);
+                    modifiedHtml = modifiedHtml.split(`src='${rawSrc}'`).join(`src='${dataUri}'`);
+                    console.log(`   ✅ Inlined successfully: "${rawSrc.substring(0, 60)}..."`);
                 }
             }
             html = modifiedHtml;
