@@ -70,6 +70,7 @@ export const STATIC_VARIABLES = [
     { name: '@FULL_DATE', desc: 'วันที่แบบเต็ม (ไทย)', example: '17 กุมภาพันธ์ 2569', category: 'Basic' },
     { name: '@ACCOUNT_NAME', desc: 'ชื่อ Account', example: 'My Account', category: 'Basic' },
     { name: '@ZONE_NAME', desc: 'ชื่อ Zone', example: 'example.com', category: 'Basic' },
+    { name: '@DOMAIN', desc: 'ชื่อโดเมน (หรือ "ทุก Subdomain")', example: 'example.com', category: 'Basic' },
     { name: '@DNS_RECORDS', desc: 'รายการ DNS Record (Proxied)', example: 'A example.com Proxied', category: 'DNS' },
     { name: '@DNS_TOTAL_ROWS', desc: 'ตาราง DNS ทั้งหมด (Auto Replace)', example: '<tr>...</tr>', category: 'DNS' },
     { name: '@SECURITY_LEVEL', desc: 'ระดับความปลอดภัย (Security Level)', example: 'Medium', category: 'Security' },

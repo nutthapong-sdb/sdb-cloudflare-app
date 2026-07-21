@@ -149,7 +149,7 @@ async function run() {
 
             log(`   Setting all inputs to ${widthValue}...`, colors.blue);
             await page.evaluate((val) => {
-                const modal = document.querySelector('div[class*="fixed"]');
+                const modal = Array.from(document.querySelectorAll('div[class*="fixed"]')).find(m => m.textContent.includes('Image Size Settings'));
                 if (modal) {
                     const inputs = Array.from(modal.querySelectorAll('input[type="number"]'));
                     inputs.forEach(input => {
@@ -220,7 +220,7 @@ async function run() {
 
         // Click generate report
         await page.evaluate(() => {
-            const modal = document.querySelector('div[class*="fixed"]');
+            const modal = Array.from(document.querySelectorAll('div[class*="fixed"]')).find(m => m.textContent.includes('Create Report'));
             if (modal) {
                 const exportBtn = Array.from(modal.querySelectorAll('button')).find(b => b.textContent.trim() === 'Generate Domain Report');
                 if (exportBtn) exportBtn.click();
@@ -318,7 +318,7 @@ async function run() {
 
         // Click generate report
         await page.evaluate(() => {
-            const modal = document.querySelector('div[class*="fixed"]');
+            const modal = Array.from(document.querySelectorAll('div[class*="fixed"]')).find(m => m.textContent.includes('Create Report'));
             if (modal) {
                 const exportBtn = Array.from(modal.querySelectorAll('button')).find(b => b.textContent.trim() === 'Generate Domain Report');
                 if (exportBtn) exportBtn.click();
