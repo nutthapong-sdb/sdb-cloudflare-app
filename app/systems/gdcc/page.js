@@ -1431,6 +1431,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             init={{
                                                 height: '100%',
                                                 menubar: false,
+                                                font_size_formats: '8px 10px 12px 14px 16px 18px 20px 22px 24px 26px 28px 30px 32px 34px 36px 38px 40px 42px 44px 46px 48px',
                                                 font_family_formats: 'TH Sarabun=TH SarabunPSK, Sarabun, sans-serif; Arial=arial,helvetica,sans-serif; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times;',
                                                 content_style: '@import url(\'https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap\'); body { font-family: "TH SarabunPSK", "Sarabun", sans-serif; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 plugins: [
