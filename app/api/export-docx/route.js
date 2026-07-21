@@ -62,11 +62,12 @@ export async function POST(request) {
             });
 
             // Normalize img tags to ensure width/height are in inline style (supported by html-to-docx)
+            // and raw attributes (required by LibreOffice to avoid distortion)
             cleanedHtml = cleanedHtml.replace(/<img\b([^>]*)>/gi, (imgTag) => {
-                const widthAttrMatch = imgTag.match(/\bwidth=["']?(\d+)(?:px)?["']?/i);
+                const widthAttrMatch = imgTag.match(/\bwidth=["']?(\d+)(?:px|%)?["']?/i);
                 const heightAttrMatch = imgTag.match(/\bheight=["']?(\d+)(?:px|%)?["']?/i);
                 
-                let width = widthAttrMatch ? parseInt(widthAttrMatch[1], 10) : null;
+                let width = widthAttrMatch ? widthAttrMatch[1] : null;
                 let height = heightAttrMatch ? heightAttrMatch[1] : null;
 
                 const styleAttrMatch = imgTag.match(/\bstyle=["']([^"']*)["']/i);
@@ -77,15 +78,21 @@ export async function POST(request) {
 
                 if (styleWidthMatch) {
                     const wVal = styleWidthMatch[1].trim();
-                    const numMatch = wVal.match(/^(\d+)(?:px)?$/);
+                    const numMatch = wVal.match(/^(\d+)(?:px|%)?$/);
                     if (numMatch) {
-                        width = parseInt(numMatch[1], 10);
+                        width = numMatch[1];
                     } else {
                         width = wVal;
                     }
                 }
                 if (styleHeightMatch) {
-                    height = styleHeightMatch[1].trim();
+                    const hVal = styleHeightMatch[1].trim();
+                    const numMatch = hVal.match(/^(\d+)(?:px|%)?$/);
+                    if (numMatch) {
+                        height = numMatch[1];
+                    } else {
+                        height = hVal;
+                    }
                 }
 
                 let cleanedTag = imgTag
@@ -97,14 +104,20 @@ export async function POST(request) {
                     .replace(/\/?>$/, '');
 
                 let newStyles = [];
+                let widthAttr = '';
+                let heightAttr = '';
                 
                 if (width !== null) {
-                    const widthStr = typeof width === 'number' ? `${width}px` : width;
+                    const widthStr = /^\d+$/.test(width) ? `${width}px` : width;
                     newStyles.push(`width: ${widthStr}`);
+                    const rawWidth = String(width).replace('px', '');
+                    widthAttr = ` width="${rawWidth}"`;
                 }
                 if (height !== null) {
                     const heightStr = /^\d+$/.test(height) ? `${height}px` : height;
                     newStyles.push(`height: ${heightStr}`);
+                    const rawHeight = String(height).replace('px', '');
+                    heightAttr = ` height="${rawHeight}"`;
                 }
 
                 if (styleContent) {
@@ -118,7 +131,7 @@ export async function POST(request) {
                 }
 
                 const finalStyle = newStyles.join('; ');
-                return `${cleanedTag} style="${finalStyle}" />`;
+                return `${cleanedTag}${widthAttr}${heightAttr} style="${finalStyle}" />`;
             });
 
             html = cleanedHtml;
