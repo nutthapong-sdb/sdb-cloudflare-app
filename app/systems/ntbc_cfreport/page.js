@@ -6,6 +6,7 @@ import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
 import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates } from '@/app/utils/ntbcTemplateApi';
 import ManageTemplateModal from './ManageTemplateModal';
+import ImageSettingsModal from './ImageSettingsModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import SearchableDropdown from './SearchableDropdown';
@@ -358,6 +359,21 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Mode check removed here as we pass safeData specifically for processing
     let html = tmpl;
 
+    let imageWidths = {
+        '@DASHBOARD_IMAGE': 504
+    };
+    if (typeof window !== 'undefined') {
+        try {
+            const stored = localStorage.getItem('ntbc:cropped-image-widths');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                imageWidths = { ...imageWidths, ...parsed };
+            }
+        } catch (e) {
+            console.error('Failed to load image widths:', e);
+        }
+    }
+
     const cleanImageSrc = (val, fallback) => {
         if (!val || val === 'null' || val === 'undefined') return fallback;
         return val;
@@ -563,7 +579,7 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         // Page Break for Word
         '@PAGE_BREAK': '<br clear="all" style="page-break-before:always" />',
         // Dashboard Screenshot Image
-        '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6" style="text-align: center;"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="504" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
+        '@DASHBOARD_IMAGE': dashboardImage ? `<div class="mb-6" style="text-align: center;"><img src="${dashboardImage}" alt="Dashboard Snapshot" width="${imageWidths['@DASHBOARD_IMAGE']}" style="height: auto; display: block; margin: 0 auto;" /></div>` : '',
     };
 
     // CRITICAL: Process special placeholders FIRST before simple replacements
@@ -1070,7 +1086,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
     // If no template passed, use default (fallback)
-    const currentTemplate = (template && typeof template === 'string') ? template : DEFAULT_TEMPLATE;
+    const currentTemplate = (typeof template === 'string') ? template : '';
 
     // Default to editing in static mode, preview in report mode
     const [isEditing, setIsEditing] = useState(false);
@@ -1136,7 +1152,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // Sync local template when prop changes
     useEffect(() => {
-        setLocalTemplate((template && typeof template === 'string') ? template : DEFAULT_TEMPLATE);
+        setLocalTemplate((typeof template === 'string') ? template : '');
     }, [template, isOpen]);
 
     // Sync mode when opening
@@ -1220,7 +1236,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
     // --- TEMPLATE PROCESSING ---
     const getProcessedHtml = (isForExport = false) => {
-        const baseTmpl = isEditing ? localTemplate : (template ?? DEFAULT_TEMPLATE);
+        const baseTmpl = isEditing ? localTemplate : (template ?? '');
         console.log('DEBUG getProcessedHtml: baseTmpl length =', baseTmpl?.length, 'localTemplate length =', localTemplate?.length, 'template length =', template?.length);
         // Even for static template, we want to process date variables
         let html = processTemplate(baseTmpl, { 
@@ -1533,8 +1549,18 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 
 
-    const handleSave = () => {
+    const handleSave = async () => {
         let contentToSave = localTemplate;
+
+        // Convert any TinyMCE blob images to Base64 before saving
+        if (editorRef.current) {
+            try {
+                await editorRef.current.uploadImages();
+                contentToSave = editorRef.current.getContent();
+            } catch (uploadError) {
+                console.error('Error uploading/inlining images in TinyMCE:', uploadError);
+            }
+        }
 
         // Cleanup empty table rows logic
         if (typeof DOMParser !== 'undefined') {
@@ -3509,7 +3535,7 @@ export default function NTBCCFReportPage() {
 
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-    const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE);
+    const [reportTemplate, setReportTemplate] = useState('');
     const [staticReportTemplate, setStaticReportTemplate] = useState(''); // Will be loaded from JSON file only
     const [middleReportTemplate, setMiddleReportTemplate] = useState('');
     const [reportModalMode, setReportModalMode] = useState('preview'); // 'preview' (report) | 'static-template' | 'middle-template'
@@ -3522,6 +3548,7 @@ export default function NTBCCFReportPage() {
     const [checkingChrome, setCheckingChrome] = useState(true);
     const [launchingChrome, setLaunchingChrome] = useState(false);
     const dashboardRef = useRef(null);
+    const [isImageSettingsModalOpen, setIsImageSettingsModalOpen] = useState(false);
     const [capturedDomainImage, setCapturedDomainImage] = useState(null);
     const [capturedDnsImage, setCapturedDnsImage] = useState(null);
     const [capturedDnsPages, setCapturedDnsPages] = useState([]);
@@ -5261,10 +5288,10 @@ export default function NTBCCFReportPage() {
 
         // Load Templates
         loadTemplate().then(tmpl => {
-            if (tmpl) setReportTemplate(tmpl);
+            if (tmpl !== null) setReportTemplate(tmpl);
         });
         loadStaticTemplate().then(tmpl => {
-            if (tmpl) setStaticReportTemplate(tmpl);
+            if (tmpl !== null) setStaticReportTemplate(tmpl);
         });
         loadMiddleTemplate().then(tmpl => {
             if (tmpl !== null) setMiddleReportTemplate(tmpl);
@@ -5588,6 +5615,16 @@ export default function NTBCCFReportPage() {
                                         >
                                             <Users className="w-3 h-3" /> Department
                                         </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsImageSettingsModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
+                                        >
+                                            <Settings className="w-3 h-3" /> Image Size Settings
+                                        </button>
                                     </div>
                                     {/* Theme Settings */}
                                     <div className="relative border-t border-gray-700/50">
@@ -5748,6 +5785,12 @@ export default function NTBCCFReportPage() {
                 subdomains={subDomains.map(s => s.value)}
                 accounts={accounts}
                 currentUser={currentUser}
+            />
+
+            <ImageSettingsModal
+                isOpen={isImageSettingsModalOpen}
+                onClose={() => setIsImageSettingsModalOpen(false)}
+                theme={theme}
             />
 
             <main className="max-w-6xl mx-auto p-8 min-h-[calc(100vh-3.5rem)] flex flex-col justify-center">

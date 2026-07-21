@@ -92,7 +92,8 @@ export async function POST(request) {
             promotedHosts,
             exportSeparated,
             exportThaiDigits,
-            userSession
+            userSession,
+            imageWidths
         } = body;
 
         if (!accountId || !zoneId || !subdomains || !startDate || !endDate || !userSession) {
@@ -112,7 +113,8 @@ export async function POST(request) {
             templateId || 'default',
             promotedHosts || [],
             exportSeparated || false,
-            exportThaiDigits || false
+            exportThaiDigits || false,
+            imageWidths ? (typeof imageWidths === 'string' ? imageWidths : JSON.stringify(imageWidths)) : null
         );
 
         // Get baseUrl from request
