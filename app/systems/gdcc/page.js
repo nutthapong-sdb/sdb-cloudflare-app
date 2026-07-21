@@ -172,6 +172,9 @@ const convertDigitsToThaiTextNodes = (html) => {
 
 const addAutomaticTOC = (html, isForExport = false, useThaiDigits = true, useAutoTOC = true) => {
     if (!html) return html;
+    if (!html.includes('@TOC@') && !html.includes('@TOC')) {
+        return html;
+    }
     if (typeof DOMParser === 'undefined') return html;
     try {
         const parser = new DOMParser();
