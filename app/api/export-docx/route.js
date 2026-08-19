@@ -108,13 +108,45 @@ async function sanitizeDocxFonts(buffer) {
                     }
                     modified = true;
                 }
+
+                // Synchronize font size tags (<w:sz> and <w:szCs>) so Thai and English text always render at the identical size
+                const szMatch = newInner.match(/<w:sz\s+w:val=["'](\d+)["']\s*\/>/i);
+                const szCsMatch = newInner.match(/<w:szCs\s+w:val=["'](\d+)["']\s*\/>/i);
+                const szVal = (szMatch && szMatch[1]) || (szCsMatch && szCsMatch[1]);
+                if (szVal) {
+                    if (szMatch) {
+                        newInner = newInner.replace(/<w:sz\s+w:val=["']\d+["']\s*\/>/gi, '');
+                    }
+                    if (szCsMatch) {
+                        newInner = newInner.replace(/<w:szCs\s+w:val=["']\d+["']\s*\/>/gi, '');
+                    }
+                    newInner = `<w:sz w:val="${szVal}"/><w:szCs w:val="${szVal}"/>` + newInner;
+                    modified = true;
+                }
+
                 return '<w:rPr>' + newInner + '</w:rPr>';
             });
 
-            // In styles.xml, ensure docDefaults font is set to TH SarabunPSK
+            // In styles.xml, ensure docDefaults font is set to TH SarabunPSK and synchronize style sizes
             if (fileName === 'word/styles.xml') {
                 xml = xml.replace(/<w:docDefaults>[\s\S]*?<w:rFonts[^>]*\/>/i, (match) => {
                     return match.replace(/<w:rFonts[^>]*\/>/, '<w:rFonts w:ascii="TH SarabunPSK" w:hAnsi="TH SarabunPSK" w:eastAsia="TH SarabunPSK" w:cs="TH SarabunPSK"/>');
+                });
+                xml = xml.replace(/<w:style\b([\s\S]*?)<\/w:style>/gi, (match, inner) => {
+                    let newInner = inner;
+                    const szMatch = newInner.match(/<w:sz\s+w:val=["'](\d+)["']\s*\/>/i);
+                    const szCsMatch = newInner.match(/<w:szCs\s+w:val=["'](\d+)["']\s*\/>/i);
+                    const szVal = (szMatch && szMatch[1]) || (szCsMatch && szCsMatch[1]);
+                    if (szVal) {
+                        if (szMatch) {
+                            newInner = newInner.replace(/<w:sz\s+w:val=["']\d+["']\s*\/>/gi, '');
+                        }
+                        if (szCsMatch) {
+                            newInner = newInner.replace(/<w:szCs\s+w:val=["']\d+["']\s*\/>/gi, '');
+                        }
+                        newInner = newInner.replace(/<w:rPr>/i, `<w:rPr><w:sz w:val="${szVal}"/><w:szCs w:val="${szVal}"/>`);
+                    }
+                    return '<w:style' + newInner + '</w:style>';
                 });
                 modified = true;
             }
