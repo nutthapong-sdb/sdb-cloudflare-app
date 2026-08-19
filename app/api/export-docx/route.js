@@ -428,6 +428,11 @@ export async function POST(request) {
                 modifiedHtml = fontOverrideStyle + modifiedHtml;
             }
 
+            // Convert strong -> b and em -> i so LibreOffice generates direct run formatting (<w:b/> + <w:i/>)
+            // instead of conflicting character styles (Strong vs Emphasis) which drops bold when combined with italic
+            modifiedHtml = modifiedHtml.replace(/<(\/?)strong\b([^>]*)>/gi, '<$1b$2>');
+            modifiedHtml = modifiedHtml.replace(/<(\/?)em\b([^>]*)>/gi, '<$1i$2>');
+
             // Convert any inline font-size in px to pt (e.g. 22px -> 22pt) so Word receives the exact intended point size
             modifiedHtml = modifiedHtml.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
 

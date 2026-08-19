@@ -1207,6 +1207,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
 
         let sourceHTML = legacyHeader + cleanHTML + footer;
+        sourceHTML = sourceHTML.replace(/<(\/?)strong\b([^>]*)>/gi, '<$1b$2>');
+        sourceHTML = sourceHTML.replace(/<(\/?)em\b([^>]*)>/gi, '<$1i$2>');
         sourceHTML = sourceHTML.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
 
         const downloadHtmlAsDoc = (html) => {
@@ -5383,6 +5385,8 @@ export default function GDCCPage() {
 
             // 6. Download the final Word document
             let sourceHTML = cleanHeader + finalCombinedHtml + footer;
+            sourceHTML = sourceHTML.replace(/<(\/?)strong\b([^>]*)>/gi, '<$1b$2>');
+            sourceHTML = sourceHTML.replace(/<(\/?)em\b([^>]*)>/gi, '<$1i$2>');
             sourceHTML = sourceHTML.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
             const filename = `batch_report_${new Date().getTime()}.doc`;
 
