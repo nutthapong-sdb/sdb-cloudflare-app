@@ -1466,6 +1466,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         }
 
         let sourceHTML = legacyHeader + cleanHTML + footer;
+        sourceHTML = sourceHTML.replace(/<(\/?)strong\b([^>]*)>/gi, '<$1b$2>');
+        sourceHTML = sourceHTML.replace(/<(\/?)em\b([^>]*)>/gi, '<$1i$2>');
         sourceHTML = sourceHTML.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
 
         const downloadHtmlAsDoc = (html) => {
