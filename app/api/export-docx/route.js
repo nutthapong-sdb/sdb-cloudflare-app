@@ -7,8 +7,70 @@ import { promisify } from 'util';
 import libreoffice from 'libreoffice-convert';
 import HTMLtoDOCX from 'html-to-docx';
 
+import JSZip from 'jszip';
+
 const execAsync = promisify(exec);
 const convertAsync = promisify(libreoffice.convert);
+
+/**
+ * Sanitizes all font references inside the generated OpenXML (.docx) archive.
+ * Replaces any multi-font or comma/semicolon-separated font names (like 'TH Sarabun PSK;TH Sarabun New;T')
+ * with a single, clean font name ('TH SarabunPSK') so Microsoft Word resolves the font properly.
+ */
+async function sanitizeDocxFonts(buffer) {
+    try {
+        const zip = await JSZip.loadAsync(buffer);
+        const xmlFileNames = Object.keys(zip.files).filter(name => 
+            name.startsWith('word/') && (name.endsWith('.xml') || name.endsWith('.xml.rels'))
+        );
+        
+        for (const fileName of xmlFileNames) {
+            let xml = await zip.file(fileName).async('string');
+            let modified = false;
+
+            // 1. Clean any font attribute containing TH Sarabun, Sarabun, or multi-font lists
+            // e.g. w:ascii="TH Sarabun PSK;TH Sarabun New;TH SarabunPSK;sans-serif" -> w:ascii="TH SarabunPSK"
+            const sarabunRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|name|val|altName|asciiTheme|hAnsiTheme|eastAsiaTheme|cstheme)=["'])[^"']*(?:TH\s*Sarabun|Sarabun)[^"']*(["'])/gi;
+            if (sarabunRegex.test(xml)) {
+                xml = xml.replace(sarabunRegex, '$1TH SarabunPSK$2');
+                modified = true;
+            }
+
+            // 2. Clean any remaining semicolon or comma separated fallback lists
+            // e.g. w:ascii="Arial;sans-serif" -> w:ascii="Arial"
+            const multiFontRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|name|val|altName)=["'])([^"';,]+)[;,][^"']*(["'])/gi;
+            if (multiFontRegex.test(xml)) {
+                xml = xml.replace(multiFontRegex, '$1$2$3');
+                modified = true;
+            }
+
+            // 3. Strip any quotes or escaped quotes around font names
+            // e.g. w:ascii="'TH SarabunPSK'" -> w:ascii="TH SarabunPSK"
+            const quotedFontRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|name|val|altName)=["'])(?:&apos;|'|")*([^"'&]+?)(?:&apos;|'|")*(["'])/gi;
+            if (quotedFontRegex.test(xml)) {
+                xml = xml.replace(quotedFontRegex, '$1$2$3');
+                modified = true;
+            }
+
+            // 4. In fontTable.xml, ensure TH SarabunPSK is registered with altName TH Sarabun New
+            if (fileName === 'word/fontTable.xml') {
+                if (!xml.includes('w:name="TH SarabunPSK"')) {
+                    xml = xml.replace('</w:fonts>', '<w:font w:name="TH SarabunPSK"><w:altName w:val="TH Sarabun New"/><w:charset w:val="01"/><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font></w:fonts>');
+                    modified = true;
+                }
+            }
+
+            if (modified) {
+                zip.file(fileName, xml);
+            }
+        }
+        
+        return await zip.generateAsync({ type: 'nodebuffer' });
+    } catch (zipErr) {
+        console.warn('⚠️ Error during docx font sanitization, returning original buffer:', zipErr.message);
+        return buffer;
+    }
+}
 
 export async function POST(request) {
     let tempInputPath = null;
@@ -292,11 +354,11 @@ export async function POST(request) {
                     console.log(`   ✅ Inlined successfully: "${rawSrc.substring(0, 60)}..."`);
                 }
             }
-            // Force TH Sarabun font-family on all elements to ensure all elements (including h1/h2/h3) render in TH Sarabun
+            // Force clean single TH SarabunPSK font-family on all elements to prevent multi-font comma truncation in MS Word
             const fontOverrideStyle = `<style>
-                * { font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif !important; }
+                * { font-family: 'TH SarabunPSK' !important; }
                 h1, h2, h3, h4, h5, h6, p, span, div, table, tr, td, th, a, li, ul, ol {
-                    font-family: 'TH Sarabun PSK', 'TH Sarabun New', 'TH SarabunPSK', 'Sarabun', sans-serif !important;
+                    font-family: 'TH SarabunPSK' !important;
                 }
             </style>`;
             if (modifiedHtml.includes('</head>')) {
@@ -304,6 +366,10 @@ export async function POST(request) {
             } else {
                 modifiedHtml = fontOverrideStyle + modifiedHtml;
             }
+
+            // Also replace any inline font-family with multiple comma-separated Sarabun fallbacks
+            modifiedHtml = modifiedHtml.replace(/font-family:\s*['"][^'"]*Sarabun[^'"]*['"]/gi, "font-family: 'TH SarabunPSK'");
+            modifiedHtml = modifiedHtml.replace(/font-family:\s*[^;"]*Sarabun[^;"]*/gi, "font-family: 'TH SarabunPSK'");
 
             html = modifiedHtml;
         }
@@ -353,13 +419,18 @@ export async function POST(request) {
                 console.log('🔄 Converting to DOCX using html-to-docx...');
                 // html-to-docx returns a Buffer/Uint8Array
                 docxBuffer = await HTMLtoDOCX(String(html), null, {
-                    font: 'TH Sarabun PSK',
+                    font: 'TH SarabunPSK',
                     fontSize: 32
                 });
             } catch (e) {
                 console.error('html-to-docx conversion failed:', e?.message || e);
                 throw e;
             }
+        }
+
+        // Sanitize all font references in the generated docx archive
+        if (docxBuffer) {
+            docxBuffer = await sanitizeDocxFonts(docxBuffer);
         }
 
         console.log(`✅ API Conversion successful. Buffer length: ${docxBuffer.length}`);
