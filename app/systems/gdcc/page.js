@@ -1081,6 +1081,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK'; font-size: 16pt; white-space: pre-wrap; }" +
+            "i, em { font-style: italic !important; }" +
+            "b, strong { font-weight: bold !important; }" +
             "img { max-width: 100%; height: auto; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
@@ -4606,6 +4608,8 @@ export default function GDCCPage() {
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK'; font-size: 16pt; }" +
+            "i, em { font-style: italic !important; }" +
+            "b, strong { font-weight: bold !important; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +
@@ -4621,6 +4625,8 @@ export default function GDCCPage() {
             "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK'; font-size: 16pt; }" +
+            "i, em { font-style: italic !important; }" +
+            "b, strong { font-weight: bold !important; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +

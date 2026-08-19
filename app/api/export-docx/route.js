@@ -84,6 +84,33 @@ async function sanitizeDocxFonts(buffer) {
                 return prefix + newVal + suffix;
             });
 
+            // Ensure Italic tags have both <w:i/> and <w:iCs/> for complete Thai + Latin font rendering in MS Word
+            xml = xml.replace(/<w:rPr>([\s\S]*?)<\/w:rPr>/gi, (match, inner) => {
+                let newInner = inner;
+                const hasItalic = /<w:i\s*\/>|<w:iCs\s*\/>|<w:rStyle\s+w:val=["']Emphasis["']\s*\/>/i.test(newInner);
+                if (hasItalic) {
+                    if (!/<w:i\s*\/>/i.test(newInner)) {
+                        newInner = '<w:i/>' + newInner;
+                    }
+                    if (!/<w:iCs\s*\/>/i.test(newInner)) {
+                        newInner = '<w:iCs/>' + newInner;
+                    }
+                    modified = true;
+                }
+
+                const hasBold = /<w:b\s*\/>|<w:bCs\s*\/>|<w:rStyle\s+w:val=["']Strong["']\s*\/>/i.test(newInner);
+                if (hasBold) {
+                    if (!/<w:b\s*\/>/i.test(newInner)) {
+                        newInner = '<w:b/>' + newInner;
+                    }
+                    if (!/<w:bCs\s*\/>/i.test(newInner)) {
+                        newInner = '<w:bCs/>' + newInner;
+                    }
+                    modified = true;
+                }
+                return '<w:rPr>' + newInner + '</w:rPr>';
+            });
+
             // In styles.xml, ensure docDefaults font is set to TH SarabunPSK
             if (fileName === 'word/styles.xml') {
                 xml = xml.replace(/<w:docDefaults>[\s\S]*?<w:rFonts[^>]*\/>/i, (match) => {
@@ -392,6 +419,8 @@ export async function POST(request) {
                 h1, h2, h3, h4, h5, h6, p, span, div, table, tr, td, th, a, li, ul, ol {
                     font-family: 'TH SarabunPSK' !important;
                 }
+                i, em { font-style: italic !important; }
+                b, strong { font-weight: bold !important; }
             </style>`;
             if (modifiedHtml.includes('</head>')) {
                 modifiedHtml = modifiedHtml.replace('</head>', `${fontOverrideStyle}</head>`);
