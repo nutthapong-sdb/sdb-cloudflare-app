@@ -1463,7 +1463,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
         }
 
-        const sourceHTML = legacyHeader + cleanHTML + footer;
+        let sourceHTML = legacyHeader + cleanHTML + footer;
+        sourceHTML = sourceHTML.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
 
         const downloadHtmlAsDoc = (html) => {
             const blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
@@ -1688,7 +1689,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             init={{
                                                 height: '100%',
                                                 menubar: false,
-                                                font_size_formats: '8px 10px 12px 14px 16px 18px 20px 22px 24px 26px 28px 30px 32px 34px 36px 38px 40px 42px 44px 46px 48px',
+                                                font_size_formats: '8pt 10pt 12pt 14pt 16pt 18pt 20pt 22pt 24pt 26pt 28pt 30pt 32pt 34pt 36pt 38pt 40pt 42pt 44pt 46pt 48pt',
                                                 plugins: [
                                                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',

@@ -399,6 +399,9 @@ export async function POST(request) {
                 modifiedHtml = fontOverrideStyle + modifiedHtml;
             }
 
+            // Convert any inline font-size in px to pt (e.g. 22px -> 22pt) so Word receives the exact intended point size
+            modifiedHtml = modifiedHtml.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
+
             // Also replace any inline font-family with multiple comma-separated Sarabun fallbacks
             modifiedHtml = modifiedHtml.replace(/font-family:\s*['"][^'"]*Sarabun[^'"]*['"]/gi, "font-family: 'TH SarabunPSK'");
             modifiedHtml = modifiedHtml.replace(/font-family:\s*[^;"]*Sarabun[^;"]*/gi, "font-family: 'TH SarabunPSK'");

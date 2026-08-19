@@ -1204,7 +1204,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
         cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
 
-        const sourceHTML = legacyHeader + cleanHTML + footer;
+        let sourceHTML = legacyHeader + cleanHTML + footer;
+        sourceHTML = sourceHTML.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
 
         const downloadHtmlAsDoc = (html) => {
             const blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
@@ -1429,7 +1430,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                             init={{
                                                 height: '100%',
                                                 menubar: false,
-                                                font_size_formats: '8px 10px 12px 14px 16px 18px 20px 22px 24px 26px 28px 30px 32px 34px 36px 38px 40px 42px 44px 46px 48px',
+                                                font_size_formats: '8pt 10pt 12pt 14pt 16pt 18pt 20pt 22pt 24pt 26pt 28pt 30pt 32pt 34pt 36pt 38pt 40pt 42pt 44pt 46pt 48pt',
                                                 font_family_formats: 'TH Sarabun=TH SarabunPSK; Arial=Arial; Tahoma=Tahoma; Times New Roman=Times New Roman;',
                                                 content_style: '@import url(\'https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap\'); body { font-family: "TH SarabunPSK"; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 plugins: [
@@ -5375,7 +5376,8 @@ export default function GDCCPage() {
             }
 
             // 6. Download the final Word document
-            const sourceHTML = cleanHeader + finalCombinedHtml + footer;
+            let sourceHTML = cleanHeader + finalCombinedHtml + footer;
+            sourceHTML = sourceHTML.replace(/font-size:\s*(\d+(?:\.\d+)?)px/gi, 'font-size: $1pt');
             const filename = `batch_report_${new Date().getTime()}.doc`;
 
             try {
