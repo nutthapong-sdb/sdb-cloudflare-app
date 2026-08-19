@@ -13,61 +13,93 @@ const execAsync = promisify(exec);
 const convertAsync = promisify(libreoffice.convert);
 
 /**
- * Sanitizes all font references inside the generated OpenXML (.docx) archive.
- * Replaces any multi-font or comma/semicolon-separated font names (like 'TH Sarabun PSK;TH Sarabun New;T')
- * with a single, clean font name ('TH SarabunPSK') so Microsoft Word resolves the font properly.
+ * Sanitizes all font references and XML compatibility inside the generated OpenXML (.docx) archive.
+ * 1. Deduplicates fonts in fontTable.xml and registers TH SarabunPSK with TH Sarabun New alias.
+ * 2. Normalizes settings.xml compatibilityMode for full MS Word (2013-365) compatibility.
+ * 3. Replaces any multi-font or comma/semicolon-separated font names with 'TH SarabunPSK'.
+ * 4. Ensures w:docDefaults in styles.xml uses TH SarabunPSK.
  */
 async function sanitizeDocxFonts(buffer) {
     try {
         const zip = await JSZip.loadAsync(buffer);
-        const xmlFileNames = Object.keys(zip.files).filter(name => 
-            name.startsWith('word/') && (name.endsWith('.xml') || name.endsWith('.xml.rels'))
+
+        // 1. Fix word/fontTable.xml - deduplicate fonts and ensure valid ECMA-376 schema
+        if (zip.file('word/fontTable.xml')) {
+            let fontXml = await zip.file('word/fontTable.xml').async('string');
+            const fontTagRegex = /<w:font\s+[^>]*w:name=["']([^"']+)["'][^>]*>[\s\S]*?<\/w:font>/gi;
+            const seenFonts = new Set();
+            const cleanedFonts = [];
+            let m;
+            while ((m = fontTagRegex.exec(fontXml)) !== null) {
+                let fontName = m[1];
+                if (/Sarabun/i.test(fontName)) {
+                    fontName = 'TH SarabunPSK';
+                }
+                if (!seenFonts.has(fontName.toLowerCase())) {
+                    seenFonts.add(fontName.toLowerCase());
+                    if (fontName === 'TH SarabunPSK') {
+                        cleanedFonts.push('<w:font w:name="TH SarabunPSK"><w:altName w:val="TH Sarabun New"/><w:charset w:val="01"/><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>');
+                    } else {
+                        let tagContent = m[0].replace(/w:name=["'][^"']+["']/, `w:name="${fontName}"`);
+                        cleanedFonts.push(tagContent);
+                    }
+                }
+            }
+
+            if (!seenFonts.has('th sarabunpsk')) {
+                cleanedFonts.push('<w:font w:name="TH SarabunPSK"><w:altName w:val="TH Sarabun New"/><w:charset w:val="01"/><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>');
+            }
+
+            const newFontXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' + cleanedFonts.join('') + '</w:fonts>';
+            zip.file('word/fontTable.xml', newFontXml);
+        }
+
+        // 2. Fix word/settings.xml - remove conflicting compatSettings that trigger Word "unreadable content"
+        if (zip.file('word/settings.xml')) {
+            let settingsXml = await zip.file('word/settings.xml').async('string');
+            settingsXml = settingsXml.replace(/<w:compat>[\s\S]*?<\/w:compat>/gi, '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>');
+            zip.file('word/settings.xml', settingsXml);
+        }
+
+        // 3. Clean fonts in styles.xml, document.xml, numbering.xml
+        const xmlFiles = Object.keys(zip.files).filter(name => 
+            name.startsWith('word/') && name.endsWith('.xml') && name !== 'word/fontTable.xml' && name !== 'word/settings.xml'
         );
-        
-        for (const fileName of xmlFileNames) {
+
+        for (const fileName of xmlFiles) {
             let xml = await zip.file(fileName).async('string');
             let modified = false;
 
-            // 1. Clean any font attribute containing TH Sarabun, Sarabun, or multi-font lists
-            // e.g. w:ascii="TH Sarabun PSK;TH Sarabun New;TH SarabunPSK;sans-serif" -> w:ascii="TH SarabunPSK"
-            const sarabunRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|name|val|altName|asciiTheme|hAnsiTheme|eastAsiaTheme|cstheme)=["'])[^"']*(?:TH\s*Sarabun|Sarabun)[^"']*(["'])/gi;
-            if (sarabunRegex.test(xml)) {
-                xml = xml.replace(sarabunRegex, '$1TH SarabunPSK$2');
-                modified = true;
-            }
-
-            // 2. Clean any remaining semicolon or comma separated fallback lists
-            // e.g. w:ascii="Arial;sans-serif" -> w:ascii="Arial"
-            const multiFontRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|name|val|altName)=["'])([^"';,]+)[;,][^"']*(["'])/gi;
-            if (multiFontRegex.test(xml)) {
-                xml = xml.replace(multiFontRegex, '$1$2$3');
-                modified = true;
-            }
-
-            // 3. Strip any quotes or escaped quotes around font names
-            // e.g. w:ascii="'TH SarabunPSK'" -> w:ascii="TH SarabunPSK"
-            const quotedFontRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|name|val|altName)=["'])(?:&apos;|'|")*([^"'&]+?)(?:&apos;|'|")*(["'])/gi;
-            if (quotedFontRegex.test(xml)) {
-                xml = xml.replace(quotedFontRegex, '$1$2$3');
-                modified = true;
-            }
-
-            // 4. In fontTable.xml, ensure TH SarabunPSK is registered with altName TH Sarabun New
-            if (fileName === 'word/fontTable.xml') {
-                if (!xml.includes('w:name="TH SarabunPSK"')) {
-                    xml = xml.replace('</w:fonts>', '<w:font w:name="TH SarabunPSK"><w:altName w:val="TH Sarabun New"/><w:charset w:val="01"/><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font></w:fonts>');
-                    modified = true;
+            // Target ONLY font-specific attributes in <w:rFonts> or <w:rPr>
+            const fontAttrRegex = /(w:(?:ascii|hAnsi|eastAsia|cs|asciiTheme|hAnsiTheme|cstheme)=["'])([^"']+)(["'])/gi;
+            xml = xml.replace(fontAttrRegex, (match, prefix, val, suffix) => {
+                let newVal = val;
+                if (/Sarabun/i.test(newVal)) {
+                    newVal = 'TH SarabunPSK';
+                } else if (newVal.includes(';') || newVal.includes(',')) {
+                    newVal = newVal.split(/[;,]/)[0].trim().replace(/^['"]|['"]$/g, '');
                 }
+                newVal = newVal.replace(/^['"]|['"]$/g, '');
+                if (newVal !== val) modified = true;
+                return prefix + newVal + suffix;
+            });
+
+            // In styles.xml, ensure docDefaults font is set to TH SarabunPSK
+            if (fileName === 'word/styles.xml') {
+                xml = xml.replace(/<w:docDefaults>[\s\S]*?<w:rFonts[^>]*\/>/i, (match) => {
+                    return match.replace(/<w:rFonts[^>]*\/>/, '<w:rFonts w:ascii="TH SarabunPSK" w:hAnsi="TH SarabunPSK" w:eastAsia="TH SarabunPSK" w:cs="TH SarabunPSK"/>');
+                });
+                modified = true;
             }
 
             if (modified) {
                 zip.file(fileName, xml);
             }
         }
-        
+
         return await zip.generateAsync({ type: 'nodebuffer' });
     } catch (zipErr) {
-        console.warn('⚠️ Error during docx font sanitization, returning original buffer:', zipErr.message);
+        console.warn('⚠️ Error during docx sanitization, returning original buffer:', zipErr.message);
         return buffer;
     }
 }
