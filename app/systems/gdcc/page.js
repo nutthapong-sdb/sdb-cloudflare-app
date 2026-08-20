@@ -4461,7 +4461,8 @@ export default function GDCCPage() {
                         exportSeparated: exportSeparated,
                         exportThaiDigits: exportThaiDigits,
                         userSession: currentUser,
-                        imageWidths: typeof window !== 'undefined' ? localStorage.getItem('gdcc:cropped-image-widths') : null
+                        imageWidths: typeof window !== 'undefined' ? localStorage.getItem('gdcc:cropped-image-widths') : null,
+                        pageMargins: typeof window !== 'undefined' ? localStorage.getItem('gdcc:page-margins') : null
                     })
                 });
 
