@@ -115,19 +115,32 @@ export default function TableSettingsModal({ isOpen, onClose, theme, storageKey 
             const tableCols = widths[tableKey] || DEFAULT_TABLE_COLUMN_WIDTHS[tableKey];
             finalWidths[tableKey] = {};
             
+            let tableTotal = 0;
             for (const col of config.columns) {
                 const val = parseFloat(tableCols[col.id]);
                 if (isNaN(val) || val <= 0) {
                     Swal.fire({
-                        title: 'Invalid Width',
-                        text: `Please enter a valid percentage (> 0) for ${config.label} - ${col.label}`,
+                        title: 'กรุณากรอกตัวเลขที่ถูกต้อง',
+                        text: `กรุณาระบุเปอร์เซ็นต์ (> 0) ให้กับ ${config.label} - ${col.label}`,
                         icon: 'error',
                         background: '#111827',
                         color: '#fff'
                     });
                     return;
                 }
+                tableTotal += val;
                 finalWidths[tableKey][col.id] = val;
+            }
+
+            if (Math.abs(tableTotal - 100) > 0.01) {
+                Swal.fire({
+                    title: 'ผลรวมเปอร์เซ็นต์ไม่เท่ากับ 100%',
+                    text: `ตาราง "${tableKey}" มีผลรวมความกว้างคอลัมน์เท่ากับ ${tableTotal}% (ต้องรวมกันได้ 100% พอดีจึงจะสามารถบันทึกได้)`,
+                    icon: 'warning',
+                    background: '#111827',
+                    color: '#fff'
+                });
+                return;
             }
         }
 
