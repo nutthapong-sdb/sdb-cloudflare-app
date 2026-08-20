@@ -20,7 +20,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal, Monitor, Table,
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal, Monitor, Table, Layout,
     ChevronLeft, ChevronRight
 } from 'lucide-react';
 import jsPDF from 'jspdf';
