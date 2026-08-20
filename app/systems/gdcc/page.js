@@ -1099,7 +1099,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "<style>" +
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
             "/* Define Page Size and Margins (Standard) */" +
-            "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "@page Section1 { size: 21cm 29.7cm; margin: " + (pageMargins.top || 2.54) + "cm " + (pageMargins.right || 2.54) + "cm " + (pageMargins.bottom || 2.54) + "cm " + (pageMargins.left || 2.54) + "cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "@page { margin-top: " + (pageMargins.top || 2.54) + "cm; margin-bottom: " + (pageMargins.bottom || 2.54) + "cm; margin-left: " + (pageMargins.left || 2.54) + "cm; margin-right: " + (pageMargins.right || 2.54) + "cm; }" +
             "div.Section1 { page: Section1; }" +
             "body { font-family: 'TH SarabunPSK'; font-size: 16pt; white-space: pre-wrap; }" +
             "i, em { font-style: italic !important; }" +
@@ -1119,6 +1120,8 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "</head><body><div class='Section1'>";
 
         const cleanHeader = "<style>" +
+            "@page Section1 { size: 21cm 29.7cm; margin: " + (pageMargins.top || 2.54) + "cm " + (pageMargins.right || 2.54) + "cm " + (pageMargins.bottom || 2.54) + "cm " + (pageMargins.left || 2.54) + "cm; }" +
+            "@page { margin-top: " + (pageMargins.top || 2.54) + "cm; margin-bottom: " + (pageMargins.bottom || 2.54) + "cm; margin-left: " + (pageMargins.left || 2.54) + "cm; margin-right: " + (pageMargins.right || 2.54) + "cm; }" +
             "body, p, div, span, td, th { font-family: 'Arial', sans-serif; font-size: 11pt; }" +
             "img { max-width: 100%; height: auto; display: block; margin: 10px auto; }" +
             "table { width: 100%; border-collapse: collapse; margin: 10px 0; border: 1px solid #000; }" +
@@ -1438,7 +1441,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         .report-content, .report-content p, .report-content div { white-space: pre-wrap !important; }
                         .report-content .toc-container, .report-content .toc-container * { white-space: normal !important; }
                     `}} />
-                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto" style={{ fontFamily: '"TH SarabunPSK"' }}>
+                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto bg-white text-black rounded-lg shadow-sm" style={{ fontFamily: '"TH SarabunPSK"', paddingTop: `${pageMargins.top || 2.54}cm`, paddingBottom: `${pageMargins.bottom || 2.54}cm`, paddingLeft: `${pageMargins.left || 2.54}cm`, paddingRight: `${pageMargins.right || 2.54}cm`, boxSizing: 'border-box' }}>
 
                         {isEditing ? (
                             <div className="flex gap-4 h-full relative">
@@ -1458,6 +1461,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 <div className="flex-1 flex flex-col min-w-0">
                                     <div className="flex-1 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
                                         <Editor
+                                            key={JSON.stringify(pageMargins)}
                                             tinymceScriptSrc='/systems/tinymce/tinymce.min.js'
                                             licenseKey='gpl'
                                             onInit={(evt, editor) => editorRef.current = editor}
@@ -1468,7 +1472,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 menubar: false,
                                                 font_size_formats: '8pt 10pt 12pt 14pt 16pt 18pt 20pt 22pt 24pt 26pt 28pt 30pt 32pt 34pt 36pt 38pt 40pt 42pt 44pt 46pt 48pt',
                                                 font_family_formats: 'TH Sarabun=TH SarabunPSK; Arial=Arial; Tahoma=Tahoma; Times New Roman=Times New Roman;',
-                                                content_style: '@import url(\'https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap\'); body { font-family: "TH SarabunPSK"; font-size: 16pt; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
+                                                content_style: `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap'); body { font-family: "TH SarabunPSK"; font-size: 16pt; padding: ${pageMargins.top || 2.54}cm ${pageMargins.right || 2.54}cm ${pageMargins.bottom || 2.54}cm ${pageMargins.left || 2.54}cm !important; box-sizing: border-box; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }',
                                                 plugins: [
                                                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
@@ -3599,6 +3603,24 @@ export default function GDCCPage() {
     const [isImageSettingsModalOpen, setIsImageSettingsModalOpen] = useState(false);
     const [isTableSettingsModalOpen, setIsTableSettingsModalOpen] = useState(false);
     const [isPageMarginModalOpen, setIsPageMarginModalOpen] = useState(false);
+    const [pageMargins, setPageMargins] = useState({
+        top: 2.54,
+        bottom: 2.54,
+        left: 2.54,
+        right: 2.54,
+        presetId: 'normal'
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('gdcc:page-margins');
+                if (stored) {
+                    setPageMargins(JSON.parse(stored));
+                }
+            } catch (e) {}
+        }
+    }, []);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -6365,6 +6387,7 @@ export default function GDCCPage() {
                 isOpen={isPageMarginModalOpen}
                 onClose={() => setIsPageMarginModalOpen(false)}
                 theme={theme}
+                onSave={(newMargins) => setPageMargins(newMargins)}
                 storageKey="gdcc:page-margins"
             />
 
