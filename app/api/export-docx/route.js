@@ -155,13 +155,18 @@ async function sanitizeDocxFonts(bufferOrPath, margins = null) {
 
             // In document.xml, enforce page margins if specified
             if (fileName === 'word/document.xml' && margins) {
-                const topDxa = Math.round(((parseFloat(margins.top) || 2.54) / 2.54) * 1440);
-                const bottomDxa = Math.round(((parseFloat(margins.bottom) || 2.54) / 2.54) * 1440);
-                const leftDxa = Math.round(((parseFloat(margins.left) || 2.54) / 2.54) * 1440);
-                const rightDxa = Math.round(((parseFloat(margins.right) || 2.54) / 2.54) * 1440);
+                const parseMarginDxa = (val) => {
+                    if (val === undefined || val === null || val === '') return 1440; // 2.54cm default
+                    const num = parseFloat(val);
+                    return isNaN(num) ? 1440 : Math.round((num / 2.54) * 1440);
+                };
+                const topDxa = parseMarginDxa(margins.top);
+                const bottomDxa = parseMarginDxa(margins.bottom);
+                const leftDxa = parseMarginDxa(margins.left);
+                const rightDxa = parseMarginDxa(margins.right);
 
                 if (/<w:pgMar\b[^>]*\/>/i.test(xml)) {
-                    xml = xml.replace(/<w:pgMar\b[^>]*\/>/gi, `<w:pgMar w:top="${topDxa}" w:right="${rightDxa}" w:bottom="${bottomDxa}" w:left="${leftDxa}" w:header="720" w:footer="720" w:gutter="0"/>`);
+                    xml = xml.replace(/<w:pgMar\b[^>]*\/>/gi, `<w:pgMar w:top="${topDxa}" w:right="${rightDxa}" w:bottom="${bottomDxa}" w:left="${leftDxa}" w:header="0" w:footer="0" w:gutter="0"/>`);
                     modified = true;
                 }
             }
@@ -467,12 +472,24 @@ export async function POST(request) {
                 }
             }
             // Force clean single TH SarabunPSK font-family on all elements to prevent multi-font comma truncation in MS Word
+            const getMarginVal = (val) => {
+                if (val === undefined || val === null || val === '') return '2.54cm';
+                const num = parseFloat(val);
+                return isNaN(num) ? '2.54cm' : `${num}cm`;
+            };
             const marginCss = margins ? `
                 @page {
-                    margin-top: ${margins.top || 2.54}cm !important;
-                    margin-bottom: ${margins.bottom || 2.54}cm !important;
-                    margin-left: ${margins.left || 2.54}cm !important;
-                    margin-right: ${margins.right || 2.54}cm !important;
+                    margin-top: ${getMarginVal(margins.top)} !important;
+                    margin-bottom: ${getMarginVal(margins.bottom)} !important;
+                    margin-left: ${getMarginVal(margins.left)} !important;
+                    margin-right: ${getMarginVal(margins.right)} !important;
+                }
+                body {
+                    margin-top: ${getMarginVal(margins.top)} !important;
+                    margin-bottom: ${getMarginVal(margins.bottom)} !important;
+                    margin-left: ${getMarginVal(margins.left)} !important;
+                    margin-right: ${getMarginVal(margins.right)} !important;
+                    padding: 0 !important;
                 }
             ` : '';
             const fontOverrideStyle = `<style>
