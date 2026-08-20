@@ -7,6 +7,7 @@ import { getUserProfileAction } from '@/app/actions/authActions';
 import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates } from '@/app/utils/templateApi';
 import ManageTemplateModal from './ManageTemplateModal';
 import ImageSettingsModal from './ImageSettingsModal';
+import TableSettingsModal, { DEFAULT_TABLE_COLUMN_WIDTHS } from './TableSettingsModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import BackgroundJobsModal from './BackgroundJobsModal';
@@ -19,7 +20,7 @@ import {
 import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
-    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users,
+    Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Table,
     ChevronLeft, ChevronRight
 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -780,13 +781,27 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     }
 
     // 2. Table Generators
+    let customTableWidths = DEFAULT_TABLE_COLUMN_WIDTHS;
+    if (typeof window !== 'undefined') {
+        try {
+            const stored = localStorage.getItem('gdcc:table-column-widths');
+            if (stored) {
+                customTableWidths = { ...DEFAULT_TABLE_COLUMN_WIDTHS, ...JSON.parse(stored) };
+            }
+        } catch (e) {}
+    }
+
+    const getColWidth = (tableKey, colId, defaultPct) => {
+        const val = customTableWidths[tableKey]?.[colId];
+        return (val !== undefined && val !== null && !isNaN(val) && val > 0) ? `${val}%` : `${defaultPct}%`;
+    };
 
     // Top URLs Table
     const topUrlsHtml = generateHtmlTable(
         [
-            { label: 'ลำดับ', width: '10%', align: 'center' },
-            { label: 'รายการ (URL)', width: '70%' },
-            { label: 'จำนวน (Count)', width: '20%', align: 'right' }
+            { label: 'ลำดับ', width: getColWidth('@TOP_URLS_LIST', 'col1', 10), align: 'center' },
+            { label: 'รายการ (URL)', width: getColWidth('@TOP_URLS_LIST', 'col2', 70) },
+            { label: 'จำนวน (Count)', width: getColWidth('@TOP_URLS_LIST', 'col3', 20), align: 'right' }
         ],
         (safeData.topUrls || []).slice(0, 3).map((item, idx) => [idx + 1, item.path, formatCompactNumber(item.count)])
     );
@@ -795,8 +810,8 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Top IPs Table
     const topIpsHtml = generateHtmlTable(
         [
-            { label: 'Client IP', width: '70%' },
-            { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+            { label: 'Client IP', width: getColWidth('@TOP_IPS_LIST', 'col1', 70) },
+            { label: 'จำนวน (Count)', width: getColWidth('@TOP_IPS_LIST', 'col2', 30), align: 'right' }
         ],
         (safeData.topIps || []).slice(0, 3).map(item => [item.ip, formatCompactNumber(item.count)])
     );
@@ -805,8 +820,8 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Top Rules Table
     const topRulesHtml = generateHtmlTable(
         [
-            { label: 'Rule Name (ID)', width: '70%' },
-            { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+            { label: 'Rule Name (ID)', width: getColWidth('@TOP_RULES_LIST', 'col1', 70) },
+            { label: 'จำนวน (Count)', width: getColWidth('@TOP_RULES_LIST', 'col2', 30), align: 'right' }
         ],
         (safeData.topRules || []).slice(0, 3).map(item => [item.rule, formatCompactNumber(item.count)])
     );
@@ -815,10 +830,10 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Top Attackers Table
     const topAttackersHtml = generateHtmlTable(
         [
-            { label: 'IP', width: '30%' },
-            { label: 'ประเทศ (Country)', width: '25%' },
-            { label: 'จำนวน (Count)', width: '25%', align: 'right' },
-            { label: 'ประเภท (Type)', width: '20%' }
+            { label: 'IP', width: getColWidth('@TOP_ATTACKERS_LIST', 'col1', 30) },
+            { label: 'ประเทศ (Country)', width: getColWidth('@TOP_ATTACKERS_LIST', 'col2', 25) },
+            { label: 'จำนวน (Count)', width: getColWidth('@TOP_ATTACKERS_LIST', 'col3', 25), align: 'right' },
+            { label: 'ประเภท (Type)', width: getColWidth('@TOP_ATTACKERS_LIST', 'col4', 20) }
         ],
         (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, getCountryName(item.country), formatCompactNumber(item.count), item.type])
     );
@@ -827,8 +842,8 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Top Sources Table
     const topSourcesHtml = generateHtmlTable(
         [
-            { label: 'Type (Security Source)', width: '70%' },
-            { label: 'จำนวน (Count)', width: '30%', align: 'right' }
+            { label: 'Type (Security Source)', width: getColWidth('@TOP_SOURCES_LIST', 'col1', 70) },
+            { label: 'จำนวน (Count)', width: getColWidth('@TOP_SOURCES_LIST', 'col2', 30), align: 'right' }
         ],
         (safeData.topFirewallSources || []).slice(0, 5).map(item => [item.source, item.count.toLocaleString()])
     );
@@ -3570,6 +3585,7 @@ export default function GDCCPage() {
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
     const [isBackgroundJobsModalOpen, setIsBackgroundJobsModalOpen] = useState(false);
     const [isImageSettingsModalOpen, setIsImageSettingsModalOpen] = useState(false);
+    const [isTableSettingsModalOpen, setIsTableSettingsModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -6152,6 +6168,16 @@ export default function GDCCPage() {
                                         >
                                             <Settings className="w-3 h-3" /> Image Size Settings
                                         </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsTableSettingsModalOpen(true); 
+                                            }}
+                                            className={}
+                                        >
+                                            <Table className="w-3 h-3" /> Table Column Settings
+                                        </button>
                                         </div>
                                     {/* Theme Settings (Refactored to Submenu) */}
                                     <div className="relative">
@@ -6303,6 +6329,13 @@ export default function GDCCPage() {
                 isOpen={isImageSettingsModalOpen}
                 onClose={() => setIsImageSettingsModalOpen(false)}
                 theme={theme}
+            />
+
+            <TableSettingsModal
+                isOpen={isTableSettingsModalOpen}
+                onClose={() => setIsTableSettingsModalOpen(false)}
+                theme={theme}
+                storageKey="gdcc:table-column-widths"
             />
 
             <SyncHistoryModal
