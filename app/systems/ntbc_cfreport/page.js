@@ -8,6 +8,7 @@ import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loa
 import ManageTemplateModal from './ManageTemplateModal';
 import ImageSettingsModal from './ImageSettingsModal';
 import TableSettingsModal, { DEFAULT_TABLE_COLUMN_WIDTHS } from './TableSettingsModal';
+import PageMarginSettingsModal from './PageMarginSettingsModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import SearchableDropdown from './SearchableDropdown';
@@ -1532,6 +1533,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             titleField.name = 'title';
             titleField.value = filename.includes('template') ? 'Report Template' : 'Cloudflare Report';
             form.appendChild(titleField);
+
+            const marginsField = document.createElement('input');
+            marginsField.type = 'hidden';
+            marginsField.name = 'margins';
+            try {
+                const storedMargins = localStorage.getItem('ntbc:page-margins');
+                if (storedMargins) {
+                    marginsField.value = storedMargins;
+                    form.appendChild(marginsField);
+                }
+            } catch (e) {}
 
             document.body.appendChild(form);
             form.submit();
@@ -3574,6 +3586,7 @@ export default function NTBCCFReportPage() {
     const dashboardRef = useRef(null);
     const [isImageSettingsModalOpen, setIsImageSettingsModalOpen] = useState(false);
     const [isTableSettingsModalOpen, setIsTableSettingsModalOpen] = useState(false);
+    const [isPageMarginModalOpen, setIsPageMarginModalOpen] = useState(false);
     const [capturedDomainImage, setCapturedDomainImage] = useState(null);
     const [capturedDnsImage, setCapturedDnsImage] = useState(null);
     const [capturedDnsPages, setCapturedDnsPages] = useState([]);
@@ -5660,6 +5673,16 @@ export default function NTBCCFReportPage() {
                                         >
                                             <Table className="w-3 h-3" /> Table Column Settings
                                         </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsPageMarginModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
+                                        >
+                                            <Layout className="w-3 h-3" /> Page Margin Settings
+                                        </button>
                                     </div>
                                     {/* Theme Settings */}
                                     <div className="relative border-t border-gray-700/50">
@@ -5833,6 +5856,13 @@ export default function NTBCCFReportPage() {
                 onClose={() => setIsTableSettingsModalOpen(false)}
                 theme={theme}
                 storageKey="ntbc:table-column-widths"
+            />
+
+            <PageMarginSettingsModal
+                isOpen={isPageMarginModalOpen}
+                onClose={() => setIsPageMarginModalOpen(false)}
+                theme={theme}
+                storageKey="ntbc:page-margins"
             />
 
             <main className="max-w-6xl mx-auto p-8 min-h-[calc(100vh-3.5rem)] flex flex-col justify-center">

@@ -19,9 +19,11 @@ const convertAsync = promisify(libreoffice.convert);
  * 3. Replaces any multi-font or comma/semicolon-separated font names with 'TH SarabunPSK'.
  * 4. Ensures w:docDefaults in styles.xml uses TH SarabunPSK.
  */
-async function sanitizeDocxFonts(buffer) {
+async function sanitizeDocxFonts(bufferOrPath, margins = null) {
     try {
-        const zip = await JSZip.loadAsync(buffer);
+        const data = Buffer.isBuffer(bufferOrPath) ? bufferOrPath : fsNode.readFileSync(bufferOrPath);
+        const zip = await JSZip.loadAsync(data);
+        let modified = false;
 
         // 1. Fix word/fontTable.xml - deduplicate fonts and ensure valid ECMA-376 schema
         if (zip.file('word/fontTable.xml')) {
@@ -151,6 +153,19 @@ async function sanitizeDocxFonts(buffer) {
                 modified = true;
             }
 
+            // In document.xml, enforce page margins if specified
+            if (fileName === 'word/document.xml' && margins) {
+                const topDxa = Math.round(((parseFloat(margins.top) || 2.54) / 2.54) * 1440);
+                const bottomDxa = Math.round(((parseFloat(margins.bottom) || 2.54) / 2.54) * 1440);
+                const leftDxa = Math.round(((parseFloat(margins.left) || 2.54) / 2.54) * 1440);
+                const rightDxa = Math.round(((parseFloat(margins.right) || 2.54) / 2.54) * 1440);
+
+                if (/<w:pgMar\b[^>]*\/>/i.test(xml)) {
+                    xml = xml.replace(/<w:pgMar\b[^>]*\/>/gi, `<w:pgMar w:top="${topDxa}" w:right="${rightDxa}" w:bottom="${bottomDxa}" w:left="${leftDxa}" w:header="720" w:footer="720" w:gutter="0"/>`);
+                    modified = true;
+                }
+            }
+
             if (modified) {
                 zip.file(fileName, xml);
             }
@@ -159,7 +174,7 @@ async function sanitizeDocxFonts(buffer) {
         return await zip.generateAsync({ type: 'nodebuffer' });
     } catch (zipErr) {
         console.warn('⚠️ Error during docx sanitization, returning original buffer:', zipErr.message);
-        return buffer;
+        return bufferOrPath;
     }
 }
 
@@ -173,12 +188,14 @@ export async function POST(request) {
         let html;
         let filename = 'document.docx';
         let title;
+        let margins = null;
 
         if (contentType.includes('application/json')) {
             const body = await request.json();
             html = body?.html;
             filename = body?.filename || filename;
             title = body?.title;
+            margins = body?.margins || null;
         } else {
             // Support form POST to allow browsers to download as a normal file
             // (avoids programmatic download restrictions in some browsers)
@@ -186,6 +203,10 @@ export async function POST(request) {
             html = form.get('html');
             filename = form.get('filename') || filename;
             title = form.get('title');
+            const marginsStr = form.get('margins');
+            if (marginsStr) {
+                try { margins = JSON.parse(marginsStr); } catch (e) {}
+            }
         }
 
         html = typeof html === 'string' ? html : (html ? String(html) : '');
@@ -446,6 +467,14 @@ export async function POST(request) {
                 }
             }
             // Force clean single TH SarabunPSK font-family on all elements to prevent multi-font comma truncation in MS Word
+            const marginCss = margins ? `
+                @page {
+                    margin-top: ${margins.top || 2.54}cm !important;
+                    margin-bottom: ${margins.bottom || 2.54}cm !important;
+                    margin-left: ${margins.left || 2.54}cm !important;
+                    margin-right: ${margins.right || 2.54}cm !important;
+                }
+            ` : '';
             const fontOverrideStyle = `<style>
                 * { font-family: 'TH SarabunPSK' !important; }
                 h1, h2, h3, h4, h5, h6, p, span, div, table, tr, td, th, a, li, ul, ol {
@@ -454,6 +483,7 @@ export async function POST(request) {
                 table { width: 100% !important; border-collapse: collapse !important; }
                 i, em { font-style: italic !important; }
                 b, strong { font-weight: bold !important; }
+                ${marginCss}
             </style>`;
             if (modifiedHtml.includes('</head>')) {
                 modifiedHtml = modifiedHtml.replace('</head>', `${fontOverrideStyle}</head>`);
@@ -535,7 +565,7 @@ export async function POST(request) {
 
         // Sanitize all font references in the generated docx archive
         if (docxBuffer) {
-            docxBuffer = await sanitizeDocxFonts(docxBuffer);
+            docxBuffer = await sanitizeDocxFonts(docxBuffer, margins);
         }
 
         console.log(`✅ API Conversion successful. Buffer length: ${docxBuffer.length}`);
