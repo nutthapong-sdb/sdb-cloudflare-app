@@ -8,6 +8,7 @@ import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loa
 import ManageTemplateModal from './ManageTemplateModal';
 import ImageSettingsModal from './ImageSettingsModal';
 import TableSettingsModal, { DEFAULT_TABLE_COLUMN_WIDTHS } from './TableSettingsModal';
+import PageMarginSettingsModal from './PageMarginSettingsModal';
 import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import BackgroundJobsModal from './BackgroundJobsModal';
@@ -1273,6 +1274,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             titleField.name = 'title';
             titleField.value = filename.includes('template') ? 'Report Template' : 'Cloudflare Report';
             form.appendChild(titleField);
+
+            const marginsField = document.createElement('input');
+            marginsField.type = 'hidden';
+            marginsField.name = 'margins';
+            try {
+                const storedMargins = localStorage.getItem('gdcc:page-margins');
+                if (storedMargins) {
+                    marginsField.value = storedMargins;
+                    form.appendChild(marginsField);
+                }
+            } catch (e) {}
 
             document.body.appendChild(form);
             form.submit();
@@ -3586,6 +3598,7 @@ export default function GDCCPage() {
     const [isBackgroundJobsModalOpen, setIsBackgroundJobsModalOpen] = useState(false);
     const [isImageSettingsModalOpen, setIsImageSettingsModalOpen] = useState(false);
     const [isTableSettingsModalOpen, setIsTableSettingsModalOpen] = useState(false);
+    const [isPageMarginModalOpen, setIsPageMarginModalOpen] = useState(false);
     const dashboardRef = useRef(null);
 
     // Theme State
@@ -6178,6 +6191,16 @@ export default function GDCCPage() {
                                         >
                                             <Table className="w-3 h-3" /> Table Column Settings
                                         </button>
+                                        <button
+                                            onClick={() => { 
+                                                setIsReportMenuOpen(false); 
+                                                setIsTemplateSubmenuOpen(false); 
+                                                setIsPageMarginModalOpen(true); 
+                                            }}
+                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
+                                        >
+                                            <Layout className="w-3 h-3" /> Page Margin Settings
+                                        </button>
                                         </div>
                                     {/* Theme Settings (Refactored to Submenu) */}
                                     <div className="relative">
@@ -6336,6 +6359,13 @@ export default function GDCCPage() {
                 onClose={() => setIsTableSettingsModalOpen(false)}
                 theme={theme}
                 storageKey="gdcc:table-column-widths"
+            />
+
+            <PageMarginSettingsModal
+                isOpen={isPageMarginModalOpen}
+                onClose={() => setIsPageMarginModalOpen(false)}
+                theme={theme}
+                storageKey="gdcc:page-margins"
             />
 
             <SyncHistoryModal
