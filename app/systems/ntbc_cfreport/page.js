@@ -1325,7 +1325,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "@page Section1 { size: 21cm 29.7cm; margin: " + (pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54) + "cm " + (pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54) + "cm " + (pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54) + "cm " + (pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54) + "cm; mso-header-margin:0pt; mso-footer-margin:0pt; mso-paper-source:0; }" +
             "@page { margin-top: " + (pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54) + "cm; margin-bottom: " + (pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54) + "cm; margin-left: " + (pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54) + "cm; margin-right: " + (pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54) + "cm; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; white-space: pre-wrap; }" +
+            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; white-space: pre-wrap; margin: 0 !important; padding: 0 !important; }" +
             "i, em { font-style: italic !important; }" +
             "b, strong { font-weight: bold !important; }" +
             "img { max-width: 100%; height: auto; }" +
@@ -1340,7 +1340,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "div, table { margin-top: 0px; margin-bottom: 0px; }" +
             "</style>" +
             "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
-            "</head><body><div class='Section1'>";
+            "</head><body style='margin:0;padding:0;'><div class='Section1'>";
 
         const cleanHeader = "<style>" +
             "@page Section1 { size: 21cm 29.7cm; margin: " + (pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54) + "cm " + (pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54) + "cm " + (pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54) + "cm " + (pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54) + "cm; }" +

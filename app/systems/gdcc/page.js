@@ -1102,7 +1102,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "@page Section1 { size: 21cm 29.7cm; margin: " + (pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54) + "cm " + (pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54) + "cm " + (pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54) + "cm " + (pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54) + "cm; mso-header-margin:0pt; mso-footer-margin:0pt; mso-paper-source:0; }" +
             "@page { margin-top: " + (pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54) + "cm; margin-bottom: " + (pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54) + "cm; margin-left: " + (pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54) + "cm; margin-right: " + (pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54) + "cm; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; white-space: pre-wrap; }" +
+            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; white-space: pre-wrap; margin: 0 !important; padding: 0 !important; }" +
             "i, em { font-style: italic !important; }" +
             "b, strong { font-weight: bold !important; }" +
             "img { max-width: 100%; height: auto; }" +
@@ -1117,7 +1117,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
             "div, table { margin-top: 0px; margin-bottom: 0px; }" +
             "</style>" +
             "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
-            "</head><body><div class='Section1'>";
+            "</head><body style='margin:0;padding:0;'><div class='Section1'>";
 
         const cleanHeader = "<style>" +
             "@page Section1 { size: 21cm 29.7cm; margin: " + (pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54) + "cm " + (pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54) + "cm " + (pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54) + "cm " + (pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54) + "cm; }" +
@@ -4657,22 +4657,33 @@ export default function GDCCPage() {
             }
         });
 
+        let batchMargins = { top: 2.54, bottom: 2.54, left: 2.54, right: 2.54 };
+        try {
+            const sm = typeof window !== 'undefined' ? localStorage.getItem('gdcc:page-margins') : null;
+            if (sm) batchMargins = JSON.parse(sm);
+        } catch (e) {}
+        const bTop = batchMargins.top !== undefined && batchMargins.top !== '' ? batchMargins.top : 2.54;
+        const bBottom = batchMargins.bottom !== undefined && batchMargins.bottom !== '' ? batchMargins.bottom : 2.54;
+        const bLeft = batchMargins.left !== undefined && batchMargins.left !== '' ? batchMargins.left : 2.54;
+        const bRight = batchMargins.right !== undefined && batchMargins.right !== '' ? batchMargins.right : 2.54;
+
         const legacyHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
             "xmlns='http://www.w3.org/TR/REC-html40'>" +
             "<head><meta charset='utf-8'><title>Batch Report</title>" +
             "<style>" +
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
-            "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "@page Section1 { size: 21cm 29.7cm; margin: " + bTop + "cm " + bRight + "cm " + bBottom + "cm " + bLeft + "cm; mso-header-margin:0pt; mso-footer-margin:0pt; mso-paper-source:0; }" +
+            "@page { margin-top: " + bTop + "cm; margin-bottom: " + bBottom + "cm; margin-left: " + bLeft + "cm; margin-right: " + bRight + "cm; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; }" +
+            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; margin: 0 !important; padding: 0 !important; }" +
             "i, em { font-style: italic !important; }" +
             "b, strong { font-weight: bold !important; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +
             "</style>" +
-            "</head><body><div class='Section1'>";
+            "</head><body style='margin:0;padding:0;'><div class='Section1'>";
 
         const cleanHeader = "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
             "xmlns:w='urn:schemas-microsoft-com:office:word' " +
@@ -4680,16 +4691,17 @@ export default function GDCCPage() {
             "<head><meta charset='utf-8'><title>Batch Report</title>" +
             "<style>" +
             "@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');" +
-            "@page Section1 { size: 21cm 29.7cm; margin: 2.54cm 2.54cm 2.54cm 2.54cm; mso-header-margin:35.4pt; mso-footer-margin:35.4pt; mso-paper-source:0; }" +
+            "@page Section1 { size: 21cm 29.7cm; margin: " + bTop + "cm " + bRight + "cm " + bBottom + "cm " + bLeft + "cm; mso-header-margin:0pt; mso-footer-margin:0pt; mso-paper-source:0; }" +
+            "@page { margin-top: " + bTop + "cm; margin-bottom: " + bBottom + "cm; margin-left: " + bLeft + "cm; margin-right: " + bRight + "cm; }" +
             "div.Section1 { page: Section1; }" +
-            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; }" +
+            "body { font-family: 'TH SarabunPSK'; font-size: 16pt; margin: 0 !important; padding: 0 !important; }" +
             "i, em { font-style: italic !important; }" +
             "b, strong { font-weight: bold !important; }" +
             "table { width: 100%; border-collapse: collapse; }" +
             "td, th { border: 1px solid #000; padding: 5px; }" +
             ".page-break { page-break-after: always; }" +
             "</style>" +
-            "</head><body><div class='Section1'>";
+            "</head><body style='margin:0;padding:0;'><div class='Section1'>";
 
         const footer = "</div></body></html>";
 
