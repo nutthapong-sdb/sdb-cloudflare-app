@@ -101,14 +101,16 @@ const DEFAULT_TEMPLATE = `
 
 // Helper to generate HTML tables for lists
 const generateHtmlTable = (headers, rows, styles = {}) => {
-    const thStyle = "border: 1px solid black; padding: 8px; background-color: #f3f4f6; font-weight: bold;";
-    const tdStyle = "border: 1px solid black; padding: 8px;";
+    const thStyle = "border: 1px solid black; padding: 8px; background-color: #f3f4f6; font-weight: bold; font-family: 'TH SarabunPSK'; font-size: 16pt;";
+    const tdStyle = "border: 1px solid black; padding: 8px; font-family: 'TH SarabunPSK'; font-size: 16pt;";
 
-    let html = `<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; margin-top: 0; margin-bottom: 0; ${styles.table || ''}">
+    let html = `<table width="100%" style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-top: 0; margin-bottom: 0; ${styles.table || ''}">
         <thead><tr>`;
 
     headers.forEach(h => {
-        html += `<th style="${thStyle} width: ${h.width || 'auto'}; text-align: ${h.align || 'left'};">${h.label}</th>`;
+        const widthAttr = h.width ? ` width="${h.width}"` : '';
+        const widthStyle = h.width ? ` width: ${h.width};` : '';
+        html += `<th${widthAttr} style="${thStyle}${widthStyle} text-align: ${h.align || 'left'};">${h.label}</th>`;
     });
 
     html += `</tr></thead><tbody>`;
@@ -117,7 +119,10 @@ const generateHtmlTable = (headers, rows, styles = {}) => {
         html += `<tr>`;
         row.forEach((cell, idx) => {
             const align = headers[idx]?.align || 'left';
-            html += `<td style="${tdStyle} text-align: ${align};">${cell}</td>`;
+            const width = headers[idx]?.width;
+            const widthAttr = width ? ` width="${width}"` : '';
+            const widthStyle = width ? ` width: ${width};` : '';
+            html += `<td${widthAttr} style="${tdStyle}${widthStyle} text-align: ${align};">${cell}</td>`;
         });
         html += `</tr>`;
     });
@@ -823,10 +828,10 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
     // Top Attackers Table
     const topAttackersHtml = generateHtmlTable(
         [
-            { label: 'IP' },
-            { label: 'ประเทศ (Country)' },
-            { label: 'จำนวน (Count)', align: 'right' },
-            { label: 'ประเภท (Type)' }
+            { label: 'IP', width: '30%' },
+            { label: 'ประเทศ (Country)', width: '25%' },
+            { label: 'จำนวน (Count)', width: '25%', align: 'right' },
+            { label: 'ประเภท (Type)', width: '20%' }
         ],
         (safeData.topAttackers || []).slice(0, 5).map(item => [item.ip, getCountryName(item.country), formatCompactNumber(item.count), item.type])
     );

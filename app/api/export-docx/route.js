@@ -451,6 +451,7 @@ export async function POST(request) {
                 h1, h2, h3, h4, h5, h6, p, span, div, table, tr, td, th, a, li, ul, ol {
                     font-family: 'TH SarabunPSK' !important;
                 }
+                table { width: 100% !important; border-collapse: collapse !important; }
                 i, em { font-style: italic !important; }
                 b, strong { font-weight: bold !important; }
             </style>`;
@@ -459,6 +460,9 @@ export async function POST(request) {
             } else {
                 modifiedHtml = fontOverrideStyle + modifiedHtml;
             }
+
+            // Ensure all <table> tags have width="100%"
+            modifiedHtml = modifiedHtml.replace(/<table(?![^>]*width=["']?100%["']?)([^>]*)>/gi, '<table width="100%"$1>');
 
             // Convert strong -> b and em -> i so LibreOffice generates direct run formatting (<w:b/> + <w:i/>)
             // instead of conflicting character styles (Strong vs Emphasis) which drops bold when combined with italic
