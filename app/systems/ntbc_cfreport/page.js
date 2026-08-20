@@ -1570,15 +1570,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         };
 
         try {
-            // Template editing exports can be large (embedded base64 images).
-            // Prefer fast .doc download in that case to avoid long server conversion.
-            if (isTemplateMode || mode === 'report') {
-                downloadHtmlAsDoc(sourceHTML);
-                return;
-            }
-
-            // Use a hidden iframe target so the browser downloads normally
-            // without opening a new tab that looks like it's "loading".
+            // Use a hidden iframe target so the browser downloads .docx with exact margins
             submitExportFormToHiddenIframe(cleanHeader + cleanHTML + footer);
         } catch (error) {
             console.error('Word export error:', error);
