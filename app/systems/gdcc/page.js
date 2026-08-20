@@ -949,10 +949,20 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
     const [showUnusedOnly, setShowUnusedOnly] = useState(false);
     const [isVariablesCollapsed, setIsVariablesCollapsed] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [pageMargins, setPageMargins] = useState({ top: 2.54, bottom: 2.54, left: 2.54, right: 2.54, presetId: 'normal' });
 
     useEffect(() => {
         setMounted(true);
-    }, []);
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('gdcc:page-margins');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    setPageMargins(prev => ({ ...prev, ...parsed }));
+                }
+            } catch (e) {}
+        }
+    }, [isOpen]);
 
     const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
