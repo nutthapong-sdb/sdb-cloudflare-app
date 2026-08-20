@@ -43,7 +43,7 @@ export const DEFAULT_PAGE_MARGINS = {
     presetId: 'normal'
 };
 
-export default function PageMarginSettingsModal({ isOpen, onClose, theme, storageKey = 'gdcc:page-margins' }) {
+export default function PageMarginSettingsModal({ isOpen, onClose, onSave, theme, storageKey = 'gdcc:page-margins' }) {
     const [margins, setMargins] = useState(DEFAULT_PAGE_MARGINS);
 
     useEffect(() => {
@@ -105,6 +105,7 @@ export default function PageMarginSettingsModal({ isOpen, onClose, theme, storag
         if (typeof window !== 'undefined') {
             try {
                 localStorage.setItem(storageKey, JSON.stringify(payload));
+                if (onSave) onSave(payload);
                 Swal.fire({
                     title: 'Saved!',
                     text: 'Page margin settings saved successfully.',
