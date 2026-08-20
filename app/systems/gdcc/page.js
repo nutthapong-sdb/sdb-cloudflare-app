@@ -5466,13 +5466,56 @@ export default function GDCCPage() {
                 }
 
                 if (!isWorkerMode) {
-                    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-                    const a = document.createElement("a");
-                    a.href = source;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    const docxFilename = filename.replace(/\.doc$/, '') + '.docx';
+                    let parsedMargins = { top: 2.54, bottom: 2.54, left: 2.54, right: 2.54 };
+                    try {
+                        const stored = localStorage.getItem('gdcc:page-margins');
+                        if (stored) parsedMargins = JSON.parse(stored);
+                    } catch (e) {}
+
+                    const iframeName = `batch_docx_export_${Date.now()}`;
+                    const iframe = document.createElement('iframe');
+                    iframe.name = iframeName;
+                    iframe.style.display = 'none';
+                    document.body.appendChild(iframe);
+
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/api/export-docx';
+                    form.style.display = 'none';
+                    form.target = iframeName;
+
+                    const htmlField = document.createElement('textarea');
+                    htmlField.name = 'html';
+                    htmlField.value = sourceHTML;
+                    form.appendChild(htmlField);
+
+                    const filenameInput = document.createElement('input');
+                    filenameInput.type = 'hidden';
+                    filenameInput.name = 'filename';
+                    filenameInput.value = docxFilename;
+                    form.appendChild(filenameInput);
+
+                    const titleInput = document.createElement('input');
+                    titleInput.type = 'hidden';
+                    titleInput.name = 'title';
+                    titleInput.value = 'Batch Cloudflare Report';
+                    form.appendChild(titleInput);
+
+                    const marginsInput = document.createElement('input');
+                    marginsInput.type = 'hidden';
+                    marginsInput.name = 'margins';
+                    marginsInput.value = JSON.stringify(parsedMargins);
+                    form.appendChild(marginsInput);
+
+                    document.body.appendChild(form);
+                    form.submit();
+                    document.body.removeChild(form);
+                    setTimeout(() => {
+                        if (document.body.contains(iframe)) {
+                            document.body.removeChild(iframe);
+                        }
+                    }, 60000);
                 }
             } catch (error) {
                 console.error('Batch Word export error:', error);
