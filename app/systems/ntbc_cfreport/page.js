@@ -101,10 +101,10 @@ const DEFAULT_TEMPLATE = `
 
 // Helper to generate HTML tables for lists
 const generateHtmlTable = (headers, rows, styles = {}) => {
-    const thStyle = "border: 1px solid black; padding: 8px; background-color: #f3f4f6; font-weight: bold; font-family: 'TH SarabunPSK'; font-size: 16pt;";
-    const tdStyle = "border: 1px solid black; padding: 8px; font-family: 'TH SarabunPSK'; font-size: 16pt;";
+    const thStyle = "border: 1px solid black; padding: 6px 8px; background-color: #f3f4f6; font-weight: bold; font-family: 'TH SarabunPSK'; font-size: 16pt; word-break: break-all; overflow-wrap: anywhere;";
+    const tdStyle = "border: 1px solid black; padding: 6px 8px; font-family: 'TH SarabunPSK'; font-size: 16pt; word-break: break-all; overflow-wrap: anywhere;";
 
-    let html = `<table width="100%" style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-top: 0; margin-bottom: 0; ${styles.table || ''}">
+    let html = `<table width="100%" style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-top: 0; margin-bottom: 0; table-layout: fixed; ${styles.table || ''}">
         <thead><tr>`;
 
     headers.forEach(h => {
