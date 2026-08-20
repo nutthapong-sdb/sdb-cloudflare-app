@@ -1138,9 +1138,20 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         downloadWordRef.current = handleDownloadWord;
     });
 
+    const [pageMargins, setPageMargins] = useState({ top: 2.54, bottom: 2.54, left: 2.54, right: 2.54, presetId: 'normal' });
+
     useEffect(() => {
         setMounted(true);
-    }, []);
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('ntbc:page-margins');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    setPageMargins(prev => ({ ...prev, ...parsed }));
+                }
+            } catch (e) {}
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         if (isOpen && autoDownloadWord && mounted) {
