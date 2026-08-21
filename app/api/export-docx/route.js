@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
+import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
 import { exec } from 'child_process';
@@ -21,7 +22,7 @@ const convertAsync = promisify(libreoffice.convert);
  */
 async function sanitizeDocxFonts(bufferOrPath, margins = null) {
     try {
-        const data = Buffer.isBuffer(bufferOrPath) ? bufferOrPath : fsNode.readFileSync(bufferOrPath);
+        const data = Buffer.isBuffer(bufferOrPath) ? bufferOrPath : fsSync.readFileSync(bufferOrPath);
         const zip = await JSZip.loadAsync(data);
         let modified = false;
 
