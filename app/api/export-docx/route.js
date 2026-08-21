@@ -129,10 +129,16 @@ async function sanitizeDocxFonts(bufferOrPath, margins = null) {
                 return '<w:rPr>' + newInner + '</w:rPr>';
             });
 
-            // In styles.xml, ensure docDefaults font is set to TH SarabunPSK and synchronize style sizes
+            // In styles.xml, ensure docDefaults font is set to TH SarabunPSK, synchronize style sizes, and remove accidental indents from Normal style
             if (fileName === 'word/styles.xml') {
                 xml = xml.replace(/<w:docDefaults>[\s\S]*?<w:rFonts[^>]*\/>/i, (match) => {
                     return match.replace(/<w:rFonts[^>]*\/>/, '<w:rFonts w:ascii="TH SarabunPSK" w:hAnsi="TH SarabunPSK" w:eastAsia="TH SarabunPSK" w:cs="TH SarabunPSK"/>');
+                });
+                xml = xml.replace(/(<w:style\b[^>]*w:styleId=["']Normal["'][\s\S]*?<w:pPr>)([\s\S]*?)(<\/w:pPr>)/gi, (match, pPrOpen, pPrInner, pPrClose) => {
+                    let cleanInner = pPrInner
+                        .replace(/<w:ind\b[^>]*\/>/gi, '')
+                        .replace(/<w:spacing\b[^>]*\/>/gi, '');
+                    return pPrOpen + cleanInner + pPrClose;
                 });
                 xml = xml.replace(/<w:style\b([\s\S]*?)<\/w:style>/gi, (match, inner) => {
                     let newInner = inner;
@@ -477,21 +483,19 @@ export async function POST(request) {
                 const num = parseFloat(val);
                 return isNaN(num) ? '2.54cm' : `${num}cm`;
             };
-            const marginCss = margins ? `
+            const marginCss = `
                 @page {
-                    margin-top: ${getMarginVal(margins.top)} !important;
-                    margin-bottom: ${getMarginVal(margins.bottom)} !important;
-                    margin-left: ${getMarginVal(margins.left)} !important;
-                    margin-right: ${getMarginVal(margins.right)} !important;
+                    size: 21cm 29.7cm;
+                    margin-top: ${getMarginVal(margins?.top)} !important;
+                    margin-bottom: ${getMarginVal(margins?.bottom)} !important;
+                    margin-left: ${getMarginVal(margins?.left)} !important;
+                    margin-right: ${getMarginVal(margins?.right)} !important;
                 }
                 body {
-                    margin-top: ${getMarginVal(margins.top)} !important;
-                    margin-bottom: ${getMarginVal(margins.bottom)} !important;
-                    margin-left: ${getMarginVal(margins.left)} !important;
-                    margin-right: ${getMarginVal(margins.right)} !important;
+                    margin: 0 !important;
                     padding: 0 !important;
                 }
-            ` : '';
+            `;
             const fontOverrideStyle = `<style>
                 * { font-family: 'TH SarabunPSK' !important; }
                 h1, h2, h3, h4, h5, h6, p, span, div, table, tr, td, th, a, li, ul, ol {
