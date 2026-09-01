@@ -543,6 +543,16 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@captured_speed_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedImage || safeData.captured_speed_page, '/captured-speed.png')}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_speed_mobile_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page, '/captured-speed-mobile.png')}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
         '@captured_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImage || safeData.captured_traffic_page, '/captured-traffic.png')}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_bot_management': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedBotManagementImage || safeData.captured_bot_management, '/captured-bot-management.png')}" alt="Captured Bot Management" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_security_level': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityLevelImage || safeData.captured_security_level, '/captured-security-level.png')}" alt="Captured Security Level" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_ssl_overview': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSslOverviewImage || safeData.captured_ssl_overview, '/captured-ssl-overview.png')}" alt="Captured SSL/TLS Encryption" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_ssl_edge': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSslEdgeImage || safeData.captured_ssl_edge, '/captured-ssl-edge.png')}" alt="Captured Edge Certificates" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_rate_limiting_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedRateLimitingImage || safeData.captured_rate_limiting_page, '/captured-rate-limiting.png')}" alt="Captured Rate Limiting Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_managed_rules_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedManagedRulesImage || safeData.captured_managed_rules_page, '/captured-managed-rules.png')}" alt="Captured Managed WAF Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_ip_access_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedIpAccessImage || safeData.captured_ip_access_page, '/captured-ip-access.png')}" alt="Captured IP Access Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_zone_lockdown_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedZoneLockdownImage || safeData.captured_zone_lockdown_page, '/captured-zone-lockdown.png')}" alt="Captured Zone Lockdown Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_traffic_countries_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficCountriesImage || safeData.captured_traffic_countries_page, '/captured-traffic-countries.png')}" alt="Captured Traffic by Country" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_top_events_source_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTopEventsSourceImage || safeData.captured_top_events_source_page, '/captured-top-events-source.png')}" alt="Captured Top Events by Source" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
 
 
         // DDoS Protection - individual protections (convert Always On to Enable)
@@ -3821,6 +3831,16 @@ export default function NTBCCFReportPage() {
     const [capturedArgoImage, setCapturedArgoImage] = useState(null);
     const [capturedSpeedImage, setCapturedSpeedImage] = useState(null);
     const [capturedSpeedMobileImage, setCapturedSpeedMobileImage] = useState(null);
+    const [capturedBotManagementImage, setCapturedBotManagementImage] = useState(null);
+    const [capturedSecurityLevelImage, setCapturedSecurityLevelImage] = useState(null);
+    const [capturedSslOverviewImage, setCapturedSslOverviewImage] = useState(null);
+    const [capturedSslEdgeImage, setCapturedSslEdgeImage] = useState(null);
+    const [capturedRateLimitingImage, setCapturedRateLimitingImage] = useState(null);
+    const [capturedManagedRulesImage, setCapturedManagedRulesImage] = useState(null);
+    const [capturedIpAccessImage, setCapturedIpAccessImage] = useState(null);
+    const [capturedZoneLockdownImage, setCapturedZoneLockdownImage] = useState(null);
+    const [capturedTrafficCountriesImage, setCapturedTrafficCountriesImage] = useState(null);
+    const [capturedTopEventsSourceImage, setCapturedTopEventsSourceImage] = useState(null);
 
     // Load saved screenshots from control center session
     useEffect(() => {
@@ -3845,6 +3865,16 @@ export default function NTBCCFReportPage() {
             setCapturedArgoImage(localStorage.getItem('control_capturedArgoScreenshot'));
             setCapturedSpeedImage(localStorage.getItem('control_capturedSpeedScreenshot'));
             setCapturedSpeedMobileImage(localStorage.getItem('control_capturedSpeedMobileScreenshot'));
+            setCapturedBotManagementImage(localStorage.getItem('control_capturedBotManagementScreenshot'));
+            setCapturedSecurityLevelImage(localStorage.getItem('control_capturedSecurityLevelScreenshot'));
+            setCapturedSslOverviewImage(localStorage.getItem('control_capturedSslOverviewScreenshot'));
+            setCapturedSslEdgeImage(localStorage.getItem('control_capturedSslEdgeScreenshot'));
+            setCapturedRateLimitingImage(localStorage.getItem('control_capturedRateLimitingScreenshot'));
+            setCapturedManagedRulesImage(localStorage.getItem('control_capturedManagedRulesScreenshot'));
+            setCapturedIpAccessImage(localStorage.getItem('control_capturedIpAccessScreenshot'));
+            setCapturedZoneLockdownImage(localStorage.getItem('control_capturedZoneLockdownScreenshot'));
+            setCapturedTrafficCountriesImage(localStorage.getItem('control_capturedTrafficCountriesScreenshot'));
+            setCapturedTopEventsSourceImage(localStorage.getItem('control_capturedTopEventsSourceScreenshot'));
         }
     }, [isReportModalOpen]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
@@ -4846,9 +4876,19 @@ export default function NTBCCFReportPage() {
             launch: 'running',
             domains: 'pending',
             dns: 'pending',
+            bot: 'pending',
+            securityLevel: 'pending',
+            sslOverview: 'pending',
+            sslEdge: 'pending',
             traffic: 'pending',
+            trafficCountries: 'pending',
             firewall: 'pending',
+            topEvents: 'pending',
             rules: 'pending',
+            rateLimiting: 'pending',
+            managedRules: 'pending',
+            ipAccess: 'pending',
+            zoneLockdown: 'pending',
             argo: 'pending',
             speed: 'pending',
             speedMobile: 'pending',
@@ -4870,38 +4910,48 @@ export default function NTBCCFReportPage() {
             const renderLine = (statusKey, text) => {
                 const icon = getIcon(statusMap[statusKey]);
                 const errMsg = errorMap[statusKey] ? `<div style="color: #ef4444; font-size: 11px; margin-left: 24px; margin-top: -6px; margin-bottom: 8px; line-height: 1.2; word-break: break-word;">${errorMap[statusKey]}</div>` : '';
-                return `<div style="margin-bottom: ${errMsg ? '2px' : '10px'};">${icon} ${text}</div>${errMsg}`;
+                return `<div style="margin-bottom: ${errMsg ? '2px' : '6px'}; font-size: 13px;">${icon} ${text}</div>${errMsg}`;
             };
 
             return `
-                <div style="margin-bottom: 10px; background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 10px; border-radius: 6px; text-align: center;">
-                    <p style="color: #60a5fa; font-size: 14px; font-weight: bold; margin: 0;">
+                <div style="margin-bottom: 10px; background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 8px; border-radius: 6px; text-align: center;">
+                    <p style="color: #60a5fa; font-size: 13px; font-weight: bold; margin: 0;">
                         ℹ️ You can safely minimize this browser tab or switch to another window. The process will continue in the background.
                     </p>
                 </div>
-                <div style="display: flex; gap: 20px; text-align: left; font-size: 14px; color: #d1d5db; line-height: 1.6; margin-top: 10px;">
+                <div style="display: flex; gap: 16px; text-align: left; font-size: 13px; color: #d1d5db; line-height: 1.4; margin-top: 10px;">
                     <style>
                         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
-                    <div style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
-                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 100%; min-height: 250px; background: #000;">
+                    <div style="flex: 2.5; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 100%; min-height: 380px; background: #000;">
                             <div style="position: absolute; top: 0; left: 0; background: #e11d48; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Live Browser Monitor</div>
                             <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify" style="width: 100%; height: 100%; border: none;" title="Live Browser Monitor"></iframe>
                         </div>
                     </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #374151; padding-left: 20px;">
+                    <div style="flex: 1.5; display: flex; flex-direction: column; justify-content: flex-start; border-left: 1px solid #374151; padding-left: 16px; max-height: 480px; overflow-y: auto;">
                         ${renderLine('launch', 'Start debug browser')}
                         ${renderLine('domains', 'Capture Domains Overview')}
                         ${renderLine('dns', 'Capture DNS Records')}
+                        ${renderLine('bot', 'Capture Bot Management')}
+                        ${renderLine('securityLevel', 'Capture Security Level & BIC')}
+                        ${renderLine('sslOverview', 'Capture SSL/TLS Overview')}
+                        ${renderLine('sslEdge', 'Capture Min TLS & TLS 1.3')}
                         ${renderLine('traffic', 'Capture HTTP Traffic')}
+                        ${renderLine('trafficCountries', 'Capture Traffic by Country')}
                         ${renderLine('firewall', 'Capture Firewall Events')}
+                        ${renderLine('topEvents', 'Capture Top Events by Source')}
                         ${renderLine('rules', 'Capture Security Rules')}
+                        ${renderLine('rateLimiting', 'Capture Rate Limiting Rules')}
+                        ${renderLine('managedRules', 'Capture Managed WAF Rules')}
+                        ${renderLine('ipAccess', 'Capture IP Access Rules')}
+                        ${renderLine('zoneLockdown', 'Capture Zone Lockdown')}
                         ${renderLine('argo', 'Capture Argo Routing')}
                         ${renderLine('speed', 'Capture Speed Test')}
                         ${renderLine('stats', 'Fetch CF Statistics')}
                         ${renderLine('report', 'Generate & Download Report')}
                         <div style="text-align: left; margin-top: 10px;">
-                            <button id="force-stop-btn" style="background-color: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; width: 100%;">
+                            <button id="force-stop-btn" style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; width: 100%;">
                                 Force Stop
                             </button>
                         </div>
@@ -4965,7 +5015,17 @@ export default function NTBCCFReportPage() {
                 if (!globalCoords) return '';
                 let key = type;
                 if (type === 'speed-mobile') key = 'speedMobile';
-                if (type === 'rules') key = 'securityRules';
+                if (type === 'rules' || type === 'security-rules') key = 'securityRules';
+                if (type === 'bot-management') key = 'botManagement';
+                if (type === 'security-level') key = 'securityLevel';
+                if (type === 'ssl-overview') key = 'sslOverview';
+                if (type === 'ssl-edge') key = 'sslEdge';
+                if (type === 'rate-limiting') key = 'rateLimiting';
+                if (type === 'managed-rules') key = 'managedRules';
+                if (type === 'ip-access-rules') key = 'ipAccess';
+                if (type === 'zone-lockdown') key = 'zoneLockdown';
+                if (type === 'traffic-countries') key = 'trafficCountries';
+                if (type === 'top-events-source') key = 'topEventsSource';
                 const c = globalCoords[key];
                 if (c) {
                     let params = '';
@@ -5130,7 +5190,49 @@ export default function NTBCCFReportPage() {
                     }
                 }
 
-                // Step 4: HTTP Traffic
+                // Step 4: Security Settings (Bot Management & Security Level)
+                const botData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/settings`,
+                    'bot-management',
+                    'bot'
+                );
+                if (botData) {
+                    setCapturedBotManagementImage(botData.image);
+                    localStorage.setItem('control_capturedBotManagementScreenshot', botData.image);
+                }
+                const secLevelData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/settings`,
+                    'security-level',
+                    'securityLevel'
+                );
+                if (secLevelData) {
+                    setCapturedSecurityLevelImage(secLevelData.image);
+                    localStorage.setItem('control_capturedSecurityLevelScreenshot', secLevelData.image);
+                }
+
+                // Step 5: SSL/TLS Overview
+                const sslOverviewData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/ssl-tls`,
+                    'ssl-overview',
+                    'sslOverview'
+                );
+                if (sslOverviewData) {
+                    setCapturedSslOverviewImage(sslOverviewData.image);
+                    localStorage.setItem('control_capturedSslOverviewScreenshot', sslOverviewData.image);
+                }
+
+                // Step 6: SSL/TLS Edge Certificates (Min TLS & TLS 1.3)
+                const sslEdgeData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/ssl-tls/edge-certificates`,
+                    'ssl-edge',
+                    'sslEdge'
+                );
+                if (sslEdgeData) {
+                    setCapturedSslEdgeImage(sslEdgeData.image);
+                    localStorage.setItem('control_capturedSslEdgeScreenshot', sslEdgeData.image);
+                }
+
+                // Step 7: HTTP Traffic
                 let trafficQuery = '';
                 if (batchStartDate && batchEndDate) {
                     const startIso = new Date(batchStartDate + 'T00:00:00.000Z').toISOString();
@@ -5167,7 +5269,18 @@ export default function NTBCCFReportPage() {
                     }
                 }
 
-                // Step 5: Firewall Events
+                // Step 8: Traffic Countries
+                const trafficCountriesData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/analytics/traffic${trafficQuery}`,
+                    'traffic-countries',
+                    'trafficCountries'
+                );
+                if (trafficCountriesData) {
+                    setCapturedTrafficCountriesImage(trafficCountriesData.image);
+                    localStorage.setItem('control_capturedTrafficCountriesScreenshot', trafficCountriesData.image);
+                }
+
+                // Step 9: Firewall Events
                 const firewallData = await controlAndCapture(
                     `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/analytics/events`,
                     'firewall',
@@ -5178,7 +5291,18 @@ export default function NTBCCFReportPage() {
                     localStorage.setItem('control_capturedFirewallScreenshot', firewallData.image);
                 }
 
-                // Step 6: Security Rules
+                // Step 10: Top Events by Source
+                const topEventsData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/analytics/events`,
+                    'top-events-source',
+                    'topEvents'
+                );
+                if (topEventsData) {
+                    setCapturedTopEventsSourceImage(topEventsData.image);
+                    localStorage.setItem('control_capturedTopEventsSourceScreenshot', topEventsData.image);
+                }
+
+                // Step 11: Security Rules (Custom Rules)
                 const rulesData = await controlAndCapture(
                     `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
                     'security-rules',
@@ -5189,7 +5313,51 @@ export default function NTBCCFReportPage() {
                     localStorage.setItem('control_capturedSecurityRulesScreenshot', rulesData.image);
                 }
 
-                // Step 7: Argo Routing
+                // Step 12: Rate Limiting Rules
+                const rateLimitData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
+                    'rate-limiting',
+                    'rateLimiting'
+                );
+                if (rateLimitData) {
+                    setCapturedRateLimitingImage(rateLimitData.image);
+                    localStorage.setItem('control_capturedRateLimitingScreenshot', rateLimitData.image);
+                }
+
+                // Step 13: Managed Rules
+                const managedRulesData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
+                    'managed-rules',
+                    'managedRules'
+                );
+                if (managedRulesData) {
+                    setCapturedManagedRulesImage(managedRulesData.image);
+                    localStorage.setItem('control_capturedManagedRulesScreenshot', managedRulesData.image);
+                }
+
+                // Step 14: IP Access Rules
+                const ipAccessData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
+                    'ip-access-rules',
+                    'ipAccess'
+                );
+                if (ipAccessData) {
+                    setCapturedIpAccessImage(ipAccessData.image);
+                    localStorage.setItem('control_capturedIpAccessScreenshot', ipAccessData.image);
+                }
+
+                // Step 15: Zone Lockdown
+                const zoneLockdownData = await controlAndCapture(
+                    `https://dash.cloudflare.com/${activeAccountId}/${domainName}/security/security-rules`,
+                    'zone-lockdown',
+                    'zoneLockdown'
+                );
+                if (zoneLockdownData) {
+                    setCapturedZoneLockdownImage(zoneLockdownData.image);
+                    localStorage.setItem('control_capturedZoneLockdownScreenshot', zoneLockdownData.image);
+                }
+
+                // Step 16: Argo Routing
                 const argoData = await controlAndCapture(
                     `https://dash.cloudflare.com/${activeAccountId}/${domainName}/traffic`,
                     'argo',

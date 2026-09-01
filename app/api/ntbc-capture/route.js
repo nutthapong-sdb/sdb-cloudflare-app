@@ -29,7 +29,17 @@ export async function GET(request) {
                 argo: 'captured-argo.png',
                 speed: 'captured-speed.png',
                 'speed-mobile': 'captured-speed-mobile.png',
-                domains: 'captured-domains.png'
+                domains: 'captured-domains.png',
+                'bot-management': 'captured-bot-management.png',
+                'security-level': 'captured-security-level.png',
+                'ssl-overview': 'captured-ssl-overview.png',
+                'ssl-edge': 'captured-ssl-edge.png',
+                'rate-limiting': 'captured-rate-limiting.png',
+                'managed-rules': 'captured-managed-rules.png',
+                'ip-access-rules': 'captured-ip-access.png',
+                'zone-lockdown': 'captured-zone-lockdown.png',
+                'traffic-countries': 'captured-traffic-countries.png',
+                'top-events-source': 'captured-top-events-source.png'
             };
             
             const fileName = fileMapping[type] || 'captured-domains.png';
@@ -187,16 +197,26 @@ export async function GET(request) {
                     );
 
                     // Ensure heading H1-H4 title is visible
-                    const headingText = captureType === 'traffic' ? 'traffic' : (captureType === 'dns' ? 'dns' : (captureType === 'firewall' ? 'security' : (captureType === 'security-rules' ? 'rules' : (captureType === 'argo' ? 'argo' : (captureType === 'speed' || captureType === 'speed-mobile' ? 'speed' : 'domains')))));
-                    const heading = findElementByText('h1, h2, h3, h4', headingText);
+                    const headingText = (
+                        captureType === 'traffic' || captureType === 'traffic-countries' ? 'traffic' :
+                        captureType === 'dns' ? 'dns' :
+                        captureType === 'firewall' || captureType === 'top-events-source' ? 'security' :
+                        captureType === 'security-rules' || captureType === 'rate-limiting' || captureType === 'managed-rules' || captureType === 'ip-access-rules' || captureType === 'zone-lockdown' ? 'rules' :
+                        captureType === 'bot-management' || captureType === 'security-level' ? 'settings' :
+                        captureType === 'ssl-overview' ? 'ssl' :
+                        captureType === 'ssl-edge' ? 'certificates' :
+                        captureType === 'argo' ? 'argo' :
+                        (captureType === 'speed' || captureType === 'speed-mobile') ? 'speed' : 'domains'
+                    );
+                    const heading = findElementByText('h1, h2, h3, h4, span, div', headingText) || document.querySelector('main');
                     // Ensure table body, pagination footer, or traffic chart is loaded
-                    let tableOrFooter;
-                    if (captureType === 'traffic' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                    let tableOrFooter = true;
+                    if (captureType === 'traffic' || captureType === 'traffic-countries' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                         tableOrFooter = findElementByText('div, span, button, p, td', 'requests') || findElementByText('div, span, h1, h2, h3, h4', 'traffic') || findElementByText('div, span, button, p, td', 'result') || document.querySelector('svg, canvas, button');
                     } else if (captureType === 'domains') {
                         tableOrFooter = document.querySelector('[data-testid="zone-card"]') || findElementByText('div, span, h1, h2, h3, p', 'sites') || document.querySelector('table');
                     } else {
-                        tableOrFooter = findElementByText('div, span, button, p, td', 'of') || findElementByText('div, span, button, p, td', 'items') || document.querySelector('table');
+                        tableOrFooter = findElementByText('div, span, button, p, td', 'of') || findElementByText('div, span, button, p, td', 'items') || document.querySelector('table, form, section, main');
                     }
                                           
                     // Complete if heading and footer/table exist AND no loading placeholders are active
@@ -691,7 +711,27 @@ export async function GET(request) {
             }
         }
 
-        const fileName = type === 'dns' ? 'captured-dns.png' : (type === 'traffic' ? 'captured-traffic.png' : (type === 'firewall' ? 'captured-firewall.png' : (type === 'security-rules' ? 'captured-security-rules.png' : (type === 'argo' ? 'captured-argo.png' : (type === 'speed' ? 'captured-speed.png' : (type === 'speed-mobile' ? 'captured-speed-mobile.png' : 'captured-domains.png'))))));
+        const fileMapping = {
+            dns: 'captured-dns.png',
+            traffic: 'captured-traffic.png',
+            firewall: 'captured-firewall.png',
+            'security-rules': 'captured-security-rules.png',
+            argo: 'captured-argo.png',
+            speed: 'captured-speed.png',
+            'speed-mobile': 'captured-speed-mobile.png',
+            domains: 'captured-domains.png',
+            'bot-management': 'captured-bot-management.png',
+            'security-level': 'captured-security-level.png',
+            'ssl-overview': 'captured-ssl-overview.png',
+            'ssl-edge': 'captured-ssl-edge.png',
+            'rate-limiting': 'captured-rate-limiting.png',
+            'managed-rules': 'captured-managed-rules.png',
+            'ip-access-rules': 'captured-ip-access.png',
+            'zone-lockdown': 'captured-zone-lockdown.png',
+            'traffic-countries': 'captured-traffic-countries.png',
+            'top-events-source': 'captured-top-events-source.png'
+        };
+        const fileName = fileMapping[type] || 'captured-domains.png';
         const filePath = path.join(publicDir, fileName);
         fs.writeFileSync(filePath, finalBuffer);
         console.log(`Screenshot saved to ${filePath}`);
