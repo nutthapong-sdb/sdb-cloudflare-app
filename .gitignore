@@ -49,7 +49,9 @@ next-env.d.ts
 # Local runtime data (do not commit)
 /app/data/templates.json
 /app/data/templates/
+/app/data/ntbc_templates.json
 /downloads/templates.json
+/downloads/ntbc_templates.json
 /downloads/templates/
 *.docx
 *.html
