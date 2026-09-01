@@ -250,10 +250,10 @@ export default function ControlPage() {
                           />
                       </div>
                       <div className="flex flex-col gap-1">
-                          <span className="text-[10px] text-gray-400 font-mono font-medium">Yend</span>
+                          <span className="text-[10px] text-gray-400 font-mono font-medium">Yend (Offset)</span>
                           <input 
                               type="text"
-                              placeholder="Auto"
+                              placeholder="Auto (+0)"
                               value={coords[key]?.yEnd || ''}
                               onChange={(e) => {
                                   const val = e.target.value;
@@ -283,13 +283,13 @@ export default function ControlPage() {
                       </button>
                   </div>
                   {key === 'domains' && (
-                      <p className="ml-6 text-[10px] text-gray-400 font-sans leading-normal mt-1.5">
-                        * ค่า Yend สำหรับ Domains จะใช้ปรับขอบล่าง: ใส่ **ค่าลบ** เพื่อหักครอปขึ้นด้านบน (เช่น -250), ใส่ **ค่าบวก** เพื่อยืดขอบลงด้านล่าง (เช่น 50), หรือว่างไว้เป็น Auto (มี Pagination ยืด +15px / ไม่มีหักขึ้น -250px)
+                      <p className="ml-6 text-[10px] text-amber-400/90 font-sans leading-normal mt-1.5">
+                        💡 <b>Yend (Offset):</b> สำหรับ Domains เป็นการบวก/ลบระยะความสูงจากท้ายตาราง (Showing 1-X): เช่น ใส่ <b>+50</b> เพื่อยืดขอบล่างลงอีก 50px, ใส่ <b>-30</b> เพื่อตัดขอบล่างขึ้น 30px, หรือเว้นว่างเป็น <b>Auto (+0)</b>
                       </p>
                   )}
                   {key === 'dns' && (
-                      <p className="ml-6 text-[10px] text-gray-400 font-sans leading-normal mt-1.5">
-                        * ค่า Yend สำหรับ DNS จะใช้ปรับขอบล่าง: ใส่ **ค่าลบ** เพื่อหักครอปขึ้นด้านบน, ใส่ **ค่าบวก** เพื่อยืดขอบลงด้านล่าง, หรือว่างไว้เป็น Auto (ยืดลง +15px จากกล่อง pagination 1 to 50 of records)
+                      <p className="ml-6 text-[10px] text-amber-400/90 font-sans leading-normal mt-1.5">
+                        💡 <b>Yend (Offset):</b> สำหรับ DNS เป็นการบวก/ลบระยะความสูงจากท้ายตาราง DNS: ใส่ <b>+50</b> เพื่อยืดลงล่าง, ใส่ <b>-30</b> เพื่อตัดขึ้นบน, หรือเว้นว่างเป็น <b>Auto (+0)</b>
                       </p>
                   )}
               </div>
@@ -1626,10 +1626,10 @@ export default function ControlPage() {
                                                         />
                                                     </div>
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Yend</span>
+                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Yend (Offset)</span>
                                                         <input
                                                             type="text"
-                                                            placeholder="Auto"
+                                                            placeholder="Auto (+0)"
                                                             value={coords[activeCaptureTab]?.yEnd || ''}
                                                             onChange={(e) => {
                                                                 const val = e.target.value;
@@ -1642,9 +1642,9 @@ export default function ControlPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="text-[10px] text-gray-500 font-sans pt-1">
+                                                <div className="text-[10px] text-gray-400 font-sans pt-1">
                                                     {activeCaptureTab === 'domains' || activeCaptureTab === 'dns'
-                                                        ? '* Yend: ค่าลบ = หักขึ้นบน (เช่น -250), ค่าบวก = ยืดลงล่าง, ว่าง = Auto | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now" ด้านบน'
+                                                        ? '💡 Yend เป็นค่า Offset (+/- px) จากจุดล่างสุดของตาราง (เช่น +50 เพื่อยืดลงล่าง, -30 เพื่อตัดขึ้นบน, ว่าง = Auto) | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now"'
                                                         : '* ความละเอียดมาตรฐาน 1920x1080 (Chrome Live Monitor) | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now" ด้านบน'}
                                                 </div>
                                             </div>

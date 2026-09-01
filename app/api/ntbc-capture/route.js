@@ -275,7 +275,7 @@ export async function GET(request) {
 
             // Evaluate coordinates for post-capture cropping (no viewport clipping)
             console.log('Calculating bounding box coordinates on active page...');
-            if (qXStart && qXEnd && qYStart && qYEnd && type !== 'dns') {
+            if (qXStart && qXEnd && qYStart && qYEnd && type !== 'domains' && type !== 'dns') {
                 const xs = parseInt(qXStart, 10);
                 const xe = parseInt(qXEnd, 10);
                 const ys = parseInt(qYStart, 10);
@@ -298,12 +298,23 @@ export async function GET(request) {
                         const footer = Array.from(document.querySelectorAll('*')).find(el => (el.innerText || '').trim().startsWith('Showing 1'));
                         const hRect = h ? h.getBoundingClientRect() : { top: 80, left: 328 };
                         const fRect = footer ? footer.getBoundingClientRect() : { bottom: 480 };
-                        return {
-                            x: Math.max(0, Math.round(hRect.left) - 30),
-                            y: Math.max(0, Math.round(hRect.top) - 20),
-                            width: 1350,
-                            height: Math.round((fRect.bottom || 480) - hRect.top + 40)
-                        };
+                        
+                        let offsetVal = 40;
+                        const parsedYE = parseInt(qYE, 10);
+                        if (!isNaN(parsedYE)) {
+                            offsetVal = 40 + parsedYE; // e.g. +50 or -30 offset from standard 40px padding
+                        }
+                        
+                        const parsedXS = parseInt(qXS, 10);
+                        const parsedXE = parseInt(qXE, 10);
+                        const parsedYS = parseInt(qYS, 10);
+                        
+                        const x = !isNaN(parsedXS) ? parsedXS : Math.max(0, Math.round(hRect.left) - 30);
+                        const y = !isNaN(parsedYS) ? parsedYS : Math.max(0, Math.round(hRect.top) - 20);
+                        const width = (!isNaN(parsedXS) && !isNaN(parsedXE)) ? Math.max(10, parsedXE - parsedXS) : 1350;
+                        const height = Math.max(100, Math.round((fRect.bottom || 480) - (hRect.top - 20) + offsetVal));
+                        
+                        return { x, y, width, height };
                     }
                 const findLastElementByText = (selector, text) => {
                     const elements = Array.from(document.querySelectorAll(selector));
