@@ -1327,8 +1327,8 @@ export default function ControlPage() {
         try {
             const targetDomain = zones.find(z => z.id === envZone)?.name || 'log.softdebut.online';
             let targetUrl = null;
-            if (relativePath === 'domains') {
-                targetUrl = `https://dash.cloudflare.com/${envAccount}`;
+            if (relativePath === 'domains' || relativePath === '/domains/overview') {
+                targetUrl = `https://dash.cloudflare.com/${envAccount}/domains/overview`;
             } else if (relativePath) {
                 targetUrl = `https://dash.cloudflare.com/${envAccount}/${targetDomain}${relativePath}`;
             }
@@ -1562,7 +1562,7 @@ export default function ControlPage() {
                                 {/* Generic function to render preview with capture button */}
                                 {(() => {
                                     const tabMap = {
-                                        domains: { label: 'Domains Overview', img: capturedScreenshot, type: 'domains', path: 'domains', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
+                                        domains: { label: 'Domains Overview', img: capturedScreenshot, type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
                                         dns: { label: 'DNS Records', img: capturedDnsScreenshot, type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isArray: true },
                                         botManagement: { label: 'Bot Management', img: capturedBotManagementScreenshot, type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
                                         securityLevel: { label: 'Security Level & BIC', img: capturedSecurityLevelScreenshot, type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
