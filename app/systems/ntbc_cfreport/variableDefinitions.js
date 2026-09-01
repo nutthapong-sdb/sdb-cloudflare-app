@@ -115,6 +115,16 @@ export const REPORT_VARIABLES = [
     { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', example: '<img>', category: 'Traffic Screenshots' },
     { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', example: '<img>', category: 'Traffic Screenshots' },
     { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', example: '<img>', category: 'Traffic Screenshots' },
+    { name: '@captured_bot_management', desc: 'รูปภาพกล่องตั้งค่า Bot Management', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_security_level', desc: 'รูปภาพกล่องตั้งค่า Security Level & BIC', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_ssl_overview', desc: 'รูปภาพกล่องตั้งค่า SSL/TLS Encryption Mode', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_ssl_edge', desc: 'รูปภาพกล่องตั้งค่า Minimum TLS Version & TLS 1.3', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_rate_limiting_page', desc: 'รูปภาพรายการกฎ Rate Limiting Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_managed_rules_page', desc: 'รูปภาพรายการกฎ Managed WAF Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_ip_access_page', desc: 'รูปภาพรายการกฎ IP Access Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_zone_lockdown_page', desc: 'รูปภาพรายการกฎ Zone Lockdown Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_traffic_countries_page', desc: 'รูปภาพตารางสถิติปริมาณคำขอแยกตามประเทศ (Top Countries)', example: '<img>', category: 'Traffic Screenshots' },
+    { name: '@captured_top_events_source_page', desc: 'รูปภาพตารางสถิติเหตุการณ์แยกตามแหล่งที่มา (Top Events by Source)', example: '<img>', category: 'Screenshots' },
 ];
 
 export const STATIC_VARIABLES = [
@@ -205,6 +215,15 @@ export const STATIC_VARIABLES = [
     { name: '@captured_data_transfer_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Data Transfer', example: '<img>', category: 'Traffic Screenshots' },
     { name: '@captured_page_views_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Page Views', example: '<img>', category: 'Traffic Screenshots' },
     { name: '@captured_visits_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ Visits', example: '<img>', category: 'Traffic Screenshots' },
-    { name: '@captured_api_requests_traffic_page', desc: 'รูปภาพกราฟสถิติ HTTP Traffic เฉพาะ API Requests', example: '<img>', category: 'Traffic Screenshots' },
     { name: '@captured_traffic_page', desc: 'รูปภาพหน้าจอหน้ารวม Traffic ทั้งหมด', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_bot_management', desc: 'รูปภาพกล่องตั้งค่า Bot Management', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_security_level', desc: 'รูปภาพกล่องตั้งค่า Security Level & BIC', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_ssl_overview', desc: 'รูปภาพกล่องตั้งค่า SSL/TLS Encryption Mode', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_ssl_edge', desc: 'รูปภาพกล่องตั้งค่า Minimum TLS Version & TLS 1.3', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_rate_limiting_page', desc: 'รูปภาพรายการกฎ Rate Limiting Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_managed_rules_page', desc: 'รูปภาพรายการกฎ Managed WAF Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_ip_access_page', desc: 'รูปภาพรายการกฎ IP Access Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_zone_lockdown_page', desc: 'รูปภาพรายการกฎ Zone Lockdown Rules', example: '<img>', category: 'Screenshots' },
+    { name: '@captured_traffic_countries_page', desc: 'รูปภาพตารางสถิติปริมาณคำขอแยกตามประเทศ (Top Countries)', example: '<img>', category: 'Traffic Screenshots' },
+    { name: '@captured_top_events_source_page', desc: 'รูปภาพตารางสถิติเหตุการณ์แยกตามแหล่งที่มา (Top Events by Source)', example: '<img>', category: 'Screenshots' },
 ];

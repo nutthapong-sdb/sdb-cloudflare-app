@@ -46,5 +46,65 @@
     "xEnd": "1632",
     "yStart": "95",
     "yEnd": "850"
+  },
+  "botManagement": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": "750"
+  },
+  "securityLevel": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": "850"
+  },
+  "sslOverview": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": "800"
+  },
+  "sslEdge": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": "900"
+  },
+  "rateLimiting": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": ""
+  },
+  "managedRules": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": ""
+  },
+  "ipAccess": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": ""
+  },
+  "zoneLockdown": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "95",
+    "yEnd": ""
+  },
+  "trafficCountries": {
+    "xStart": "350",
+    "xEnd": "1880",
+    "yStart": "100",
+    "yEnd": "950"
+  },
+  "topEventsSource": {
+    "xStart": "288",
+    "xEnd": "1728",
+    "yStart": "100",
+    "yEnd": "950"
   }
 }
