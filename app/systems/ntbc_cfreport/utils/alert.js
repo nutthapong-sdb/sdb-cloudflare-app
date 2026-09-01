@@ -1,4 +1,5 @@
 import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 
 // Base toast configuration for top-right notifications
 const Toast = Swal.mixin({
@@ -10,7 +11,7 @@ const Toast = Swal.mixin({
     background: '#111827',
     color: '#f3f4f6',
     customClass: {
-        popup: 'rounded-xl border border-gray-800 shadow-2xl backdrop-blur-md',
+        popup: 'ntbc-top-toast rounded-xl border border-gray-800 shadow-2xl backdrop-blur-md',
         title: 'text-sm font-semibold text-gray-100',
         htmlContainer: 'text-xs text-gray-300'
     },
@@ -20,13 +21,8 @@ const Toast = Swal.mixin({
     }
 });
 
-/**
- * Custom Swal wrapper for NTBC application
- * Automatically positions non-modal alerts as top-right toasts.
- */
 const customSwal = {
     ...Swal,
-    // Direct notification helpers
     toast: (icon, title, text) => {
         return Toast.fire({
             icon,
@@ -39,38 +35,49 @@ const customSwal = {
     error: (title, text) => Toast.fire({ icon: 'error', title: title || 'Error', text }),
     warning: (title, text) => Toast.fire({ icon: 'warning', title: title || 'Warning', text }),
     info: (title, text) => Toast.fire({ icon: 'info', title: title || 'Info', text }),
-    
-    // Override fire to route alerts to top-right toast by default unless explicitly a modal dialog (like confirmations)
+
     fire: (...args) => {
-        // Handle Swal.fire('Title', 'Text', 'icon') shorthand
+        // String shorthand: Swal.fire('Title', 'Message', 'icon')
         if (args.length >= 2 && typeof args[0] === 'string' && typeof args[1] === 'string') {
             const [title, text, icon] = args;
             return Toast.fire({
                 icon: icon || 'info',
-                title: title,
-                text: text
+                title,
+                text
             });
         }
-        
-        // Handle Swal.fire(options)
+
+        // Single string: Swal.fire('Message')
+        if (args.length === 1 && typeof args[0] === 'string') {
+            return Toast.fire({
+                icon: 'info',
+                title: args[0]
+            });
+        }
+
+        // Object options: Swal.fire({ ... })
         if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
             const options = args[0];
-            // If it has showCancelButton, input, or explicitly modal with custom buttons, keep modal
-            if (options.showCancelButton || options.input || (typeof options.html === 'string' && options.html.includes('<input')) || options.isModal) {
+
+            // If it's a confirmation / prompt requiring user interaction
+            if (options.showCancelButton || options.input || (typeof options.html === 'string' && options.html.includes('<input'))) {
                 return Swal.fire({
+                    position: 'top-end',
                     background: '#111827',
                     color: '#f3f4f6',
                     customClass: {
-                        popup: 'rounded-2xl border border-gray-800 shadow-2xl'
+                        popup: 'rounded-2xl border border-gray-800 shadow-2xl',
+                        ...options.customClass
                     },
                     ...options
                 });
             }
-            // For standard notification popups, turn into top-end toast
+
+            // Normal notification/alert -> ALWAYS Top-Right Toast
             return Toast.fire({
                 ...options,
                 toast: true,
-                position: options.position || 'top-end',
+                position: 'top-end',
                 showConfirmButton: options.showConfirmButton ?? false,
                 timer: options.timer ?? 3000,
                 timerProgressBar: options.timerProgressBar ?? true
