@@ -275,6 +275,7 @@ export async function GET(request) {
 
             // Evaluate coordinates for post-capture cropping (no viewport clipping)
             console.log('Calculating bounding box coordinates on active page...');
+            let cropCoords = null;
             if (qXStart && qXEnd && qYStart && qYEnd && type !== 'domains' && type !== 'dns') {
                 const xs = parseInt(qXStart, 10);
                 const xe = parseInt(qXEnd, 10);
