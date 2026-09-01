@@ -257,7 +257,7 @@ async function runE2ESuite() {
         // 3.2 Test "📥 ดึงค่าจาก Image Size Setting" button in Crop Coordinates
         const pullFromImageSizeBtn = await page.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button'));
-            const btn = btns.find(b => b.textContent.includes('ดึงค่าจาก Image Size Setting'));
+            const btn = btns.find(b => b.textContent.includes('ดึงจาก Image Size') || b.textContent.includes('ดึงค่าจาก Image Size Setting') || b.title?.includes('ดึงค่าจาก Image Size Setting'));
             if (btn) {
                 btn.click();
                 return true;

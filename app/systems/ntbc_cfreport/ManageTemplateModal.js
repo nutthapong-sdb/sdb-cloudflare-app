@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Plus, Trash2, Edit2, FileText, LayoutTemplate, Check, Download, Upload } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 import {
     listTemplates,
     createTemplate,

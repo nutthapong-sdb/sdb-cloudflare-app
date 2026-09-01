@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Settings, RotateCcw, Download, Sliders, Shield, Lock, Activity, Globe, Check } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 
 export const IMAGE_CONFIG_ITEMS = [
     { key: 'domains', varTag: '@captured_domain_page', label: 'Domain Overview (Sites)', desc: 'ภาพรวมหน้ารวมไซต์โดเมนทั้งหมด', category: 'domains', defaultWidth: 605, defaultCoords: { xStart: '395', xEnd: '1785', yStart: '85', yEnd: '' } },

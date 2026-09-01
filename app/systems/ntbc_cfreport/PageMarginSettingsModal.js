@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Layout, RotateCcw, Check, Square } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 
 export const MARGIN_PRESETS = [
     {

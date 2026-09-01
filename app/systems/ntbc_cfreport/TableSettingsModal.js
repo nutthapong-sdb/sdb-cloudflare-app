@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Table, RotateCcw, Check, AlertCircle } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 
 export const DEFAULT_TABLE_COLUMN_WIDTHS = {
     '@TOP_URLS_LIST': {
