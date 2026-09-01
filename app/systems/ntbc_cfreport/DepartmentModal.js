@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Users, Plus, Trash2, Check, Globe, Search, AlertCircle, Loader2, Key, Server } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 import SearchableDropdown from './SearchableDropdown';
 
 export default function DepartmentModal({ isOpen, onClose, theme, selectedZoneId: initialZoneId, zoneName: initialZoneName, selectedAccountId: initialAccountId, accounts = [], currentUser, subdomains: initialSubdomains = [] }) {

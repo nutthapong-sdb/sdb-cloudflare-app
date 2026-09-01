@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 import { THEMES } from '@/app/utils/themes';
 import { Editor } from '@tinymce/tinymce-react';
 import { REPORT_VARIABLES, STATIC_VARIABLES, CATEGORY_META } from './variableDefinitions';

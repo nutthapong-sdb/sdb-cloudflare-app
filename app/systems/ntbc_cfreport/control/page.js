@@ -6,7 +6,7 @@ import {
     CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
     Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome
 } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from '../utils/alert';
 import { Editor } from '@tinymce/tinymce-react';
 import { REPORT_VARIABLES, STATIC_VARIABLES } from '../variableDefinitions';
 import { DELAY_CONFIG } from '@/lib/delay-config';

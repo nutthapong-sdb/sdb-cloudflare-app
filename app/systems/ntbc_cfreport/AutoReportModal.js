@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { Search, X, Calendar, Database, Check, Clock, Trash2, Download, AlertCircle, ChevronDown, ChevronRight, File as FileIcon, Key, Server, Globe, FileType } from 'lucide-react';
-import Swal from 'sweetalert2';
+import Swal from './utils/alert';
 
 function SearchableDropdown({ options, value, onChange, placeholder, label, loading, icon, theme }) {
     const [isOpen, setIsOpen] = useState(false);
