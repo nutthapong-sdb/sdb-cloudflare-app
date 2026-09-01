@@ -87,7 +87,7 @@ export default function ControlPage() {
      const [captureSpeed, setCaptureSpeed] = useState(true);
 
      const [coords, setCoords] = useState({
-         domains: { xStart: '395', xEnd: '1785', yStart: '85', yEnd: '' },
+         domains: { xStart: '475', xEnd: '1510', yStart: '305', yEnd: '575' },
          dns: { xStart: '365', xEnd: '1843', yStart: '95', yEnd: '' },
          traffic: { xStart: '422', xEnd: '1766', yStart: '105', yEnd: '1005' },
          firewall: { xStart: '288', xEnd: '1728', yStart: '115', yEnd: '980' },
@@ -1218,8 +1218,8 @@ export default function ControlPage() {
         try {
             const targetDomain = zones.find(z => z.id === envZone)?.name || 'log.softdebut.online';
             let targetUrl = null;
-            if (relativePath === 'domains' || relativePath === '/domains/overview') {
-                targetUrl = `https://dash.cloudflare.com/${envAccount}/domains/overview`;
+            if (relativePath === 'domains' || relativePath === '/domains/overview' || relativePath === '/home') {
+                targetUrl = `https://dash.cloudflare.com/${envAccount}/home`;
             } else if (relativePath) {
                 targetUrl = `https://dash.cloudflare.com/${envAccount}/${targetDomain}${relativePath}`;
             }
@@ -1458,7 +1458,7 @@ export default function ControlPage() {
                                 {/* Generic function to render preview with capture button */}
                                 {(() => {
                                     const tabMap = {
-                                        domains: { label: 'Domains Overview', img: capturedScreenshot || '/captured-domains.png', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
+                                        domains: { label: 'Domains Overview', img: capturedScreenshot || '/captured-domains.png', type: 'domains', path: '/home', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
                                         dns: { label: 'DNS Records', img: (capturedDnsScreenshot && Array.isArray(capturedDnsScreenshot) && capturedDnsScreenshot.length > 0) ? capturedDnsScreenshot : (capturedDnsScreenshot ? [capturedDnsScreenshot] : ['/captured-dns-1.png', '/captured-dns-2.png']), type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isArray: true },
                                         botManagement: { label: 'Bot Management', img: capturedBotManagementScreenshot || '/captured-bot-management.png', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
                                         securityLevel: { label: 'Security Level & BIC', img: capturedSecurityLevelScreenshot || '/captured-security-level.png', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
