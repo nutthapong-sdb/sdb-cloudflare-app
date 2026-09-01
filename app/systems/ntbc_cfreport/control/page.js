@@ -62,6 +62,17 @@ export default function ControlPage() {
      const [capturedArgoScreenshot, setCapturedArgoScreenshot] = useState(null);
      const [capturedSpeedScreenshot, setCapturedSpeedScreenshot] = useState(null);
      const [capturedSpeedMobileScreenshot, setCapturedSpeedMobileScreenshot] = useState(null);
+     const [capturedBotManagementScreenshot, setCapturedBotManagementScreenshot] = useState(null);
+     const [capturedSecurityLevelScreenshot, setCapturedSecurityLevelScreenshot] = useState(null);
+     const [capturedSslOverviewScreenshot, setCapturedSslOverviewScreenshot] = useState(null);
+     const [capturedSslEdgeScreenshot, setCapturedSslEdgeScreenshot] = useState(null);
+     const [capturedRateLimitingScreenshot, setCapturedRateLimitingScreenshot] = useState(null);
+     const [capturedManagedRulesScreenshot, setCapturedManagedRulesScreenshot] = useState(null);
+     const [capturedIpAccessScreenshot, setCapturedIpAccessScreenshot] = useState(null);
+     const [capturedZoneLockdownScreenshot, setCapturedZoneLockdownScreenshot] = useState(null);
+     const [capturedTrafficCountriesScreenshot, setCapturedTrafficCountriesScreenshot] = useState(null);
+     const [capturedTopEventsSourceScreenshot, setCapturedTopEventsSourceScreenshot] = useState(null);
+
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
      const [captureHttpTraffic, setCaptureHttpTraffic] = useState(true);
@@ -74,14 +85,67 @@ export default function ControlPage() {
      const [captureSpeed, setCaptureSpeed] = useState(true);
 
      const [coords, setCoords] = useState({
-         domains: { xStart: '395', xEnd: '1785', yStart: '115', yEnd: '' },
+         domains: { xStart: '395', xEnd: '1785', yStart: '85', yEnd: '' },
          dns: { xStart: '365', xEnd: '1843', yStart: '95', yEnd: '' },
          traffic: { xStart: '422', xEnd: '1766', yStart: '105', yEnd: '1005' },
-         firewall: { xStart: '288', xEnd: '1728', yStart: '115', yEnd: '815' },
-         securityRules: { xStart: '288', xEnd: '1920', yStart: '115', yEnd: '815' },
-         argo: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' },
-         speed: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' }
+         firewall: { xStart: '288', xEnd: '1728', yStart: '115', yEnd: '980' },
+         securityRules: { xStart: '350', xEnd: '1880', yStart: '85', yEnd: '' },
+         argo: { xStart: '520', xEnd: '1632', yStart: '90', yEnd: '600' },
+         speed: { xStart: '480', xEnd: '1632', yStart: '115', yEnd: '870' },
+         speedMobile: { xStart: '480', xEnd: '1632', yStart: '95', yEnd: '850' },
+         botManagement: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '750' },
+         securityLevel: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '850' },
+         sslOverview: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '800' },
+         sslEdge: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '900' },
+         rateLimiting: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '' },
+         managedRules: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '' },
+         ipAccess: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '' },
+         zoneLockdown: { xStart: '350', xEnd: '1880', yStart: '95', yEnd: '' },
+         trafficCountries: { xStart: '350', xEnd: '1880', yStart: '100', yEnd: '950' },
+         topEventsSource: { xStart: '288', xEnd: '1728', yStart: '100', yEnd: '950' }
      });
+
+    const pullFromImageSizeSettings = (e) => {
+        if (e) e.stopPropagation();
+        try {
+            const stored = localStorage.getItem('ntbc:image-size-settings');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.coords) {
+                    setCoords(prev => ({
+                        ...prev,
+                        ...parsed.coords
+                    }));
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'ดึงค่าสำเร็จ!',
+                        text: 'คัดลอกพิกัด Crop จาก Image Size Setting เรียบร้อยแล้ว (อย่าลืมกด Save to Database)',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        background: '#111827',
+                        color: '#fff'
+                    });
+                    return;
+                }
+            }
+            Swal.fire('Info', 'ยังไม่มีการบันทึกข้อมูลพิกัดใน Image Size Setting', 'info');
+        } catch (err) {
+            console.error('Failed to pull from image size settings:', err);
+            Swal.fire('Error', 'เกิดข้อผิดพลาดในการดึงค่าจาก Image Size Setting', 'error');
+        }
+    };
+
+    const getCaptureUrl = (typeKey, typeValue) => {
+        let url = `/api/ntbc-capture?type=${typeValue}`;
+        const c = coords[typeKey];
+        if (c) {
+            if (c.xStart) url += `&xStart=${c.xStart}`;
+            if (c.xEnd) url += `&xEnd=${c.xEnd}`;
+            if (c.yStart) url += `&yStart=${c.yStart}`;
+            if (c.yEnd) url += `&yEnd=${c.yEnd}`;
+        }
+        return url;
+    };
 
     const handleCoordChange = (key, coord, val) => {
         console.log(`[DEBUG] handleCoordChange called for ${key}.${coord} = ${val}`);
@@ -199,10 +263,19 @@ export default function ControlPage() {
                           />
                       </div>
                   </div>
-                  <div className="ml-6 mt-2 flex justify-end">
+                  <div className="ml-6 mt-2 flex items-center justify-between gap-2">
                       <button 
+                          type="button"
+                          onClick={pullFromImageSizeSettings}
+                          className="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[11px] font-semibold rounded transition-colors flex items-center gap-1 cursor-pointer"
+                          title="ดึงค่าพิกัดมาจาก Image Size Setting"
+                      >
+                          📥 ดึงค่าจาก Image Size Setting
+                      </button>
+                      <button 
+                          type="button"
                           onClick={saveCoordsToDatabase}
-                          className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-medium rounded transition-colors"
+                          className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-semibold rounded transition-colors cursor-pointer"
                       >
                           Save to Database
                       </button>
@@ -440,6 +513,26 @@ export default function ControlPage() {
             if (savedSpeedMobileScreenshot) {
                 setCapturedSpeedMobileScreenshot(savedSpeedMobileScreenshot);
             }
+            const savedBotManagement = localStorage.getItem('control_capturedBotManagementScreenshot');
+            if (savedBotManagement) setCapturedBotManagementScreenshot(savedBotManagement);
+            const savedSecurityLevel = localStorage.getItem('control_capturedSecurityLevelScreenshot');
+            if (savedSecurityLevel) setCapturedSecurityLevelScreenshot(savedSecurityLevel);
+            const savedSslOverview = localStorage.getItem('control_capturedSslOverviewScreenshot');
+            if (savedSslOverview) setCapturedSslOverviewScreenshot(savedSslOverview);
+            const savedSslEdge = localStorage.getItem('control_capturedSslEdgeScreenshot');
+            if (savedSslEdge) setCapturedSslEdgeScreenshot(savedSslEdge);
+            const savedRateLimiting = localStorage.getItem('control_capturedRateLimitingScreenshot');
+            if (savedRateLimiting) setCapturedRateLimitingScreenshot(savedRateLimiting);
+            const savedManagedRules = localStorage.getItem('control_capturedManagedRulesScreenshot');
+            if (savedManagedRules) setCapturedManagedRulesScreenshot(savedManagedRules);
+            const savedIpAccess = localStorage.getItem('control_capturedIpAccessScreenshot');
+            if (savedIpAccess) setCapturedIpAccessScreenshot(savedIpAccess);
+            const savedZoneLockdown = localStorage.getItem('control_capturedZoneLockdownScreenshot');
+            if (savedZoneLockdown) setCapturedZoneLockdownScreenshot(savedZoneLockdown);
+            const savedTrafficCountries = localStorage.getItem('control_capturedTrafficCountriesScreenshot');
+            if (savedTrafficCountries) setCapturedTrafficCountriesScreenshot(savedTrafficCountries);
+            const savedTopEventsSource = localStorage.getItem('control_capturedTopEventsSourceScreenshot');
+            if (savedTopEventsSource) setCapturedTopEventsSourceScreenshot(savedTopEventsSource);
             const savedCaptureDomains = localStorage.getItem('control_captureDomains') !== null 
                 ? localStorage.getItem('control_captureDomains') 
                 : localStorage.getItem('control_default_captureDomains');
@@ -1219,6 +1312,53 @@ export default function ControlPage() {
         });
     };
 
+    const handleDirectCapture = async (tabId, captureType, stateSetter, storageKey, relativePath) => {
+        try {
+            const targetDomain = zones.find(z => z.id === envZone)?.name || 'log.softdebut.online';
+            let targetUrl = null;
+            if (relativePath === 'domains') {
+                targetUrl = `https://dash.cloudflare.com/${envAccount}`;
+            } else if (relativePath) {
+                targetUrl = `https://dash.cloudflare.com/${envAccount}/${targetDomain}${relativePath}`;
+            }
+            
+            addLog(`Direct capture triggered for [${tabId}]...`, 'info');
+            if (targetUrl) {
+                addLog(`Redirecting active tab to: ${targetUrl}`, 'info');
+                const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetUrl)}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+                addLog('Waiting for page rendering to stabilize...', 'info');
+                await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
+            }
+            addLog(`Capturing screenshot with type=${captureType}...`, 'info');
+            const captureRes = await fetch(getCaptureUrl(tabId, captureType));
+            const captureData = await captureRes.json();
+            if (captureData.success && captureData.image) {
+                const imgResult = (tabId === 'dns' && captureData.dnsPages) ? captureData.dnsPages : captureData.image;
+                stateSetter(imgResult);
+                if (typeof window !== 'undefined' && storageKey) {
+                    localStorage.setItem(storageKey, typeof imgResult === 'string' ? imgResult : JSON.stringify(imgResult));
+                }
+                addLog(`Screenshot for [${tabId}] captured successfully!`, 'success');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Captured!',
+                    text: `Screenshot for ${tabId} captured successfully.`,
+                    timer: 1500,
+                    showConfirmButton: false,
+                    background: '#111827',
+                    color: '#fff'
+                });
+            } else {
+                throw new Error(captureData.error || 'Failed to capture screenshot');
+            }
+        } catch (err) {
+            addLog(`Direct capture failed for [${tabId}]: ${err.message}`, 'error');
+            Swal.fire('Capture Error', err.message, 'error');
+        }
+    };
+
     const renderVncCard = () => (
         <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col mb-6">
             <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
@@ -1229,13 +1369,13 @@ export default function ControlPage() {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setIsVncMaximized(!isVncMaximized)}
-                        className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border border-gray-700/50"
+                        className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border border-gray-700/50 cursor-pointer"
                     >
                         {isVncMaximized ? '🗗 Minimize Layout' : '🗖 Maximize Layout'}
                     </button>
                     <button
                         onClick={requestVncFullscreen}
-                        className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1.5 shadow-md"
+                        className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
                     >
                         🖥️ Fullscreen Mode
                     </button>
@@ -1284,14 +1424,14 @@ export default function ControlPage() {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={resetAll}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg text-xs font-bold transition-all border border-gray-700/50"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg text-xs font-bold transition-all border border-gray-700/50 cursor-pointer"
                     >
                         <RefreshCw className="w-3.5 h-3.5" />
                         Reset All Steps
                     </button>
                     <button
                         onClick={() => router.push('/systems/ntbc_cfreport')}
-                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30"
+                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         Back to Generator
@@ -1309,32 +1449,49 @@ export default function ControlPage() {
                     {/* Live Browser Monitor Card */}
                     {!isVncMaximized && renderVncCard()}
 
-                              {/* Consolidated Captured Screenshots (Step 2) */}
+                    {/* Consolidated Captured Screenshots (Step 2) */}
                     <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl relative animate-scale-up">
                         <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
                             <div className="flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                <span className="text-xs font-bold text-gray-300 font-mono">Captured Screenshots (Step 2)</span>
+                                <span className="text-xs font-bold text-gray-300 font-mono">Captured Screenshots ({[
+                                    capturedScreenshot, capturedDnsScreenshot, capturedBotManagementScreenshot,
+                                    capturedSecurityLevelScreenshot, capturedSslOverviewScreenshot, capturedSslEdgeScreenshot,
+                                    capturedHttpTrafficScreenshot, capturedTrafficCountriesScreenshot, capturedFirewallScreenshot,
+                                    capturedTopEventsSourceScreenshot, capturedSecurityRulesScreenshot, capturedRateLimitingScreenshot,
+                                    capturedManagedRulesScreenshot, capturedIpAccessScreenshot, capturedZoneLockdownScreenshot,
+                                    capturedArgoScreenshot, capturedSpeedScreenshot
+                                ].filter(Boolean).length}/17)</span>
                             </div>
                         </div>
 
                         {/* Tab Sidebar layout */}
                         <div className="flex flex-col md:flex-row gap-4 flex-1">
                             {/* Left-hand sidebar nav bar */}
-                            <div className="flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:pr-3 border-b md:border-b-0 md:border-r border-gray-900 scrollbar-thin scrollbar-thumb-gray-800 shrink-0 md:w-[130px]">
+                            <div className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:pr-3 border-b md:border-b-0 md:border-r border-gray-900 scrollbar-thin scrollbar-thumb-gray-800 shrink-0 md:w-[150px] max-h-[550px] md:overflow-y-auto">
                                 {[
-                                    { id: 'domains', label: 'Domains', hasData: !!capturedScreenshot, icon: '🌐' },
-                                    { id: 'dns', label: 'DNS Records', hasData: !!capturedDnsScreenshot, icon: '💾' },
-                                    { id: 'traffic', label: 'HTTP Traffic', hasData: !!capturedHttpTrafficScreenshot, icon: '📈' },
-                                    { id: 'firewall', label: 'Firewall', hasData: !!capturedFirewallScreenshot, icon: '🛡️' },
-                                    { id: 'securityRules', label: 'Security Rules', hasData: !!capturedSecurityRulesScreenshot, icon: '🔒' },
-                                    { id: 'argo', label: 'Argo Smart', hasData: !!capturedArgoScreenshot, icon: '⚡' },
-                                    { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀' }
+                                    { id: 'domains', label: 'Domains', hasData: !!capturedScreenshot, icon: '🌐', type: 'domains', path: 'domains', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
+                                    { id: 'dns', label: 'DNS Records', hasData: !!capturedDnsScreenshot, icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot' },
+                                    { id: 'botManagement', label: 'Bot Management', hasData: !!capturedBotManagementScreenshot, icon: '🤖', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
+                                    { id: 'securityLevel', label: 'Security Level', hasData: !!capturedSecurityLevelScreenshot, icon: '🛡️', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
+                                    { id: 'sslOverview', label: 'SSL/TLS Mode', hasData: !!capturedSslOverviewScreenshot, icon: '🔒', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
+                                    { id: 'sslEdge', label: 'Edge Certificates', hasData: !!capturedSslEdgeScreenshot, icon: '📜', type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
+                                    { id: 'traffic', label: 'HTTP Traffic', hasData: !!capturedHttpTrafficScreenshot, icon: '📈', type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
+                                    { id: 'trafficCountries', label: 'Traffic Countries', hasData: !!capturedTrafficCountriesScreenshot, icon: '🗺️', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
+                                    { id: 'firewall', label: 'Firewall', hasData: !!capturedFirewallScreenshot, icon: '🔥', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
+                                    { id: 'topEventsSource', label: 'Events by Source', hasData: !!capturedTopEventsSourceScreenshot, icon: '📊', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
+                                    { id: 'securityRules', label: 'Custom Rules', hasData: !!capturedSecurityRulesScreenshot, icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot' },
+                                    { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!capturedRateLimitingScreenshot, icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot' },
+                                    { id: 'managedRules', label: 'Managed WAF', hasData: !!capturedManagedRulesScreenshot, icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot' },
+                                    { id: 'ipAccess', label: 'IP Access', hasData: !!capturedIpAccessScreenshot, icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot' },
+                                    { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!capturedZoneLockdownScreenshot, icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot' },
+                                    { id: 'argo', label: 'Argo Smart', hasData: !!capturedArgoScreenshot, icon: '⚡', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
+                                    { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
                                 ].map((tab) => (
                                     <button
                                         key={tab.id}
                                         onClick={() => setActiveCaptureTab(tab.id)}
-                                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 border w-full ${
+                                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 border w-full cursor-pointer ${
                                             activeCaptureTab === tab.id
                                                 ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
                                                 : 'bg-gray-900/40 border-gray-800/80 text-gray-400 hover:text-gray-200 hover:border-gray-700'
@@ -1353,234 +1510,82 @@ export default function ControlPage() {
                             <div className="flex-1 flex flex-col min-w-0">
                                 {/* Current Crop Coordinates display */}
                                 {coords[activeCaptureTab] && (
-                                    <div className="text-[9px] font-mono text-gray-400 bg-gray-900/60 px-2 py-1.5 rounded border border-gray-800/80 mb-3 flex items-center justify-between">
+                                    <div className="text-[9px] font-mono text-gray-400 bg-gray-900/60 px-2.5 py-1.5 rounded-lg border border-gray-800/80 mb-3 flex items-center justify-between">
                                         <span className="text-gray-500">Crop Coordinates:</span>
                                         <span>X: {coords[activeCaptureTab].xStart || 'Auto'} → {coords[activeCaptureTab].xEnd || 'Auto'} | Y: {coords[activeCaptureTab].yStart || 'Auto'} → {coords[activeCaptureTab].yEnd || 'Auto'}</span>
                                     </div>
                                 )}
 
-                                {/* Domains tab */}
-                                {activeCaptureTab === 'domains' && (
-                                    <div className="flex flex-col gap-2">
-                                        {capturedScreenshot ? (
-                                            <div className="flex flex-col gap-2">
-                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
-                                                    <img src={capturedScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Domains Overview" />
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                        <button type="button" onClick={() => openImageInNewTab(capturedScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                            View Full Image
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No Domains Overview captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                {/* Generic function to render preview with capture button */}
+                                {(() => {
+                                    const tabMap = {
+                                        domains: { label: 'Domains Overview', img: capturedScreenshot, type: 'domains', path: 'domains', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
+                                        dns: { label: 'DNS Records', img: capturedDnsScreenshot, type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isArray: true },
+                                        botManagement: { label: 'Bot Management', img: capturedBotManagementScreenshot, type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
+                                        securityLevel: { label: 'Security Level & BIC', img: capturedSecurityLevelScreenshot, type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
+                                        sslOverview: { label: 'SSL/TLS Encryption', img: capturedSslOverviewScreenshot, type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
+                                        sslEdge: { label: 'Edge Certificates (TLS 1.2/1.3)', img: capturedSslEdgeScreenshot, type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
+                                        traffic: { label: 'HTTP Traffic Overview', img: capturedHttpTrafficScreenshot, type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
+                                        trafficCountries: { label: 'Traffic by Country', img: capturedTrafficCountriesScreenshot, type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
+                                        firewall: { label: 'Firewall Overview', img: capturedFirewallScreenshot, type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
+                                        topEventsSource: { label: 'Top Events by Source', img: capturedTopEventsSourceScreenshot, type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
+                                        securityRules: { label: 'Security Custom Rules', img: capturedSecurityRulesScreenshot, type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot' },
+                                        rateLimiting: { label: 'Rate Limiting Rules', img: capturedRateLimitingScreenshot, type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot' },
+                                        managedRules: { label: 'Managed WAF Rules', img: capturedManagedRulesScreenshot, type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot' },
+                                        ipAccess: { label: 'IP Access Rules', img: capturedIpAccessScreenshot, type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot' },
+                                        zoneLockdown: { label: 'Zone Lockdown Rules', img: capturedZoneLockdownScreenshot, type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot' },
+                                        argo: { label: 'Argo Smart Routing', img: capturedArgoScreenshot, type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
+                                        speed: { label: 'Speed Test Results', img: capturedSpeedScreenshot, type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
+                                    };
 
-                                {/* DNS records tab */}
-                                {activeCaptureTab === 'dns' && (
-                                    <div className="flex flex-col gap-2">
-                                        {capturedDnsScreenshot && Array.isArray(capturedDnsScreenshot) ? (
-                                            <div className="flex flex-col gap-2">
-                                                {capturedDnsScreenshot.map((imgSrc, idx) => (
-                                                    <div key={idx} className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
-                                                        <img src={imgSrc} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={`DNS Records Overview - Page ${idx + 1}`} />
+                                    const current = tabMap[activeCaptureTab];
+                                    if (!current) return null;
+
+                                    return (
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-gray-200">{current.label}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDirectCapture(activeCaptureTab, current.type, current.setter, current.key, current.path)}
+                                                    className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-[11px] font-semibold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                                >
+                                                    📸 Capture This Page Now
+                                                </button>
+                                            </div>
+
+                                            {current.img ? (
+                                                current.isArray && Array.isArray(current.img) ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {current.img.map((imgSrc, idx) => (
+                                                            <div key={idx} className="rounded-xl border border-gray-800/80 bg-black flex items-center justify-center p-2 overflow-hidden group relative">
+                                                                <img src={imgSrc} className="max-w-full rounded h-auto max-h-[280px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={`${current.label} - Page ${idx + 1}`} />
+                                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                                    <button type="button" onClick={() => openImageInNewTab(imgSrc)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                                        View Full Image
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="rounded-xl border border-gray-800/80 bg-black flex items-center justify-center p-2 overflow-hidden group relative">
+                                                        <img src={current.img} className="max-w-full rounded h-auto max-h-[280px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={current.label} />
                                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                            <button type="button" onClick={() => openImageInNewTab(imgSrc)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                            <button type="button" onClick={() => openImageInNewTab(current.img)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
                                                                 View Full Image
                                                             </button>
                                                         </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No DNS Records captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* HTTP Traffic tab */}
-                                {activeCaptureTab === 'traffic' && (
-                                    <div className="flex flex-col gap-3">
-                                        {capturedHttpTrafficScreenshot ? (
-                                            <div className="flex flex-col gap-3">
-                                                <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden group relative">
-                                                    <span className="text-[9px] text-gray-500 mb-1 font-mono">Overview</span>
-                                                    <img src={capturedHttpTrafficScreenshot} className="max-w-full rounded h-auto max-h-[220px] object-contain" alt="HTTP Traffic Overview" />
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                        <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                            View Full Image
-                                                        </button>
-                                                    </div>
+                                                )
+                                            ) : (
+                                                <div className="py-12 text-center text-xs text-gray-500 font-mono bg-gray-900/30 rounded-xl border border-gray-800/50">
+                                                    No {current.label} captured yet. Click "Capture This Page Now" to capture.
                                                 </div>
-
-                                                {/* Subdomain details grid */}
-                                                {(capturedHttpTrafficScreenshot1 || capturedHttpTrafficScreenshot2 || capturedHttpTrafficScreenshot3 || capturedHttpTrafficScreenshot4 || capturedHttpTrafficScreenshot5) && (
-                                                    <div className="grid grid-cols-2 gap-2 mt-1">
-                                                        {capturedHttpTrafficScreenshot1 && (
-                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
-                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Requests</span>
-                                                                <img src={capturedHttpTrafficScreenshot1} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 1" />
-                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot1)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
-                                                                    Zoom
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {capturedHttpTrafficScreenshot2 && (
-                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
-                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Data Transfer</span>
-                                                                <img src={capturedHttpTrafficScreenshot2} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 2" />
-                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot2)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
-                                                                    Zoom
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {capturedHttpTrafficScreenshot3 && (
-                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
-                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Page views</span>
-                                                                <img src={capturedHttpTrafficScreenshot3} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 3" />
-                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot3)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
-                                                                    Zoom
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {capturedHttpTrafficScreenshot4 && (
-                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group">
-                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">Visits</span>
-                                                                <img src={capturedHttpTrafficScreenshot4} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 4" />
-                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot4)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
-                                                                    Zoom
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {capturedHttpTrafficScreenshot5 && (
-                                                            <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1 overflow-hidden relative group col-span-2">
-                                                                <span className="text-[8px] text-gray-500 mb-0.5 font-mono">API Requests</span>
-                                                                <img src={capturedHttpTrafficScreenshot5} className="max-w-full rounded h-auto max-h-[100px] object-contain" alt="HTTP Traffic Sub 5" />
-                                                                <button type="button" onClick={() => openImageInNewTab(capturedHttpTrafficScreenshot5)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] font-bold text-white transition-opacity">
-                                                                    Zoom
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No HTTP Traffic captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Firewall Events tab */}
-                                {activeCaptureTab === 'firewall' && (
-                                    <div className="flex flex-col gap-2">
-                                        {capturedFirewallScreenshot ? (
-                                            <div className="flex flex-col gap-2">
-                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
-                                                    <img src={capturedFirewallScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Firewall Events Overview" />
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                        <button type="button" onClick={() => openImageInNewTab(capturedFirewallScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                            View Full Image
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No Firewall Events captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Security Rules tab */}
-                                {activeCaptureTab === 'securityRules' && (
-                                    <div className="flex flex-col gap-2">
-                                        {capturedSecurityRulesScreenshot ? (
-                                            <div className="flex flex-col gap-2">
-                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
-                                                    <img src={capturedSecurityRulesScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Security Rules Overview" />
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                        <button type="button" onClick={() => openImageInNewTab(capturedSecurityRulesScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                            View Full Image
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No Security Rules captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Argo Routing tab */}
-                                {activeCaptureTab === 'argo' && (
-                                    <div className="flex flex-col gap-2">
-                                        {capturedArgoScreenshot ? (
-                                            <div className="flex flex-col gap-2">
-                                                <div className="rounded border border-gray-800/80 bg-black flex items-center justify-center p-1.5 overflow-hidden group relative">
-                                                    <img src={capturedArgoScreenshot} className="max-w-full rounded h-auto max-h-[300px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt="Argo Smart Routing Overview" />
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                        <button type="button" onClick={() => openImageInNewTab(capturedArgoScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                            View Full Image
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No Argo Smart Routing captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Speed Test tab */}
-                                {activeCaptureTab === 'speed' && (
-                                    <div className="flex flex-col gap-3">
-                                        {(capturedSpeedScreenshot || capturedSpeedMobileScreenshot) ? (
-                                            <div className="flex flex-col gap-3">
-                                                {capturedSpeedScreenshot && (
-                                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden group relative">
-                                                        <span className="text-[9px] text-gray-500 mb-1 font-mono">Desktop Overview</span>
-                                                        <img src={capturedSpeedScreenshot} className="max-w-full rounded h-auto max-h-[200px] object-contain" alt="Speed Test Desktop" />
-                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                            <button type="button" onClick={() => openImageInNewTab(capturedSpeedScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                                View Full Image
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {capturedSpeedMobileScreenshot && (
-                                                    <div className="rounded border border-gray-800/80 bg-black flex flex-col items-center justify-center p-1.5 overflow-hidden group relative">
-                                                        <span className="text-[9px] text-gray-500 mb-1 font-mono">Mobile Overview</span>
-                                                        <img src={capturedSpeedMobileScreenshot} className="max-w-full rounded h-auto max-h-[200px] object-contain" alt="Speed Test Mobile" />
-                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                            <button type="button" onClick={() => openImageInNewTab(capturedSpeedMobileScreenshot)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                                View Full Image
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-                                                No Speed Test captured yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
