@@ -6265,8 +6265,26 @@ export default function NTBCCFReportPage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto w-full">
-                    {/* WORKSPACE CARD 1: TEMPLATE CREATION & MANAGEMENT */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto w-full">
+                    {/* WORKSPACE CARD 1: IMAGE SIZE & CROP SETTINGS */}
+                    <div 
+                        onClick={() => setIsImageSettingsModalOpen(true)}
+                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-blue-900/30 hover:to-indigo-900/30 border border-gray-700/60 hover:border-blue-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
+                            <Sliders className="w-40 h-40 text-white" />
+                        </div>
+                        <div className="bg-blue-500/10 w-fit p-4 rounded-xl mb-6 border border-blue-500/20 group-hover:scale-110 transition-transform duration-300">
+                            <Sliders className="w-8 h-8 text-blue-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-blue-300 transition-colors">Image Size Settings</h3>
+                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
+                            Configure screenshot crop coordinates, aspect ratio, and custom image display dimensions for report exports.
+                        </p>
+                        <span className="text-blue-400 text-xs font-semibold uppercase tracking-wider group-hover:text-blue-300">Configure Size &rarr;</span>
+                    </div>
+
+                    {/* WORKSPACE CARD 2: TEMPLATE CREATION & MANAGEMENT */}
                     <div 
                         onClick={() => setIsManageTemplateModalOpen(true)}
                         className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-purple-900/30 hover:to-indigo-900/30 border border-gray-700/60 hover:border-purple-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
@@ -6284,7 +6302,7 @@ export default function NTBCCFReportPage() {
                         <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider group-hover:text-purple-300">Open Workspace &rarr;</span>
                     </div>
 
-                    {/* WORKSPACE CARD 2: CAPTURE SCREENSHOT */}
+                    {/* WORKSPACE CARD 3: CAPTURE SCREENSHOT & GENERATE REPORT */}
                     <div 
                         onClick={() => {
                             setIsScreenshotBatchMode(true);
