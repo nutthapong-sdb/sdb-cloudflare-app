@@ -1583,6 +1583,96 @@ export default function ControlPage() {
                                                     No {current.label} captured yet. Click "Capture This Page Now" to capture.
                                                 </div>
                                             )}
+
+                                            {/* Crop Coordinates Controls directly under the screenshot image */}
+                                            <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
+                                                        <span>✂️</span>
+                                                        <span>Crop Coordinates ({current.label})</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={pullFromImageSizeSettings}
+                                                            className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[10px] font-semibold rounded transition-colors cursor-pointer flex items-center gap-1"
+                                                            title="ดึงค่าจาก Image Size Setting"
+                                                        >
+                                                            📥 ดึงจาก Image Size
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={saveCoordsToDatabase}
+                                                            className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded transition-colors cursor-pointer shadow-sm"
+                                                        >
+                                                            💾 Save to DB
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Auto"
+                                                            value={coords[activeCaptureTab]?.xStart || ''}
+                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'xStart', e.target.value)}
+                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Xend</span>
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Auto"
+                                                            value={coords[activeCaptureTab]?.xEnd || ''}
+                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'xEnd', e.target.value)}
+                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Ystart</span>
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Auto"
+                                                            value={coords[activeCaptureTab]?.yStart || ''}
+                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'yStart', e.target.value)}
+                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Yend</span>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Auto"
+                                                            value={coords[activeCaptureTab]?.yEnd || ''}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                if (/^-?\d*$/.test(val)) {
+                                                                    handleCoordChange(activeCaptureTab, 'yEnd', val);
+                                                                }
+                                                            }}
+                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[10px] text-gray-400 pt-1 gap-1.5">
+                                                    <span className="text-gray-500 font-sans">
+                                                        {activeCaptureTab === 'domains' || activeCaptureTab === 'dns'
+                                                            ? '* Yend: ค่าลบ = หักขึ้นบน (เช่น -250), ค่าบวก = ยืดลงล่าง, ว่าง = Auto'
+                                                            : '* ความละเอียดมาตรฐาน 1920x1080 (Chrome Live Monitor)'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDirectCapture(activeCaptureTab, current.type, current.setter, current.key, current.path)}
+                                                        className="text-rose-400 hover:text-rose-300 font-semibold cursor-pointer underline flex items-center gap-1 self-end sm:self-auto"
+                                                    >
+                                                        📸 แคปภาพใหม่ด้วยพิกัดนี้
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 })()}
