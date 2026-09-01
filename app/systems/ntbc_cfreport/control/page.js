@@ -72,6 +72,8 @@ export default function ControlPage() {
      const [capturedZoneLockdownScreenshot, setCapturedZoneLockdownScreenshot] = useState(null);
      const [capturedTrafficCountriesScreenshot, setCapturedTrafficCountriesScreenshot] = useState(null);
      const [capturedTopEventsSourceScreenshot, setCapturedTopEventsSourceScreenshot] = useState(null);
+     const [captureMeta, setCaptureMeta] = useState({});
+     const [isCapturingDirect, setIsCapturingDirect] = useState(false);
 
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
@@ -582,6 +584,14 @@ export default function ControlPage() {
             const savedEndDate = localStorage.getItem('control_envEndDate');
             if (savedEndDate) {
                 setEnvEndDate(savedEndDate);
+            }
+            try {
+                const savedMeta = localStorage.getItem('control_captureMeta');
+                if (savedMeta) {
+                    setCaptureMeta(JSON.parse(savedMeta));
+                }
+            } catch (e) {
+                console.error('Failed to parse captureMeta:', e);
             }
             
             // Fetch central database coordinates
@@ -1313,6 +1323,7 @@ export default function ControlPage() {
     };
 
     const handleDirectCapture = async (tabId, captureType, stateSetter, storageKey, relativePath) => {
+        setIsCapturingDirect(true);
         try {
             const targetDomain = zones.find(z => z.id === envZone)?.name || 'log.softdebut.online';
             let targetUrl = null;
@@ -1352,6 +1363,24 @@ export default function ControlPage() {
                 if (typeof window !== 'undefined' && storageKey) {
                     localStorage.setItem(storageKey, typeof imgResult === 'string' ? imgResult : JSON.stringify(imgResult));
                 }
+
+                // Record capture metadata (timestamp and user)
+                const uName = currentUser?.username || auth.getCurrentUser()?.username || 'root';
+                const nowIso = new Date().toISOString();
+                setCaptureMeta(prev => {
+                    const next = {
+                        ...prev,
+                        [tabId]: {
+                            capturedAt: nowIso,
+                            capturedBy: uName
+                        }
+                    };
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('control_captureMeta', JSON.stringify(next));
+                    }
+                    return next;
+                });
+
                 addLog(`Screenshot for [${tabId}] captured successfully!`, 'success');
                 Swal.fire({
                     icon: 'success',
@@ -1368,6 +1397,8 @@ export default function ControlPage() {
         } catch (err) {
             addLog(`Direct capture failed for [${tabId}]: ${err.message}`, 'error');
             Swal.fire('Capture Error', err.message, 'error');
+        } finally {
+            setIsCapturingDirect(false);
         }
     };
 
@@ -1555,14 +1586,38 @@ export default function ControlPage() {
 
                                     return (
                                         <div className="flex flex-col gap-3">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-bold text-gray-200">{current.label}</span>
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-800/60 pb-2.5">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-bold text-gray-200">{current.label}</span>
+                                                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-gray-400">
+                                                        <Clock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                                        {captureMeta[activeCaptureTab]?.capturedAt ? (
+                                                            <span>
+                                                                แคปล่าสุด: <strong className="text-gray-200 font-semibold">{new Date(captureMeta[activeCaptureTab].capturedAt).toLocaleString('th-TH')}</strong> โดย <strong className="text-rose-300">@{captureMeta[activeCaptureTab].capturedBy || 'root'}</strong>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-500 italic">ยังไม่มีประวัติการแคป</span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                                 <button
                                                     type="button"
+                                                    disabled={isCapturingDirect}
                                                     onClick={() => handleDirectCapture(activeCaptureTab, current.type, current.setter, current.key, current.path)}
-                                                    className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-[11px] font-semibold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                                    className={`px-3 py-1.5 bg-rose-600/25 hover:bg-rose-600/40 border border-rose-500/50 text-rose-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-md self-start sm:self-auto ${
+                                                        isCapturingDirect ? 'opacity-60 cursor-not-allowed' : ''
+                                                    }`}
                                                 >
-                                                    📸 Capture This Page Now
+                                                    {isCapturingDirect ? (
+                                                        <>
+                                                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                                                            <span>Capturing...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span>📸 Capture This Page Now</span>
+                                                        </>
+                                                    )}
                                                 </button>
                                             </div>
 
@@ -1691,19 +1746,10 @@ export default function ControlPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[10px] text-gray-400 pt-1 gap-1.5">
-                                                    <span className="text-gray-500 font-sans">
-                                                        {activeCaptureTab === 'domains' || activeCaptureTab === 'dns'
-                                                            ? '* Yend: ค่าลบ = หักขึ้นบน (เช่น -250), ค่าบวก = ยืดลงล่าง, ว่าง = Auto'
-                                                            : '* ความละเอียดมาตรฐาน 1920x1080 (Chrome Live Monitor)'}
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDirectCapture(activeCaptureTab, current.type, current.setter, current.key, current.path)}
-                                                        className="text-rose-400 hover:text-rose-300 font-semibold cursor-pointer underline flex items-center gap-1 self-end sm:self-auto"
-                                                    >
-                                                        📸 แคปภาพใหม่ด้วยพิกัดนี้
-                                                    </button>
+                                                <div className="text-[10px] text-gray-500 font-sans pt-1">
+                                                    {activeCaptureTab === 'domains' || activeCaptureTab === 'dns'
+                                                        ? '* Yend: ค่าลบ = หักขึ้นบน (เช่น -250), ค่าบวก = ยืดลงล่าง, ว่าง = Auto | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now" ด้านบน'
+                                                        : '* ความละเอียดมาตรฐาน 1920x1080 (Chrome Live Monitor) | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now" ด้านบน'}
                                                 </div>
                                             </div>
                                         </div>
