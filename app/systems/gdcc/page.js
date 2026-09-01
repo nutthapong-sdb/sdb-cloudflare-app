@@ -22,14 +22,14 @@ import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
     Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Table, Layout,
-    ChevronLeft, ChevronRight
+    ChevronLeft, ChevronRight, Sparkles, Zap, Award, BarChart2, Shield, Lock, Sliders, Image as ImageIcon, Info, Plus, Tag, CheckCheck
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import Swal from 'sweetalert2';
 import { THEMES } from '@/app/utils/themes';
 import { Editor } from '@tinymce/tinymce-react';
-import { REPORT_VARIABLES, STATIC_VARIABLES } from './variableDefinitions';
+import { REPORT_VARIABLES, STATIC_VARIABLES, CATEGORY_META } from './variableDefinitions';
 const safeToJpeg = async (element, options) => {
     console.log('📸 [safeToJpeg] called. window.__mockHtmlToImage exists:', typeof window !== 'undefined' && !!window.__mockHtmlToImage);
     if (typeof window !== 'undefined' && window.__mockHtmlToImage) {
@@ -964,17 +964,111 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         }
     }, [isOpen]);
 
+    const [selectedCategory, setSelectedCategory] = useState('All');
+    const [copiedVarName, setCopiedVarName] = useState(null);
+
     const isTemplateMode = mode === 'static-template' || mode === 'middle-template' || mode === 'sub-template';
     const availableVariables = mode === 'static-template' ? STATIC_VARIABLES : REPORT_VARIABLES;
-    const filteredVariables = availableVariables.filter(v =>
-        v.category !== 'Screenshots' &&
-        v.category !== 'Traffic Screenshots' &&
-        (!showUnusedOnly || (typeof localTemplate === 'string' && !localTemplate.includes(v.name))) &&
-        (
-            v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            v.desc.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-    );
+
+    // Available categories for current mode
+    const categories = useMemo(() => {
+        const cats = ['All'];
+        availableVariables.forEach(v => {
+            if (v.category === 'Screenshots' || v.category === 'Traffic Screenshots') return;
+            if (!cats.includes(v.category)) cats.push(v.category);
+        });
+        return cats;
+    }, [availableVariables]);
+
+    // Variable count per category
+    const categoryCounts = useMemo(() => {
+        const counts = { 'All': 0 };
+        availableVariables.forEach(v => {
+            if (v.category === 'Screenshots' || v.category === 'Traffic Screenshots') return;
+            counts[v.category] = (counts[v.category] || 0) + 1;
+            counts['All'] += 1;
+        });
+        return counts;
+    }, [availableVariables]);
+
+    // Unused variables count
+    const unusedCount = useMemo(() => {
+        if (typeof localTemplate !== 'string') return 0;
+        return availableVariables.filter(v => 
+            v.category !== 'Screenshots' && 
+            v.category !== 'Traffic Screenshots' && 
+            !localTemplate.includes(v.name)
+        ).length;
+    }, [availableVariables, localTemplate]);
+
+    // Filtered variables
+    const filteredVariables = useMemo(() => {
+        return availableVariables.filter(v => {
+            if (v.category === 'Screenshots' || v.category === 'Traffic Screenshots') return false;
+            if (selectedCategory !== 'All' && v.category !== selectedCategory) return false;
+            if (showUnusedOnly && typeof localTemplate === 'string' && localTemplate.includes(v.name)) return false;
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                const catMeta = CATEGORY_META[v.category] || {};
+                const catLabel = (catMeta.label || '').toLowerCase();
+                return v.name.toLowerCase().includes(term) ||
+                       (v.desc || '').toLowerCase().includes(term) ||
+                       (v.example || '').toLowerCase().includes(term) ||
+                       v.category.toLowerCase().includes(term) ||
+                       catLabel.includes(term);
+            }
+            return true;
+        });
+    }, [availableVariables, selectedCategory, showUnusedOnly, localTemplate, searchTerm]);
+
+    // Grouped variables for organized rendering
+    const groupedVariables = useMemo(() => {
+        if (selectedCategory !== 'All' || searchTerm.trim()) {
+            return [{ category: selectedCategory === 'All' ? 'ผลการค้นหา' : selectedCategory, items: filteredVariables }];
+        }
+        const map = {};
+        filteredVariables.forEach(v => {
+            if (!map[v.category]) map[v.category] = [];
+            map[v.category].push(v);
+        });
+        return Object.keys(map).map(cat => ({
+            category: cat,
+            items: map[cat]
+        }));
+    }, [filteredVariables, selectedCategory, searchTerm]);
+
+    const insertVariable = (varName) => {
+        if (editorRef.current) {
+            editorRef.current.insertContent(varName);
+            setCopiedVarName(varName);
+            setTimeout(() => setCopiedVarName(null), 1500);
+        }
+    };
+
+    const renderCategoryIcon = (category, className = "w-3.5 h-3.5") => {
+        switch (category) {
+            case 'All': return <Sparkles className={className} />;
+            case 'Time': return <Clock className={className} />;
+            case 'Info':
+            case 'Basic': return <Info className={className} />;
+            case 'Stats': return <BarChart2 className={className} />;
+            case 'Peak': return <Zap className={className} />;
+            case 'Top': return <Award className={className} />;
+            case 'Table': return <Table className={className} />;
+            case 'List': return <List className={className} />;
+            case 'Zone Cache': return <Activity className={className} />;
+            case 'Firewall': return <ShieldAlert className={className} />;
+            case 'Firewall Rules':
+            case 'WAF': return <Shield className={className} />;
+            case 'Security': return <ShieldAlert className={className} />;
+            case 'DDoS': return <Shield className={className} />;
+            case 'DNS': return <Globe className={className} />;
+            case 'Rules': return <Sliders className={className} />;
+            case 'SSL': return <Lock className={className} />;
+            case 'Format': return <ImageIcon className={className} />;
+            default: return <Tag className={className} />;
+        }
+    };
 
     // Sync local template when prop changes
     useEffect(() => {
@@ -1518,85 +1612,210 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 </div>
                                 {/* Variables Section - Right */}
                                 <div
-                                    className={`flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg border overflow-hidden transition-all duration-300 ${
-                                        isVariablesCollapsed ? 'p-0 border-0 opacity-0' : 'p-4 opacity-100'
+                                    className={`flex-shrink-0 flex flex-col ${t.rawData || 'bg-gray-50 border-gray-200'} rounded-lg border overflow-hidden transition-all duration-300 shadow-sm ${
+                                        isVariablesCollapsed ? 'p-0 border-0 opacity-0' : 'p-3.5 opacity-100'
                                     }`}
                                     style={{
-                                        width: isVariablesCollapsed ? '0px' : '640px',
-                                        minWidth: isVariablesCollapsed ? '0px' : '640px'
+                                        width: isVariablesCollapsed ? '0px' : '560px',
+                                        minWidth: isVariablesCollapsed ? '0px' : '560px'
                                     }}
                                 >
-                                    <div className={`text-sm font-bold ${t.text || 'text-gray-700'} mb-3 flex items-center justify-between gap-2 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2 border-b ${t.modalBorder || 'border-gray-300'} flex-shrink-0 ${isVariablesCollapsed ? 'hidden' : ''}`}>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsVariablesCollapsed(true)}
-                                                className="p-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors mr-1 cursor-pointer flex items-center justify-center"
-                                                title="Collapse Panel"
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </button>
-                                            <span className={`font-bold ${t.text || 'text-gray-700'}`}>Variables</span>
-                                            <span className={`text-xs ${t.subText || 'text-gray-500'}`}>Click to insert</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="relative">
-                                                <Search className="absolute left-2 top-1.5 w-3 h-3 text-gray-400" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search variables..."
-                                                    value={searchTerm}
-                                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                                    className={`pl-7 pr-2 py-1 text-xs border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-700'} ${t.dropdown?.border || 'border-gray-300'}`}
-                                                />
+                                    {/* Top Bar: Title & Search & Unused Toggle */}
+                                    <div className={`flex flex-col gap-2.5 sticky top-0 ${t.modalHeaderBg || 'bg-gray-50'} pb-2.5 border-b ${t.modalBorder || 'border-gray-200'} flex-shrink-0 ${isVariablesCollapsed ? 'hidden' : ''}`}>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsVariablesCollapsed(true)}
+                                                    className="p-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded transition-colors cursor-pointer flex items-center justify-center"
+                                                    title="ซ่อนแถบตัวแปร"
+                                                >
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </button>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Tag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                    <span className={`font-bold text-sm ${t.text || 'text-gray-800'}`}>ตัวแปรเทมเพลต</span>
+                                                </div>
+                                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                                    {filteredVariables.length} ตัวแปร
+                                                </span>
                                             </div>
+
                                             <button
                                                 type="button"
                                                 onClick={() => setShowUnusedOnly(!showUnusedOnly)}
-                                                className={`px-2 py-1 text-xs font-semibold rounded-md border transition-colors ${
+                                                className={`px-2.5 py-1 text-xs font-semibold rounded-md border flex items-center gap-1.5 transition-all shadow-2xs ${
                                                     showUnusedOnly
-                                                        ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
-                                                        : `${t.buttonSecondary || 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}`
+                                                        ? 'bg-amber-500 text-white border-amber-600 ring-2 ring-amber-400/30'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100'
                                                 }`}
+                                                title="แสดงเฉพาะตัวแปรที่ยังไม่ได้ใส่ในเทมเพลต"
                                             >
-                                                Unused Vars
+                                                <span className={`w-2 h-2 rounded-full ${showUnusedOnly ? 'bg-white animate-pulse' : 'bg-amber-500'}`}></span>
+                                                <span>ยังไม่ใช้ ({unusedCount})</span>
                                             </button>
+                                        </div>
+
+                                        {/* Search Input */}
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="ค้นหาตัวแปร, คำอธิบาย, หรือหมวดหมู่..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className={`w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${t.dropdown?.bg || 'bg-white'} ${t.dropdown?.text || 'text-gray-800'} ${t.dropdown?.border || 'border-gray-300'}`}
+                                            />
+                                            {searchTerm && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSearchTerm('')}
+                                                    className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Category Filter Chips */}
+                                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
+                                            {categories.map(cat => {
+                                                const meta = CATEGORY_META[cat] || { label: cat };
+                                                const isActive = selectedCategory === cat;
+                                                const count = categoryCounts[cat] || 0;
+                                                return (
+                                                    <button
+                                                        key={cat}
+                                                        type="button"
+                                                        onClick={() => setSelectedCategory(cat)}
+                                                        className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                                                            isActive
+                                                                ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400/30'
+                                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                        }`}
+                                                    >
+                                                        {renderCategoryIcon(cat, "w-3 h-3")}
+                                                        <span>{meta.label}</span>
+                                                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                                            isActive
+                                                                ? 'bg-blue-700 text-blue-100'
+                                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                                                        }`}>
+                                                            {count}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
-                                    <div className={`flex-1 overflow-auto border rounded-lg bg-white shadow-inner custom-scrollbar ${isVariablesCollapsed ? 'hidden' : ''}`}>
-                                        <table className="w-full text-left text-xs border-collapse relative">
-                                            <thead className={`sticky top-0 z-10 ${t.card || 'bg-gray-100'} border-b shadow-sm`}>
-                                                <tr>
-                                                    <th className="p-2 font-semibold w-[40%]">Variable</th>
-                                                    <th className="p-2 font-semibold w-[60%]">Description</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {filteredVariables.length > 0 ? filteredVariables.map((v) => (
-                                                    <tr
-                                                        key={v.name}
-                                                        onClick={() => editorRef.current?.insertContent(v.name)}
-                                                        className={`cursor-pointer hover:bg-blue-50 transition-colors group ${t.text || 'text-gray-700'}`}
-                                                        title={`Click to insert ${v.name}\nCategory: ${v.category}`}
-                                                    >
-                                                        <td className="p-2 font-mono text-blue-600 font-medium whitespace-nowrap group-hover:underline align-top">
-                                                            {v.name}
-                                                            <div className="text-[9px] text-gray-400 font-normal mt-0.5">{v.category}</div>
-                                                        </td>
-                                                        <td className="p-2 text-gray-600 align-top">
-                                                            {v.desc}
-                                                        </td>
-                                                    </tr>
-                                                )) : (
-                                                    <tr>
-                                                        <td colSpan={2} className="p-4 text-center text-gray-500 italic">
-                                                            No variables found matching &quot;{searchTerm}&quot;
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
+                                    {/* Variable Cards List */}
+                                    <div className={`flex-1 overflow-auto rounded-lg bg-gray-50/50 dark:bg-gray-900/30 custom-scrollbar p-1 space-y-3.5 ${isVariablesCollapsed ? 'hidden' : ''}`}>
+                                        {groupedVariables.length > 0 && groupedVariables.some(g => g.items.length > 0) ? (
+                                            groupedVariables.map(group => {
+                                                if (!group.items || group.items.length === 0) return null;
+                                                const meta = CATEGORY_META[group.category] || { label: group.category };
+                                                return (
+                                                    <div key={group.category} className="space-y-1.5">
+                                                        {/* Category Section Header */}
+                                                        <div className="flex items-center justify-between px-2 py-1 sticky top-0 bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur-xs rounded-md z-5 border border-gray-200/60 dark:border-gray-700/60 shadow-2xs">
+                                                            <div className="flex items-center gap-1.5">
+                                                                {renderCategoryIcon(group.category, "w-3.5 h-3.5 text-blue-600 dark:text-blue-400")}
+                                                                <span className="font-bold text-xs text-gray-800 dark:text-gray-200">
+                                                                    {meta.label}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                                                                    ({group.category})
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                                {group.items.length} รายการ
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Variable Item Cards */}
+                                                        <div className="grid grid-cols-1 gap-1.5">
+                                                            {group.items.map(v => {
+                                                                const isUsed = typeof localTemplate === 'string' && localTemplate.includes(v.name);
+                                                                const isCopied = copiedVarName === v.name;
+                                                                return (
+                                                                    <div
+                                                                        key={v.name}
+                                                                        onClick={() => insertVariable(v.name)}
+                                                                        className={`group p-2.5 rounded-lg border transition-all cursor-pointer flex items-start justify-between gap-3 relative ${
+                                                                            isCopied
+                                                                                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-600 shadow-md ring-2 ring-emerald-400/30'
+                                                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm'
+                                                                        }`}
+                                                                        title={`คลิกเพื่อแทรก ${v.name} ลงในเทมเพลต`}
+                                                                    >
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                                                <code className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 group-hover:bg-blue-100 group-hover:text-blue-800 transition-colors">
+                                                                                    {v.name}
+                                                                                </code>
+                                                                                {isUsed ? (
+                                                                                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-0.5">
+                                                                                        <Check className="w-2.5 h-2.5" /> ใช้แล้ว
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                                                                                        ยังไม่ใช้
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <p className="text-xs text-gray-700 dark:text-gray-300 leading-snug">
+                                                                                {v.desc}
+                                                                            </p>
+                                                                            {v.example && (
+                                                                                <div className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500 font-mono truncate">
+                                                                                    <span>ตัวอย่าง:</span>
+                                                                                    <span className="text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 px-1 py-0.2 rounded truncate max-w-[280px]">
+                                                                                        {v.example}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Insert Action Button */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                insertVariable(v.name);
+                                                                            }}
+                                                                            className={`flex-shrink-0 px-2 py-1 text-xs font-semibold rounded-md border flex items-center gap-1 transition-all ${
+                                                                                isCopied
+                                                                                    ? 'bg-emerald-600 text-white border-emerald-600'
+                                                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600'
+                                                                            }`}
+                                                                        >
+                                                                            {isCopied ? (
+                                                                                <>
+                                                                                    <CheckCheck className="w-3 h-3 animate-bounce" />
+                                                                                    <span>แทรกแล้ว</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Plus className="w-3 h-3" />
+                                                                                    <span>แทรก</span>
+                                                                                </>
+                                                                            )}
+                                                                        </button>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="p-8 text-center text-gray-500 dark:text-gray-400 flex flex-col items-center justify-center gap-2">
+                                                <Search className="w-8 h-8 opacity-40" />
+                                                <p className="text-sm font-medium">ไม่พบตัวแปรที่ตรงกับ &quot;{searchTerm}&quot;</p>
+                                                <p className="text-xs text-gray-400">ลองค้นหาด้วยคำอื่น หรือเลือกหมวดหมู่อื่น</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
