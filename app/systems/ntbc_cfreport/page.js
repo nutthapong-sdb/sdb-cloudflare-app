@@ -21,7 +21,7 @@ import {
     ShieldAlert, Activity, Clock, Globe,
     AlertTriangle, FileText, LayoutDashboard, Database,
     Search, Bell, Menu, Download, Server, Key, List, X, Edit3, Copy, FileType, Settings, Check, Trash2, Calendar, Users, Camera, Image, Terminal, Monitor, Table, Layout,
-    ChevronLeft, ChevronRight, Sparkles, Zap, Award, BarChart2, Shield, Lock, Sliders, Image as ImageIcon, Info, Plus, Tag, CheckCheck, TrendingUp
+    ChevronLeft, ChevronRight, Sparkles, Zap, Award, BarChart2, Shield, Lock, Sliders, Image as ImageIcon, Info, Plus, Tag, CheckCheck, TrendingUp, RefreshCw, ExternalLink
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
@@ -3780,6 +3780,7 @@ export default function NTBCCFReportPage() {
     const [isTemplateSubmenuOpen, setIsTemplateSubmenuOpen] = useState(false); // Submenu State
     const [isThemeSubmenuOpen, setIsThemeSubmenuOpen] = useState(false); // Submenu State
     const [isVncModalOpen, setIsVncModalOpen] = useState(false);
+    const [mainVncStreamKey, setMainVncStreamKey] = useState(Date.now());
 
     const [dashboardImage, setDashboardImage] = useState(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -6302,6 +6303,74 @@ export default function NTBCCFReportPage() {
                             Select Cloudflare domains/subdomains and capture screenshots directly from the active dashboard session.
                         </p>
                         <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider group-hover:text-purple-300">Select & Capture &rarr;</span>
+                    </div>
+                </div>
+
+                {/* BIG SCREEN: LIVE BROWSER MONITOR */}
+                <div className="mt-10 w-full max-w-5xl mx-auto bg-gray-900/60 border border-gray-700/60 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md">
+                    {/* Monitor Top Control Bar */}
+                    <div className="px-6 py-4 border-b border-gray-800/80 bg-gray-900/80 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                                <Monitor className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2.5">
+                                    <h3 className="text-base font-bold text-white tracking-wide">Live Browser Monitor</h3>
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${chromeRunning ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' : 'bg-yellow-500/15 border border-yellow-500/30 text-yellow-400'}`}>
+                                        <span className={`w-2 h-2 rounded-full ${chromeRunning ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`}></span>
+                                        {chromeRunning ? 'Active Stream (1920×1080)' : 'Browser Ready (Port 9222)'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    Interactive Chromium container session used for real-time Cloudflare navigation & screenshot capturing.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Top Bar Actions */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setMainVncStreamKey(Date.now())}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium transition-colors shadow-sm"
+                                title="Reconnect / Refresh Stream"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" /> Reconnect
+                            </button>
+                            <button
+                                onClick={() => handleQuickLaunchDebug()}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white text-xs font-medium transition-colors shadow-sm"
+                                title="Quick Cloudflare Login & Debug"
+                            >
+                                <Terminal className="w-3.5 h-3.5 text-yellow-400" /> Quick Debug
+                            </button>
+                            <a
+                                href="/vnc/?autoconnect=1&resize=scale&path=websockify"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 hover:text-rose-200 text-xs font-medium transition-colors shadow-sm"
+                                title="Open Live Monitor in New Tab"
+                            >
+                                <ExternalLink className="w-3.5 h-3.5" /> Fullscreen Tab
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Main Big Display Iframe */}
+                    <div className="relative w-full bg-black flex flex-col items-center justify-center min-h-[580px] lg:min-h-[720px]">
+                        <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                            <span className="px-2.5 py-1 rounded bg-black/70 backdrop-blur-sm border border-gray-800 text-[11px] font-mono text-gray-300 shadow-md">
+                                🔴 LIVE DISPLAY • 1920×1080
+                            </span>
+                        </div>
+                        {typeof window !== 'undefined' && (
+                            <iframe
+                                key={mainVncStreamKey}
+                                src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`}
+                                className="w-full h-[580px] lg:h-[720px] border-none"
+                                title="Live Browser Monitor"
+                            />
+                        )}
                     </div>
                 </div>
             </main>
