@@ -1443,7 +1443,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                         .report-content, .report-content p, .report-content div { white-space: pre-wrap !important; }
                         .report-content .toc-container, .report-content .toc-container * { white-space: normal !important; }
                     `}} />
-                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto bg-white text-black rounded-lg shadow-sm" style={{ fontFamily: '"TH SarabunPSK"', paddingTop: `${pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54}cm`, paddingBottom: `${pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54}cm`, paddingLeft: `${pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54}cm`, paddingRight: `${pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54}cm`, boxSizing: 'border-box' }}>
+                    <div ref={reportContentRef} className="report-content space-y-4 text-base leading-relaxed flex-1 overflow-auto bg-white text-black rounded-lg shadow-sm" style={{ fontFamily: '"TH SarabunPSK"', padding: isEditing ? '0' : `${pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54}cm ${pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54}cm ${pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54}cm ${pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54}cm`, boxSizing: 'border-box' }}>
 
                         {isEditing ? (
                             <div className="flex gap-4 h-full relative">
@@ -1463,7 +1463,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 <div className="flex-1 flex flex-col min-w-0">
                                     <div className="flex-1 bg-white text-black rounded-lg overflow-hidden border border-gray-300">
                                         <Editor
-                                            key={JSON.stringify(pageMargins)}
+                                            key="gdcc-template-editor"
                                             tinymceScriptSrc='/systems/tinymce/tinymce.min.js'
                                             licenseKey='gpl'
                                             onInit={(evt, editor) => editorRef.current = editor}
@@ -1474,7 +1474,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                                 menubar: false,
                                                 font_size_formats: '8pt 10pt 12pt 14pt 16pt 18pt 20pt 22pt 24pt 26pt 28pt 30pt 32pt 34pt 36pt 38pt 40pt 42pt 44pt 46pt 48pt',
                                                 font_family_formats: 'TH Sarabun=TH SarabunPSK; Arial=Arial; Tahoma=Tahoma; Times New Roman=Times New Roman;',
-                                                content_style: `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap'); body { font-family: "TH SarabunPSK"; font-size: 16pt; padding: ${pageMargins.top !== undefined && pageMargins.top !== '' ? pageMargins.top : 2.54}cm ${pageMargins.right !== undefined && pageMargins.right !== '' ? pageMargins.right : 2.54}cm ${pageMargins.bottom !== undefined && pageMargins.bottom !== '' ? pageMargins.bottom : 2.54}cm ${pageMargins.left !== undefined && pageMargins.left !== '' ? pageMargins.left : 2.54}cm !important; margin: 0 !important; box-sizing: border-box; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }`,
+                                                content_style: `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap'); body { font-family: "TH SarabunPSK"; font-size: 16pt; padding: 16px 20px; margin: 0; box-sizing: border-box; } h1 { font-size: 24pt; font-weight: bold; } h2 { font-size: 18pt; font-weight: bold; } h3 { font-size: 14pt; font-weight: bold; }`,
                                                 plugins: [
                                                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                                                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
