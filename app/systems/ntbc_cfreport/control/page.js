@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
     CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
-    Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check
+    Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { Editor } from '@tinymce/tinymce-react';
@@ -1712,219 +1712,6 @@ export default function ControlPage() {
                             </div>
                         </div>
                     </div>
-
-                    {/* Execution Stages Card */}
-                    <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-bold flex items-center gap-2">
-                                <Layers className="w-5 h-5 text-rose-500" />
-                                Execution Stages (2 Mockup Steps)
-                            </h2>
-                            <span className="text-xs text-gray-500">
-                                Click any step to execute/verify it
-                            </span>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            {steps.map((step, idx) => {
-                                const status = stepStatus[idx];
-                                const isCurrent = activeStep === idx;
-
-                                let borderClass = "border-gray-800 hover:border-rose-500/50 bg-gray-950/40";
-                                let textClass = "text-gray-300";
-                                let statusIcon = <Play className="w-4 h-4 text-gray-500" />;
-
-                                if (status === 'completed') {
-                                    borderClass = "border-emerald-500/40 bg-emerald-950/10 hover:border-emerald-500/80";
-                                    textClass = "text-emerald-300";
-                                    statusIcon = <CheckCircle className="w-4 h-4 text-emerald-400" />;
-                                } else if (status === 'running') {
-                                    borderClass = "border-rose-500 bg-rose-950/20";
-                                    textClass = "text-rose-300 font-bold";
-                                    statusIcon = <RefreshCw className="w-4 h-4 text-rose-400 animate-spin" />;
-                                }
-
-                                const isButtonDisabled = !mounted || !isConfigComplete || (idx === 1 && (!captureDomains && !captureDnsRecord && !captureHttpTraffic && !captureFirewall && !captureSecurityRules && !captureArgo && !captureSpeed));
-
-                                return (
-                                    <div
-                                        key={idx}
-                                        className={`flex flex-col p-4 rounded-xl border ${borderClass} transition-all duration-200 relative overflow-hidden gap-4 ${!isConfigComplete ? 'opacity-45 select-none' : ''}`}
-                                    >
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
-                                            <button
-                                                disabled={isButtonDisabled}
-                                                onClick={() => runStep(idx)}
-                                                className={`flex items-center gap-3 shrink-0 min-w-[240px] text-left hover:text-white transition-colors group ${isButtonDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                            >
-                                                <span className="p-1 rounded bg-gray-900/80 border border-gray-800 group-hover:border-rose-500/30">
-                                                    {statusIcon}
-                                                </span>
-                                                <span className={`text-sm font-semibold ${textClass}`}>
-                                                    {step.name}
-                                                </span>
-                                            </button>
-                                            <p className="text-xs text-gray-500 flex-1 leading-relaxed sm:pl-4 border-l border-gray-800/80">
-                                                {step.desc}
-                                            </p>
-                                        </div>
-                                        
-                                        {idx === 1 && (
-                                            <div className="mt-2 pl-8 flex flex-col gap-3 border-t border-gray-800/50 pt-4" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-800/40">
-                                                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wider">Required Capture Checklist:</span>
-                                                    <div className="flex items-center flex-wrap gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={toggleSelectAll}
-                                                            className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700/50 rounded text-xs font-semibold text-gray-300 hover:text-white transition-all shadow-sm active:scale-95"
-                                                        >
-                                                            {isAllSelected ? 'Deselect All' : 'Select All'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={saveStep2Settings}
-                                                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 border border-emerald-500/30 rounded text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
-                                                        >
-                                                            Save Switch Status
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={saveStep2AsDefault}
-                                                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 border border-rose-500/30 rounded text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
-                                                        >
-                                                            Set as Default
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col gap-3">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureDomains} 
-                                                                onChange={(e) => {
-                                                                    setCaptureDomains(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureDomains', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            Domains Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureDomains && renderCoordsInput('domains')}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureDnsRecord} 
-                                                                onChange={(e) => {
-                                                                    setCaptureDnsRecord(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureDnsRecord', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            Dns Record Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureDnsRecord && renderCoordsInput('dns')}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureHttpTraffic} 
-                                                                onChange={(e) => {
-                                                                    setCaptureHttpTraffic(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureHttpTraffic', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            HTTP Traffic Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureHttpTraffic && renderCoordsInput('traffic')}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureFirewall} 
-                                                                onChange={(e) => {
-                                                                    setCaptureFirewall(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureFirewall', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            Event Analytics (Firewall) Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureFirewall && renderCoordsInput('firewall')}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureSecurityRules} 
-                                                                onChange={(e) => {
-                                                                    setCaptureSecurityRules(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureSecurityRules', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            Security Rules Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureSecurityRules && renderCoordsInput('securityRules')}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureArgo} 
-                                                                onChange={(e) => {
-                                                                    setCaptureArgo(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureArgo', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            Argo Smart Routing Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureArgo && renderCoordsInput('argo')}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <label className="flex items-center gap-2.5 text-sm text-gray-300 cursor-pointer hover:text-rose-400 transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={captureSpeed} 
-                                                                onChange={(e) => {
-                                                                    setCaptureSpeed(e.target.checked);
-                                                                    if (typeof window !== 'undefined') {
-                                                                        localStorage.setItem('control_captureSpeed', e.target.checked ? 'true' : 'false');
-                                                                    }
-                                                                }}
-                                                                className="accent-rose-500 rounded border-gray-800 bg-gray-950 focus:ring-rose-500 w-4 h-4"
-                                                            />
-                                                            Speed Test Option (Check to enable Step 2 Execution)
-                                                        </label>
-                                                        {captureSpeed && renderCoordsInput('speed')}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
                 </div>
 
                 {/* Console Log Section (Right) */}
@@ -2049,6 +1836,55 @@ export default function ControlPage() {
                                     />
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Step 1: Launch Debug Browser Card */}
+                    <div className="bg-gradient-to-br from-gray-900/60 to-gray-950/80 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
+                        <div className="flex items-center justify-between border-b border-gray-800/40 pb-3">
+                            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                                <Chrome className="w-4 h-4 text-rose-500" />
+                                Step 1: Launch Debug Browser
+                            </h3>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                                stepStatus[0] === 'completed'
+                                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
+                                    : stepStatus[0] === 'running'
+                                    ? 'bg-rose-950/50 text-rose-400 border-rose-500/30 animate-pulse'
+                                    : 'bg-gray-900 text-gray-400 border-gray-800'
+                            }`}>
+                                {stepStatus[0] === 'completed' ? '● Connected' : stepStatus[0] === 'running' ? '● Launching...' : '● Ready'}
+                            </span>
+                        </div>
+                        
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                            เปิดหน้าต่าง Cloudflare Login บน Remote Debugging Browser (พอร์ต 9222) เพื่อให้สามารถล็อกอินหรือเข้าสู่ระบบจัดการ Cloudflare ได้โดยตรงผ่าน Live Browser Monitor
+                        </p>
+
+                        <div className="flex items-center justify-between pt-1">
+                            <span className="text-[11px] font-mono text-gray-500">
+                                Target: dash.cloudflare.com
+                            </span>
+                            <button
+                                type="button"
+                                disabled={!mounted || stepStatus[0] === 'running'}
+                                onClick={() => runStep(0)}
+                                className={`flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer ${
+                                    stepStatus[0] === 'running' ? 'opacity-60 cursor-not-allowed' : ''
+                                }`}
+                            >
+                                {stepStatus[0] === 'running' ? (
+                                    <>
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                        Launching Browser...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                        Launch / Go to Login
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </div>
 
