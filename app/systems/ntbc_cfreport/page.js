@@ -3844,39 +3844,32 @@ export default function NTBCCFReportPage() {
     const [capturedTopEventsSourceImage, setCapturedTopEventsSourceImage] = useState(null);
 
     // Load saved screenshots from control center session
+    // Always load screenshot images from server files
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setCapturedDomainImage(localStorage.getItem('control_capturedScreenshot'));
-            setCapturedDnsImage(localStorage.getItem('control_capturedDnsScreenshot'));
-            try {
-                const savedPages = localStorage.getItem('control_capturedDnsPages');
-                setCapturedDnsPages(savedPages ? JSON.parse(savedPages) : []);
-            } catch (e) {
-                console.error(e);
-                setCapturedDnsPages([]);
-            }
-            setCapturedTrafficImage(localStorage.getItem('control_capturedHttpTrafficScreenshot'));
-            setCapturedTrafficImageSub1(localStorage.getItem('control_capturedHttpTrafficScreenshot1'));
-            setCapturedTrafficImageSub2(localStorage.getItem('control_capturedHttpTrafficScreenshot2'));
-            setCapturedTrafficImageSub3(localStorage.getItem('control_capturedHttpTrafficScreenshot3'));
-            setCapturedTrafficImageSub4(localStorage.getItem('control_capturedHttpTrafficScreenshot4'));
-            setCapturedTrafficImageSub5(localStorage.getItem('control_capturedHttpTrafficScreenshot5'));
-            setCapturedFirewallImage(localStorage.getItem('control_capturedFirewallScreenshot'));
-            setCapturedSecurityRulesImage(localStorage.getItem('control_capturedSecurityRulesScreenshot'));
-            setCapturedArgoImage(localStorage.getItem('control_capturedArgoScreenshot'));
-            setCapturedSpeedImage(localStorage.getItem('control_capturedSpeedScreenshot'));
-            setCapturedSpeedMobileImage(localStorage.getItem('control_capturedSpeedMobileScreenshot'));
-            setCapturedBotManagementImage(localStorage.getItem('control_capturedBotManagementScreenshot'));
-            setCapturedSecurityLevelImage(localStorage.getItem('control_capturedSecurityLevelScreenshot'));
-            setCapturedSslOverviewImage(localStorage.getItem('control_capturedSslOverviewScreenshot'));
-            setCapturedSslEdgeImage(localStorage.getItem('control_capturedSslEdgeScreenshot'));
-            setCapturedRateLimitingImage(localStorage.getItem('control_capturedRateLimitingScreenshot'));
-            setCapturedManagedRulesImage(localStorage.getItem('control_capturedManagedRulesScreenshot'));
-            setCapturedIpAccessImage(localStorage.getItem('control_capturedIpAccessScreenshot'));
-            setCapturedZoneLockdownImage(localStorage.getItem('control_capturedZoneLockdownScreenshot'));
-            setCapturedTrafficCountriesImage(localStorage.getItem('control_capturedTrafficCountriesScreenshot'));
-            setCapturedTopEventsSourceImage(localStorage.getItem('control_capturedTopEventsSourceScreenshot'));
-        }
+        setCapturedDomainImage('/captured-domains.png');
+        setCapturedDnsImage('/captured-dns.png');
+        setCapturedDnsPages(['/captured-dns-1.png', '/captured-dns-2.png']);
+        setCapturedTrafficImage('/captured-traffic.png');
+        setCapturedTrafficImageSub1('/captured-traffic-sub1.png');
+        setCapturedTrafficImageSub2('/captured-traffic-sub2.png');
+        setCapturedTrafficImageSub3('/captured-traffic-sub3.png');
+        setCapturedTrafficImageSub4('/captured-traffic-sub4.png');
+        setCapturedTrafficImageSub5('/captured-traffic-sub5.png');
+        setCapturedFirewallImage('/captured-firewall.png');
+        setCapturedSecurityRulesImage('/captured-security-rules.png');
+        setCapturedArgoImage('/captured-argo.png');
+        setCapturedSpeedImage('/captured-speed.png');
+        setCapturedSpeedMobileImage('/captured-speed-mobile.png');
+        setCapturedBotManagementImage('/captured-bot-management.png');
+        setCapturedSecurityLevelImage('/captured-security-level.png');
+        setCapturedSslOverviewImage('/captured-ssl-overview.png');
+        setCapturedSslEdgeImage('/captured-ssl-edge.png');
+        setCapturedRateLimitingImage('/captured-rate-limiting.png');
+        setCapturedManagedRulesImage('/captured-managed-rules.png');
+        setCapturedIpAccessImage('/captured-ip-access.png');
+        setCapturedZoneLockdownImage('/captured-zone-lockdown.png');
+        setCapturedTrafficCountriesImage('/captured-traffic-countries.png');
+        setCapturedTopEventsSourceImage('/captured-top-events-source.png');
     }, [isReportModalOpen]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);
