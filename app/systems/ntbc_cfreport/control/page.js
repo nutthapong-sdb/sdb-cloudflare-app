@@ -1321,6 +1321,18 @@ export default function ControlPage() {
             } else if (relativePath) {
                 targetUrl = `https://dash.cloudflare.com/${envAccount}/${targetDomain}${relativePath}`;
             }
+
+            if (tabId === 'traffic' || tabId === 'trafficCountries') {
+                let trafficQuery = '';
+                if (trafficTimeWindow === 'custom' && trafficStartDate && trafficEndDate) {
+                    const startTs = new Date(trafficStartDate).toISOString();
+                    const endTs = new Date(trafficEndDate).toISOString();
+                    trafficQuery = `?since=${encodeURIComponent(startTs)}&until=${encodeURIComponent(endTs)}`;
+                } else if (trafficTimeWindow !== 'custom') {
+                    trafficQuery = `?time-window=${trafficTimeWindow}`;
+                }
+                if (targetUrl) targetUrl += trafficQuery;
+            }
             
             addLog(`Direct capture triggered for [${tabId}]...`, 'info');
             if (targetUrl) {
@@ -1610,6 +1622,27 @@ export default function ControlPage() {
                                                     </div>
                                                 </div>
 
+                                                {/* Quick Options for HTTP Traffic and Traffic Countries */}
+                                                {(activeCaptureTab === 'traffic' || activeCaptureTab === 'trafficCountries') && (
+                                                    <div className="flex flex-col gap-2 p-2.5 bg-gray-950/70 rounded-lg border border-gray-800/80 my-1">
+                                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                            <span className="text-gray-400 font-bold min-w-[85px]">Quick Options:</span>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('1440')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '1440' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>1 Day</button>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('10080')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '10080' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>7 Days</button>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('43200')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '43200' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>30 Days</button>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('custom')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === 'custom' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>Custom</button>
+                                                        </div>
+                                                        {trafficTimeWindow === 'custom' && (
+                                                            <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                                                                <span className="text-gray-400 font-bold min-w-[85px]">Date Range:</span>
+                                                                <input type="datetime-local" value={trafficStartDate} onChange={(e) => setTrafficStartDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-200 rounded px-2 py-1 text-xs" />
+                                                                <span className="text-gray-500 font-bold px-1">to</span>
+                                                                <input type="datetime-local" value={trafficEndDate} onChange={(e) => setTrafficEndDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-200 rounded px-2 py-1 text-xs" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
                                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                                     <div className="flex flex-col gap-1">
                                                         <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
@@ -1814,25 +1847,6 @@ export default function ControlPage() {
                                                             />
                                                             HTTP Traffic Option (Check to enable Step 2 Execution)
                                                         </label>
-                                                        {captureHttpTraffic && (
-                                                            <div className="pl-6 flex flex-col gap-2 my-1">
-                                                                <div className="flex items-center gap-2 text-xs">
-                                                                    <span className="text-gray-400 font-bold min-w-[80px]">Quick Options:</span>
-                                                                    <button type="button" onClick={() => setTrafficTimeWindow('1440')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === '1440' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>1 Day</button>
-                                                                    <button type="button" onClick={() => setTrafficTimeWindow('10080')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === '10080' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>7 Days</button>
-                                                                    <button type="button" onClick={() => setTrafficTimeWindow('43200')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === '43200' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>30 Days</button>
-                                                                    <button type="button" onClick={() => setTrafficTimeWindow('custom')} className={`px-2 py-1 rounded border transition-colors ${trafficTimeWindow === 'custom' ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700'}`}>Custom</button>
-                                                                </div>
-                                                                {trafficTimeWindow === 'custom' && (
-                                                                    <div className="flex items-center gap-2 text-xs mt-1">
-                                                                        <span className="text-gray-400 font-bold min-w-[80px]">Date Range:</span>
-                                                                        <input type="datetime-local" value={trafficStartDate} onChange={(e) => setTrafficStartDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-300 rounded px-2 py-1 w-[160px]" />
-                                                                        <span className="text-gray-500 font-bold px-1">to</span>
-                                                                        <input type="datetime-local" value={trafficEndDate} onChange={(e) => setTrafficEndDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-300 rounded px-2 py-1 w-[160px]" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
                                                         {captureHttpTraffic && renderCoordsInput('traffic')}
                                                     </div>
                                                     <div className="flex flex-col gap-1.5">
