@@ -214,7 +214,7 @@ export async function GET(request) {
                     if (captureType === 'traffic' || captureType === 'traffic-countries' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
                         tableOrFooter = findElementByText('div, span, button, p, td', 'requests') || findElementByText('div, span, h1, h2, h3, h4', 'traffic') || findElementByText('div, span, button, p, td', 'result') || document.querySelector('svg, canvas, button');
                     } else if (captureType === 'domains') {
-                        tableOrFooter = document.querySelector('[data-testid="zone-card"]') || findElementByText('div, span, h1, h2, h3, p', 'sites') || document.querySelector('table');
+                        tableOrFooter = document.querySelector('[data-testid*="table_row"], [role="row"], [role="table"]') || findElementByText('div, span, button, p, td', 'Showing 1') || document.querySelector('table');
                     } else {
                         tableOrFooter = findElementByText('div, span, button, p, td', 'of') || findElementByText('div, span, button, p, td', 'items') || document.querySelector('table, form, section, main');
                     }
@@ -227,6 +227,50 @@ export async function GET(request) {
                 await new Promise(r => setTimeout(r, 400));
             } catch (err) {
                 console.warn(`Timeout waiting for page elements to finish lazy loading. Proceeding anyway:`, err.message);
+            }
+
+            // Inject CSS render fix for Domains table if capture type is domains
+            if (type === 'domains') {
+                await page.evaluate(() => {
+                    const id = 'cf-domains-render-fix';
+                    let style = document.getElementById(id);
+                    if (!style) {
+                        style = document.createElement('style');
+                        style.id = id;
+                        document.head.appendChild(style);
+                    }
+                    style.innerHTML = `
+                        div[class*="overflow-clip"],
+                        div[class*="overflow-x-clip"],
+                        div[class*="overflow-y-clip"],
+                        [role="table"],
+                        [data-sentry-component="TableBody"] {
+                            overflow: visible !important;
+                            clip-path: none !important;
+                        }
+                        [role="table"] {
+                            display: block !important;
+                            width: 100% !important;
+                        }
+                        [role="row"], [role="rowgroup"] > div {
+                            display: flex !important;
+                            flex-direction: row !important;
+                            width: 100% !important;
+                            min-height: 44px !important;
+                            border-bottom: 1px solid #e5e7eb !important;
+                        }
+                        [role="cell"], [role="columnheader"] {
+                            display: flex !important;
+                            align-items: center !important;
+                            padding: 8px 12px !important;
+                            flex: 1 1 0 !important;
+                        }
+                        [role="cell"]:first-child, [role="columnheader"]:first-child {
+                            flex: 2 1 0 !important;
+                        }
+                    `;
+                });
+                await new Promise(r => setTimeout(r, 600));
             }
 
             // Evaluate coordinates for post-capture cropping (no viewport clipping)
@@ -250,22 +294,16 @@ export async function GET(request) {
             if (!cropCoords) {
                 cropCoords = await page.evaluate((captureType, qXS, qXE, qYS, qYE) => {
                     if (captureType === 'domains') {
-                        const domainItem = Array.from(document.querySelectorAll('a, button, div, span')).find(el => 
-                            (el.innerText || '').includes('softdebut') && el.getBoundingClientRect().left > 200
-                        );
-                        if (domainItem) {
-                            let container = domainItem;
-                            while (container && container.parentElement && container.parentElement.offsetWidth < 1200 && container.parentElement.tagName !== 'MAIN') {
-                                container = container.parentElement;
-                            }
-                            const rect = container.getBoundingClientRect();
-                            return {
-                                x: Math.max(0, Math.round(rect.left) - 15),
-                                y: Math.max(0, Math.round(rect.top) - 15),
-                                width: Math.min(window.innerWidth, Math.round(rect.width) + 30),
-                                height: Math.round(rect.height) + 20
-                            };
-                        }
+                        const h = Array.from(document.querySelectorAll('h1, h2, h3, div, span')).find(el => (el.innerText || '').trim().startsWith('Domains') && el.getBoundingClientRect().left > 200);
+                        const footer = Array.from(document.querySelectorAll('*')).find(el => (el.innerText || '').trim().startsWith('Showing 1'));
+                        const hRect = h ? h.getBoundingClientRect() : { top: 80, left: 328 };
+                        const fRect = footer ? footer.getBoundingClientRect() : { bottom: 480 };
+                        return {
+                            x: Math.max(0, Math.round(hRect.left) - 30),
+                            y: Math.max(0, Math.round(hRect.top) - 20),
+                            width: 1350,
+                            height: Math.round((fRect.bottom || 480) - hRect.top + 40)
+                        };
                     }
                 const findLastElementByText = (selector, text) => {
                     const elements = Array.from(document.querySelectorAll(selector));
@@ -477,11 +515,13 @@ export async function GET(request) {
                 };
             });
 
-            console.log(`Temporarily resizing viewport height from ${originalViewportSize.height} to ${originalViewportSize.documentHeight} for full page capture...`);
-            await page.setViewport({
-                width: originalViewportSize.width,
-                height: originalViewportSize.documentHeight
-            });
+            if (type !== 'domains') {
+                console.log(`Temporarily resizing viewport height from ${originalViewportSize.height} to ${originalViewportSize.documentHeight} for full page capture...`);
+                await page.setViewport({
+                    width: originalViewportSize.width,
+                    height: originalViewportSize.documentHeight
+                });
+            }
 
             console.log('Capturing page screenshot (flicker-free)...');
             const fullScreenshotBase64 = await page.screenshot({
@@ -489,11 +529,13 @@ export async function GET(request) {
                 type: 'png'
             });
 
-            // Restore viewport size to original window dimensions
-            await page.setViewport({
-                width: originalViewportSize.width,
-                height: originalViewportSize.height
-            });
+            if (type !== 'domains') {
+                // Restore viewport size to original window dimensions
+                await page.setViewport({
+                    width: originalViewportSize.width,
+                    height: originalViewportSize.height
+                });
+            }
 
             let pageBuffer = Buffer.from(fullScreenshotBase64, 'base64');
 
