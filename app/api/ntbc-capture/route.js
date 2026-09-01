@@ -231,8 +231,7 @@ export async function GET(request) {
 
             // Evaluate coordinates for post-capture cropping (no viewport clipping)
             console.log('Calculating bounding box coordinates on active page...');
-            let cropCoords = null;
-            if (qXStart && qXEnd && qYStart && qYEnd && type !== 'domains' && type !== 'dns') {
+            if (qXStart && qXEnd && qYStart && qYEnd && type !== 'dns') {
                 const xs = parseInt(qXStart, 10);
                 const xe = parseInt(qXEnd, 10);
                 const ys = parseInt(qYStart, 10);
@@ -250,6 +249,24 @@ export async function GET(request) {
 
             if (!cropCoords) {
                 cropCoords = await page.evaluate((captureType, qXS, qXE, qYS, qYE) => {
+                    if (captureType === 'domains') {
+                        const domainItem = Array.from(document.querySelectorAll('a, button, div, span')).find(el => 
+                            (el.innerText || '').includes('softdebut') && el.getBoundingClientRect().left > 200
+                        );
+                        if (domainItem) {
+                            let container = domainItem;
+                            while (container && container.parentElement && container.parentElement.offsetWidth < 1200 && container.parentElement.tagName !== 'MAIN') {
+                                container = container.parentElement;
+                            }
+                            const rect = container.getBoundingClientRect();
+                            return {
+                                x: Math.max(0, Math.round(rect.left) - 15),
+                                y: Math.max(0, Math.round(rect.top) - 15),
+                                width: Math.min(window.innerWidth, Math.round(rect.width) + 30),
+                                height: Math.round(rect.height) + 20
+                            };
+                        }
+                    }
                 const findLastElementByText = (selector, text) => {
                     const elements = Array.from(document.querySelectorAll(selector));
                     return elements.reverse().find(el => {
