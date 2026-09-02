@@ -1238,12 +1238,17 @@ export default function ControlPage() {
             
             addLog(`Direct capture triggered for [${tabId}]...`, 'info');
             if (targetUrl) {
-                addLog(`Redirecting active tab to: ${targetUrl}`, 'info');
+                addLog(`Checking active tab URL...`, 'info');
                 const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetUrl)}`);
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error);
-                addLog('Waiting for page rendering to stabilize...', 'info');
-                await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
+                if (data.skippedRedirect) {
+                    addLog(`⚡ Browser is already on target page (${targetUrl}) - skipped reload for faster capture & anti-bot protection.`, 'success');
+                } else {
+                    addLog(`Redirected active tab to: ${targetUrl}`, 'info');
+                    addLog('Waiting for page rendering to stabilize...', 'info');
+                    await new Promise(r => setTimeout(r, DELAY_CONFIG.NAV_STABILIZE_MS));
+                }
             }
             addLog(`Capturing screenshot with type=${captureType}...`, 'info');
             const captureRes = await fetch(getCaptureUrl(tabId, captureType));
