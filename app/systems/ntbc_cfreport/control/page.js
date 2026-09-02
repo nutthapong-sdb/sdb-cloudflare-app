@@ -1307,6 +1307,29 @@ export default function ControlPage() {
                 </h2>
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={async () => {
+                            try {
+                                addLog('Launching Quick Debug Session...', 'info');
+                                await fetch('/api/ntbc-launch-chrome');
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Quick Debug Session Launched',
+                                    text: 'Chrome is active and navigated to Cloudflare login.',
+                                    timer: 1500,
+                                    showConfirmButton: false,
+                                    background: '#111827',
+                                    color: '#fff'
+                                });
+                            } catch (err) {
+                                addLog(`Failed to launch quick debug: ${err.message}`, 'error');
+                            }
+                        }}
+                        className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border border-amber-500/40 cursor-pointer shadow-sm"
+                        title="Quick Cloudflare Login & Debug Session"
+                    >
+                        <Terminal className="w-3.5 h-3.5 text-amber-400" /> Quick Debug Session
+                    </button>
+                    <button
                         onClick={() => setIsVncMaximized(!isVncMaximized)}
                         className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border border-gray-700/50 cursor-pointer"
                     >
