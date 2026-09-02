@@ -104,26 +104,40 @@ export async function GET(request) {
             console.error('Failed to reset zoom via Ctrl+0:', err);
         }
 
-        // Collapse Cloudflare sidebar navigation to keep layout standardized
+        // Ensure Cloudflare sidebar navigation is EXPANDED to keep layout standardized
         try {
-            const isExpanded = await page.evaluate(() => {
-                const nav = document.querySelector('nav') || document.querySelector('aside') || document.querySelector('[aria-label*="navigation"]');
-                if (nav) {
-                    return nav.offsetWidth > 120;
-                }
-                return false;
+            const sidebarState = await page.evaluate(() => {
+                const nav = document.querySelector('nav') || document.querySelector('aside');
+                const navWidth = nav ? nav.offsetWidth : 0;
+                const expandBtn = document.querySelector('button[aria-label*="Expand sidebar"], button[aria-label*="Expand navigation"], button[aria-label*="Open navigation"]');
+                return {
+                    isCollapsed: navWidth > 0 && navWidth < 150,
+                    hasExpandBtn: !!expandBtn
+                };
             });
-            if (isExpanded) {
-                console.log('Sidebar is expanded, collapsing it using keyboard shortcut "t" then "s"...');
-                await page.keyboard.press('KeyT');
-                await new Promise(r => setTimeout(r, 100));
-                await page.keyboard.press('KeyS');
-                await new Promise(r => setTimeout(r, 600));
+
+            if (sidebarState.isCollapsed || sidebarState.hasExpandBtn) {
+                console.log('Sidebar is collapsed. Expanding sidebar deterministically...');
+                const clicked = await page.evaluate(() => {
+                    const expandBtn = document.querySelector('button[aria-label*="Expand sidebar"], button[aria-label*="Expand navigation"], button[aria-label*="Open navigation"]');
+                    if (expandBtn) {
+                        expandBtn.click();
+                        return true;
+                    }
+                    return false;
+                });
+                if (!clicked) {
+                    await page.keyboard.press('KeyT');
+                    await new Promise(r => setTimeout(r, 100));
+                    await page.keyboard.press('KeyS');
+                }
+                await new Promise(r => setTimeout(r, 500));
+                console.log('Sidebar expanded successfully.');
             } else {
-                console.log('Sidebar is already collapsed.');
+                console.log('Sidebar is already expanded.');
             }
         } catch (err) {
-            console.warn('Failed to collapse Cloudflare sidebar:', err.message);
+            console.warn('Could not ensure sidebar is expanded:', err.message);
         }
 
         // Wait up to 3 seconds for either the login page to appear or the dashboard to load
@@ -453,41 +467,27 @@ export async function GET(request) {
                     }
                 }
 
+                let headingAnchorY = Math.max(0, Math.round(headingTop - 20));
                 let startY;
                 const parsedYS = parseInt(qYS, 10);
                 if (!isNaN(parsedYS)) {
-                    startY = parsedYS;
+                    // Ystart is treated as offset relative to heading title anchor
+                    startY = Math.max(0, headingAnchorY + parsedYS);
                 } else {
-                    let yOffset = -20;
-                    if (captureType === 'dns' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
-                        yOffset = -20 - Math.round(window.innerHeight * 0.02);
-                    } else if (captureType === 'traffic') {
-                        yOffset = -20 - Math.round(window.innerHeight * 0.01);
-                    } else if (captureType === 'firewall' || captureType === 'security-rules') {
-                        yOffset = -20;
-                    }
-                    startY = Math.max(0, headingTop + yOffset);
+                    startY = headingAnchorY;
                 }
 
                 let targetHeight;
-                if (captureType === 'domains' || captureType === 'dns') {
-                    // Treat qYE as the offset to add to absoluteBottom height
-                    // Positive adds height (extends downwards), negative reduces height (cuts upwards)
-                    const parsedYE = parseInt(qYE, 10);
-                    let offsetVal;
+                const isDynamic = ['domains', 'dns', 'security-rules', 'rate-limiting', 'managed-rules', 'ip-access-rules', 'zone-lockdown'].includes(captureType);
+                const parsedYE = parseInt(qYE, 10);
+                
+                if (isDynamic) {
+                    let offsetVal = 20;
                     if (!isNaN(parsedYE)) {
-                        offsetVal = parsedYE;
-                    } else {
-                        if (captureType === 'domains') {
-                            offsetVal = footer ? 15 : -250;
-                        } else {
-                            // captureType === 'dns'
-                            offsetVal = 15;
-                        }
+                        offsetVal = 20 + parsedYE;
                     }
-                    targetHeight = Math.max(150, (absoluteBottom - startY) + offsetVal);
+                    targetHeight = Math.max(100, (absoluteBottom - startY) + offsetVal);
                 } else {
-                    const parsedYE = parseInt(qYE, 10);
                     if (!isNaN(parsedYE)) {
                         targetHeight = Math.max(10, parsedYE - startY);
                     } else {
@@ -496,8 +496,8 @@ export async function GET(request) {
                             targetHeight = 900;
                         } else if (captureType === 'firewall') {
                             targetHeight = 700;
-                        } else if (captureType === 'security-rules' || captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
-                            targetHeight = Math.max(150, (absoluteBottom - startY));
+                        } else if (captureType === 'argo' || captureType === 'speed' || captureType === 'speed-mobile') {
+                            targetHeight = 750;
                         }
                     }
                 }
