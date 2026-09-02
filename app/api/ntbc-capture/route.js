@@ -8,17 +8,117 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
+        const action = searchParams.get('action');
         const type = searchParams.get('type') || 'domains';
         const qXStart = searchParams.get('xStart');
         const qXEnd = searchParams.get('xEnd');
         const qYStart = searchParams.get('yStart');
         const qYEnd = searchParams.get('yEnd');
 
+        const publicDir = path.join(process.cwd(), 'public');
+        const dbCapturedDir = path.join(process.cwd(), 'db', 'captured');
+        if (!fs.existsSync(dbCapturedDir)) {
+            try { fs.mkdirSync(dbCapturedDir, { recursive: true }); } catch (e) {}
+        }
+
+        // Action to get all saved screenshots directly from disk
+        if (action === 'get-saved') {
+            const tabs = [
+                { id: 'domains', file: 'captured-domains.png' },
+                { id: 'botManagement', file: 'captured-bot-management.png' },
+                { id: 'securityLevel', file: 'captured-security-level.png' },
+                { id: 'sslOverview', file: 'captured-ssl-overview.png' },
+                { id: 'sslEdge', file: 'captured-ssl-edge.png' },
+                { id: 'traffic', file: 'captured-traffic.png' },
+                { id: 'trafficCountries', file: 'captured-traffic-countries.png' },
+                { id: 'firewall', file: 'captured-firewall.png' },
+                { id: 'topEventsSource', file: 'captured-top-events-source.png' },
+                { id: 'securityRules', file: 'captured-security-rules.png' },
+                { id: 'rateLimiting', file: 'captured-rate-limiting.png' },
+                { id: 'managedRules', file: 'captured-managed-rules.png' },
+                { id: 'ipAccess', file: 'captured-ip-access.png' },
+                { id: 'zoneLockdown', file: 'captured-zone-lockdown.png' },
+                { id: 'argo', file: 'captured-argo.png' },
+                { id: 'speed', file: 'captured-speed.png' },
+                { id: 'speedMobile', file: 'captured-speed-mobile.png' }
+            ];
+
+            const screenshots = {};
+            const metadata = {};
+
+            // Check DNS pages
+            const dnsPages = [];
+            let pageNum = 1;
+            while (pageNum <= 10) {
+                const dnsFile = `captured-dns-${pageNum}.png`;
+                const p1 = path.join(dbCapturedDir, dnsFile);
+                const p2 = path.join(publicDir, dnsFile);
+                const target = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+                if (target) {
+                    dnsPages.push(`data:image/png;base64,${fs.readFileSync(target).toString('base64')}`);
+                    pageNum++;
+                } else {
+                    break;
+                }
+            }
+            if (dnsPages.length === 0) {
+                const singleP1 = path.join(dbCapturedDir, 'captured-dns.png');
+                const singleP2 = path.join(publicDir, 'captured-dns.png');
+                const singleTarget = fs.existsSync(singleP1) ? singleP1 : (fs.existsSync(singleP2) ? singleP2 : null);
+                if (singleTarget) {
+                    dnsPages.push(`data:image/png;base64,${fs.readFileSync(singleTarget).toString('base64')}`);
+                    metadata['dns'] = { capturedAt: fs.statSync(singleTarget).mtime.toISOString() };
+                }
+            } else {
+                const dnsStatTarget = fs.existsSync(path.join(dbCapturedDir, 'captured-dns-1.png')) ? path.join(dbCapturedDir, 'captured-dns-1.png') : path.join(publicDir, 'captured-dns-1.png');
+                if (fs.existsSync(dnsStatTarget)) {
+                    metadata['dns'] = { capturedAt: fs.statSync(dnsStatTarget).mtime.toISOString() };
+                }
+            }
+            if (dnsPages.length > 0) {
+                screenshots['dns'] = dnsPages;
+            }
+
+            // Check other single files
+            for (const item of tabs) {
+                const p1 = path.join(dbCapturedDir, item.file);
+                const p2 = path.join(publicDir, item.file);
+                const target = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+                if (target) {
+                    try {
+                        const buf = fs.readFileSync(target);
+                        screenshots[item.id] = `data:image/png;base64,${buf.toString('base64')}`;
+                        metadata[item.id] = { capturedAt: fs.statSync(target).mtime.toISOString() };
+                    } catch (e) {
+                        console.error(`Failed to read ${target}:`, e);
+                    }
+                }
+            }
+
+            // Check Traffic sub1 to sub5
+            for (let i = 1; i <= 5; i++) {
+                const subFile = `captured-traffic-sub${i}.png`;
+                const p1 = path.join(dbCapturedDir, subFile);
+                const p2 = path.join(publicDir, subFile);
+                const target = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+                if (target) {
+                    try {
+                        screenshots[`trafficSub${i}`] = `data:image/png;base64,${fs.readFileSync(target).toString('base64')}`;
+                    } catch (e) {}
+                }
+            }
+
+            return Response.json({
+                success: true,
+                screenshots,
+                metadata
+            });
+        }
+
         // Mock mode check using the bind-mounted db directory
         const mockModePath = path.join(process.cwd(), 'db', 'mock_capture.txt');
         if (fs.existsSync(mockModePath)) {
             console.log(`ℹ️ [MOCK MODE] Simulating capture for type: ${type}...`);
-            const publicDir = path.join(process.cwd(), 'public');
             
             // Map types to filenames
             const fileMapping = {
@@ -746,10 +846,12 @@ export async function GET(request) {
             }
         }
 
-        // Save to Next.js public directory inside the project
-        const publicDir = path.join(process.cwd(), 'public');
+        // Ensure directories exist
         if (!fs.existsSync(publicDir)) {
             fs.mkdirSync(publicDir, { recursive: true });
+        }
+        if (!fs.existsSync(dbCapturedDir)) {
+            try { fs.mkdirSync(dbCapturedDir, { recursive: true }); } catch (e) {}
         }
 
         // Clean up old captured-dns-*.png files
@@ -759,6 +861,14 @@ export async function GET(request) {
                 for (const file of files) {
                     if (file.startsWith('captured-dns-') && file.endsWith('.png')) {
                         fs.unlinkSync(path.join(publicDir, file));
+                    }
+                }
+                if (fs.existsSync(dbCapturedDir)) {
+                    const dbFiles = fs.readdirSync(dbCapturedDir);
+                    for (const file of dbFiles) {
+                        if (file.startsWith('captured-dns-') && file.endsWith('.png')) {
+                            fs.unlinkSync(path.join(dbCapturedDir, file));
+                        }
                     }
                 }
             } catch (e) {
@@ -789,13 +899,15 @@ export async function GET(request) {
         const fileName = fileMapping[type] || 'captured-domains.png';
         const filePath = path.join(publicDir, fileName);
         fs.writeFileSync(filePath, finalBuffer);
-        console.log(`Screenshot saved to ${filePath}`);
+        try { fs.writeFileSync(path.join(dbCapturedDir, fileName), finalBuffer); } catch (e) {}
+        console.log(`Screenshot saved to ${filePath} and persistent disk`);
 
         if (type === 'dns' && pageBuffers.length > 0) {
             for (let i = 0; i < pageBuffers.length; i++) {
                 const pageFileName = `captured-dns-${i + 1}.png`;
                 const pageFilePath = path.join(publicDir, pageFileName);
                 fs.writeFileSync(pageFilePath, pageBuffers[i]);
+                try { fs.writeFileSync(path.join(dbCapturedDir, pageFileName), pageBuffers[i]); } catch (e) {}
                 console.log(`Saved paginated DNS screenshot to ${pageFilePath}`);
             }
         }
@@ -803,22 +915,27 @@ export async function GET(request) {
         if (type === 'traffic') {
             if (sub1Buffer) {
                 fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub1.png'), sub1Buffer);
+                try { fs.writeFileSync(path.join(dbCapturedDir, 'captured-traffic-sub1.png'), sub1Buffer); } catch (e) {}
                 console.log('Saved traffic sub1 screenshot');
             }
             if (sub2Buffer) {
                 fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub2.png'), sub2Buffer);
+                try { fs.writeFileSync(path.join(dbCapturedDir, 'captured-traffic-sub2.png'), sub2Buffer); } catch (e) {}
                 console.log('Saved traffic sub2 screenshot');
             }
             if (sub3Buffer) {
                 fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub3.png'), sub3Buffer);
+                try { fs.writeFileSync(path.join(dbCapturedDir, 'captured-traffic-sub3.png'), sub3Buffer); } catch (e) {}
                 console.log('Saved traffic sub3 screenshot');
             }
             if (sub4Buffer) {
                 fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub4.png'), sub4Buffer);
+                try { fs.writeFileSync(path.join(dbCapturedDir, 'captured-traffic-sub4.png'), sub4Buffer); } catch (e) {}
                 console.log('Saved traffic sub4 screenshot');
             }
             if (sub5Buffer) {
                 fs.writeFileSync(path.join(publicDir, 'captured-traffic-sub5.png'), sub5Buffer);
+                try { fs.writeFileSync(path.join(dbCapturedDir, 'captured-traffic-sub5.png'), sub5Buffer); } catch (e) {}
                 console.log('Saved traffic sub5 screenshot');
             }
         }

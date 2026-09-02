@@ -538,35 +538,47 @@ export default function ControlPage() {
                 console.error('Failed to parse captureMeta:', e);
             }
 
-            // Restore captured screenshots from localStorage
-            setCapturedScreenshot(localStorage.getItem('control_capturedScreenshot') || null);
-            try {
-                const dnsVal = localStorage.getItem('control_capturedDnsScreenshot');
-                setCapturedDnsScreenshot(dnsVal ? JSON.parse(dnsVal) : null);
-            } catch (e) {
-                setCapturedDnsScreenshot(null);
-            }
-            setCapturedHttpTrafficScreenshot(localStorage.getItem('control_capturedHttpTrafficScreenshot') || null);
-            setCapturedHttpTrafficScreenshot1(localStorage.getItem('control_capturedHttpTrafficScreenshot1') || null);
-            setCapturedHttpTrafficScreenshot2(localStorage.getItem('control_capturedHttpTrafficScreenshot2') || null);
-            setCapturedHttpTrafficScreenshot3(localStorage.getItem('control_capturedHttpTrafficScreenshot3') || null);
-            setCapturedHttpTrafficScreenshot4(localStorage.getItem('control_capturedHttpTrafficScreenshot4') || null);
-            setCapturedHttpTrafficScreenshot5(localStorage.getItem('control_capturedHttpTrafficScreenshot5') || null);
-            setCapturedFirewallScreenshot(localStorage.getItem('control_capturedFirewallScreenshot') || null);
-            setCapturedSecurityRulesScreenshot(localStorage.getItem('control_capturedSecurityRulesScreenshot') || null);
-            setCapturedArgoScreenshot(localStorage.getItem('control_capturedArgoScreenshot') || null);
-            setCapturedSpeedScreenshot(localStorage.getItem('control_capturedSpeedScreenshot') || null);
-            setCapturedSpeedMobileScreenshot(localStorage.getItem('control_capturedSpeedMobileScreenshot') || null);
-            setCapturedBotManagementScreenshot(localStorage.getItem('control_capturedBotManagementScreenshot') || null);
-            setCapturedSecurityLevelScreenshot(localStorage.getItem('control_capturedSecurityLevelScreenshot') || null);
-            setCapturedSslOverviewScreenshot(localStorage.getItem('control_capturedSslOverviewScreenshot') || null);
-            setCapturedSslEdgeScreenshot(localStorage.getItem('control_capturedSslEdgeScreenshot') || null);
-            setCapturedRateLimitingScreenshot(localStorage.getItem('control_capturedRateLimitingScreenshot') || null);
-            setCapturedManagedRulesScreenshot(localStorage.getItem('control_capturedManagedRulesScreenshot') || null);
-            setCapturedIpAccessScreenshot(localStorage.getItem('control_capturedIpAccessScreenshot') || null);
-            setCapturedZoneLockdownScreenshot(localStorage.getItem('control_capturedZoneLockdownScreenshot') || null);
-            setCapturedTrafficCountriesScreenshot(localStorage.getItem('control_capturedTrafficCountriesScreenshot') || null);
-            setCapturedTopEventsSourceScreenshot(localStorage.getItem('control_capturedTopEventsSourceScreenshot') || null);
+            // Fetch saved screenshots and metadata directly from persistent server disk
+            fetch('/api/ntbc-capture?action=get-saved')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.screenshots) {
+                        const s = data.screenshots;
+                        if (s.domains) setCapturedScreenshot(s.domains);
+                        if (s.dns) setCapturedDnsScreenshot(s.dns);
+                        if (s.traffic) setCapturedHttpTrafficScreenshot(s.traffic);
+                        if (s.trafficSub1) setCapturedHttpTrafficScreenshot1(s.trafficSub1);
+                        if (s.trafficSub2) setCapturedHttpTrafficScreenshot2(s.trafficSub2);
+                        if (s.trafficSub3) setCapturedHttpTrafficScreenshot3(s.trafficSub3);
+                        if (s.trafficSub4) setCapturedHttpTrafficScreenshot4(s.trafficSub4);
+                        if (s.trafficSub5) setCapturedHttpTrafficScreenshot5(s.trafficSub5);
+                        if (s.firewall) setCapturedFirewallScreenshot(s.firewall);
+                        if (s.securityRules) setCapturedSecurityRulesScreenshot(s.securityRules);
+                        if (s.argo) setCapturedArgoScreenshot(s.argo);
+                        if (s.speed) setCapturedSpeedScreenshot(s.speed);
+                        if (s.speedMobile) setCapturedSpeedMobileScreenshot(s.speedMobile);
+                        if (s.botManagement) setCapturedBotManagementScreenshot(s.botManagement);
+                        if (s.securityLevel) setCapturedSecurityLevelScreenshot(s.securityLevel);
+                        if (s.sslOverview) setCapturedSslOverviewScreenshot(s.sslOverview);
+                        if (s.sslEdge) setCapturedSslEdgeScreenshot(s.sslEdge);
+                        if (s.rateLimiting) setCapturedRateLimitingScreenshot(s.rateLimiting);
+                        if (s.managedRules) setCapturedManagedRulesScreenshot(s.managedRules);
+                        if (s.ipAccess) setCapturedIpAccessScreenshot(s.ipAccess);
+                        if (s.zoneLockdown) setCapturedZoneLockdownScreenshot(s.zoneLockdown);
+                        if (s.trafficCountries) setCapturedTrafficCountriesScreenshot(s.trafficCountries);
+                        if (s.topEventsSource) setCapturedTopEventsSourceScreenshot(s.topEventsSource);
+
+                        if (data.metadata) {
+                            setCaptureMeta(prev => ({
+                                ...prev,
+                                ...data.metadata
+                            }));
+                        }
+                    }
+                })
+                .catch(e => {
+                    console.error('Failed to load saved screenshots from server disk:', e);
+                });
             
             // Fetch central database coordinates
             fetch('/api/ntbc-capture-coords')

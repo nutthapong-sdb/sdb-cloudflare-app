@@ -3843,38 +3843,44 @@ export default function NTBCCFReportPage() {
     const [capturedTrafficCountriesImage, setCapturedTrafficCountriesImage] = useState(null);
     const [capturedTopEventsSourceImage, setCapturedTopEventsSourceImage] = useState(null);
 
-    // Load saved screenshots from control center session
+    // Load saved screenshots directly from server disk
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setCapturedDomainImage(localStorage.getItem('control_capturedScreenshot') || null);
-            try {
-                const dnsVal = localStorage.getItem('control_capturedDnsScreenshot');
-                setCapturedDnsPages(dnsVal ? JSON.parse(dnsVal) : null);
-            } catch (e) {
-                setCapturedDnsPages(null);
-            }
-            setCapturedTrafficImage(localStorage.getItem('control_capturedHttpTrafficScreenshot') || null);
-            setCapturedTrafficImageSub1(localStorage.getItem('control_capturedHttpTrafficScreenshot1') || null);
-            setCapturedTrafficImageSub2(localStorage.getItem('control_capturedHttpTrafficScreenshot2') || null);
-            setCapturedTrafficImageSub3(localStorage.getItem('control_capturedHttpTrafficScreenshot3') || null);
-            setCapturedTrafficImageSub4(localStorage.getItem('control_capturedHttpTrafficScreenshot4') || null);
-            setCapturedTrafficImageSub5(localStorage.getItem('control_capturedHttpTrafficScreenshot5') || null);
-            setCapturedFirewallImage(localStorage.getItem('control_capturedFirewallScreenshot') || null);
-            setCapturedSecurityRulesImage(localStorage.getItem('control_capturedSecurityRulesScreenshot') || null);
-            setCapturedArgoImage(localStorage.getItem('control_capturedArgoScreenshot') || null);
-            setCapturedSpeedImage(localStorage.getItem('control_capturedSpeedScreenshot') || null);
-            setCapturedSpeedMobileImage(localStorage.getItem('control_capturedSpeedMobileScreenshot') || null);
-            setCapturedBotManagementImage(localStorage.getItem('control_capturedBotManagementScreenshot') || null);
-            setCapturedSecurityLevelImage(localStorage.getItem('control_capturedSecurityLevelScreenshot') || null);
-            setCapturedSslOverviewImage(localStorage.getItem('control_capturedSslOverviewScreenshot') || null);
-            setCapturedSslEdgeImage(localStorage.getItem('control_capturedSslEdgeScreenshot') || null);
-            setCapturedRateLimitingImage(localStorage.getItem('control_capturedRateLimitingScreenshot') || null);
-            setCapturedManagedRulesImage(localStorage.getItem('control_capturedManagedRulesScreenshot') || null);
-            setCapturedIpAccessImage(localStorage.getItem('control_capturedIpAccessScreenshot') || null);
-            setCapturedZoneLockdownImage(localStorage.getItem('control_capturedZoneLockdownScreenshot') || null);
-            setCapturedTrafficCountriesImage(localStorage.getItem('control_capturedTrafficCountriesScreenshot') || null);
-            setCapturedTopEventsSourceImage(localStorage.getItem('control_capturedTopEventsSourceScreenshot') || null);
-        }
+        fetch('/api/ntbc-capture?action=get-saved')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.screenshots) {
+                    const s = data.screenshots;
+                    if (s.domains) setCapturedDomainImage(s.domains);
+                    if (s.dns) {
+                        setCapturedDnsPages(Array.isArray(s.dns) ? s.dns : [s.dns]);
+                        setCapturedDnsImage(Array.isArray(s.dns) ? s.dns[0] : s.dns);
+                    }
+                    if (s.traffic) setCapturedTrafficImage(s.traffic);
+                    if (s.trafficSub1) setCapturedTrafficImageSub1(s.trafficSub1);
+                    if (s.trafficSub2) setCapturedTrafficImageSub2(s.trafficSub2);
+                    if (s.trafficSub3) setCapturedTrafficImageSub3(s.trafficSub3);
+                    if (s.trafficSub4) setCapturedTrafficImageSub4(s.trafficSub4);
+                    if (s.trafficSub5) setCapturedTrafficImageSub5(s.trafficSub5);
+                    if (s.firewall) setCapturedFirewallImage(s.firewall);
+                    if (s.securityRules) setCapturedSecurityRulesImage(s.securityRules);
+                    if (s.argo) setCapturedArgoImage(s.argo);
+                    if (s.speed) setCapturedSpeedImage(s.speed);
+                    if (s.speedMobile) setCapturedSpeedMobileImage(s.speedMobile);
+                    if (s.botManagement) setCapturedBotManagementImage(s.botManagement);
+                    if (s.securityLevel) setCapturedSecurityLevelImage(s.securityLevel);
+                    if (s.sslOverview) setCapturedSslOverviewImage(s.sslOverview);
+                    if (s.sslEdge) setCapturedSslEdgeImage(s.sslEdge);
+                    if (s.rateLimiting) setCapturedRateLimitingImage(s.rateLimiting);
+                    if (s.managedRules) setCapturedManagedRulesImage(s.managedRules);
+                    if (s.ipAccess) setCapturedIpAccessImage(s.ipAccess);
+                    if (s.zoneLockdown) setCapturedZoneLockdownImage(s.zoneLockdown);
+                    if (s.trafficCountries) setCapturedTrafficCountriesImage(s.trafficCountries);
+                    if (s.topEventsSource) setCapturedTopEventsSourceImage(s.topEventsSource);
+                }
+            })
+            .catch(e => {
+                console.error('Failed to load saved screenshots from server disk:', e);
+            });
     }, [isReportModalOpen]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);
