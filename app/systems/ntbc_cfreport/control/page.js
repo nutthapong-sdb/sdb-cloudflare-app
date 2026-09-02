@@ -537,6 +537,36 @@ export default function ControlPage() {
             } catch (e) {
                 console.error('Failed to parse captureMeta:', e);
             }
+
+            // Restore captured screenshots from localStorage
+            setCapturedScreenshot(localStorage.getItem('control_capturedScreenshot') || null);
+            try {
+                const dnsVal = localStorage.getItem('control_capturedDnsScreenshot');
+                setCapturedDnsScreenshot(dnsVal ? JSON.parse(dnsVal) : null);
+            } catch (e) {
+                setCapturedDnsScreenshot(null);
+            }
+            setCapturedHttpTrafficScreenshot(localStorage.getItem('control_capturedHttpTrafficScreenshot') || null);
+            setCapturedHttpTrafficScreenshot1(localStorage.getItem('control_capturedHttpTrafficScreenshot1') || null);
+            setCapturedHttpTrafficScreenshot2(localStorage.getItem('control_capturedHttpTrafficScreenshot2') || null);
+            setCapturedHttpTrafficScreenshot3(localStorage.getItem('control_capturedHttpTrafficScreenshot3') || null);
+            setCapturedHttpTrafficScreenshot4(localStorage.getItem('control_capturedHttpTrafficScreenshot4') || null);
+            setCapturedHttpTrafficScreenshot5(localStorage.getItem('control_capturedHttpTrafficScreenshot5') || null);
+            setCapturedFirewallScreenshot(localStorage.getItem('control_capturedFirewallScreenshot') || null);
+            setCapturedSecurityRulesScreenshot(localStorage.getItem('control_capturedSecurityRulesScreenshot') || null);
+            setCapturedArgoScreenshot(localStorage.getItem('control_capturedArgoScreenshot') || null);
+            setCapturedSpeedScreenshot(localStorage.getItem('control_capturedSpeedScreenshot') || null);
+            setCapturedSpeedMobileScreenshot(localStorage.getItem('control_capturedSpeedMobileScreenshot') || null);
+            setCapturedBotManagementScreenshot(localStorage.getItem('control_capturedBotManagementScreenshot') || null);
+            setCapturedSecurityLevelScreenshot(localStorage.getItem('control_capturedSecurityLevelScreenshot') || null);
+            setCapturedSslOverviewScreenshot(localStorage.getItem('control_capturedSslOverviewScreenshot') || null);
+            setCapturedSslEdgeScreenshot(localStorage.getItem('control_capturedSslEdgeScreenshot') || null);
+            setCapturedRateLimitingScreenshot(localStorage.getItem('control_capturedRateLimitingScreenshot') || null);
+            setCapturedManagedRulesScreenshot(localStorage.getItem('control_capturedManagedRulesScreenshot') || null);
+            setCapturedIpAccessScreenshot(localStorage.getItem('control_capturedIpAccessScreenshot') || null);
+            setCapturedZoneLockdownScreenshot(localStorage.getItem('control_capturedZoneLockdownScreenshot') || null);
+            setCapturedTrafficCountriesScreenshot(localStorage.getItem('control_capturedTrafficCountriesScreenshot') || null);
+            setCapturedTopEventsSourceScreenshot(localStorage.getItem('control_capturedTopEventsSourceScreenshot') || null);
             
             // Fetch central database coordinates
             fetch('/api/ntbc-capture-coords')
@@ -717,11 +747,10 @@ export default function ControlPage() {
 
                         addLog('Triggering cropped screenshot capture ("Domains" heading to pagination)...', 'info');
                         const captureRes = await fetch(getCaptureUrl('domains', 'domains'));
-                        const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
-                            const ts = Date.now();
-                            domainsImg = `/captured-domains.png?v=${ts}`;
+                            domainsImg = captureData.image;
                             setCapturedScreenshot(domainsImg);
+                            localStorage.setItem('control_capturedScreenshot', domainsImg);
                             addLog('Domains screenshot captured successfully.', 'success');
                         } else {
                             addLog(`Domains capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -748,10 +777,10 @@ export default function ControlPage() {
                         const captureRes = await fetch(getCaptureUrl('dns', 'dns'));
                         const captureData = await captureRes.json();
                         if (captureData.success && (captureData.image || captureData.dnsPages)) {
-                            const ts = Date.now();
-                            const dnsImages = [`/captured-dns-1.png?v=${ts}`, `/captured-dns-2.png?v=${ts}`];
+                            const dnsImages = (captureData.dnsPages && captureData.dnsPages.length > 0) ? captureData.dnsPages : [captureData.image];
                             dnsImg = dnsImages;
                             setCapturedDnsScreenshot(dnsImages);
+                            localStorage.setItem('control_capturedDnsScreenshot', JSON.stringify(dnsImages));
                             addLog('DNS records screenshot captured successfully.', 'success');
                         } else {
                             addLog(`DNS records capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -786,14 +815,29 @@ export default function ControlPage() {
                         const captureRes = await fetch(getCaptureUrl('traffic', 'traffic'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
-                            const ts = Date.now();
-                            trafficImg = `/captured-traffic.png?v=${ts}`;
+                            trafficImg = captureData.image;
                             setCapturedHttpTrafficScreenshot(trafficImg);
-                            setCapturedHttpTrafficScreenshot1(`/captured-traffic-sub1.png?v=${ts}`);
-                            setCapturedHttpTrafficScreenshot2(`/captured-traffic-sub2.png?v=${ts}`);
-                            setCapturedHttpTrafficScreenshot3(`/captured-traffic-sub3.png?v=${ts}`);
-                            setCapturedHttpTrafficScreenshot4(`/captured-traffic-sub4.png?v=${ts}`);
-                            setCapturedHttpTrafficScreenshot5(`/captured-traffic-sub5.png?v=${ts}`);
+                            localStorage.setItem('control_capturedHttpTrafficScreenshot', trafficImg);
+                            if (captureData.imageSub1) {
+                                setCapturedHttpTrafficScreenshot1(captureData.imageSub1);
+                                localStorage.setItem('control_capturedHttpTrafficScreenshot1', captureData.imageSub1);
+                            }
+                            if (captureData.imageSub2) {
+                                setCapturedHttpTrafficScreenshot2(captureData.imageSub2);
+                                localStorage.setItem('control_capturedHttpTrafficScreenshot2', captureData.imageSub2);
+                            }
+                            if (captureData.imageSub3) {
+                                setCapturedHttpTrafficScreenshot3(captureData.imageSub3);
+                                localStorage.setItem('control_capturedHttpTrafficScreenshot3', captureData.imageSub3);
+                            }
+                            if (captureData.imageSub4) {
+                                setCapturedHttpTrafficScreenshot4(captureData.imageSub4);
+                                localStorage.setItem('control_capturedHttpTrafficScreenshot4', captureData.imageSub4);
+                            }
+                            if (captureData.imageSub5) {
+                                setCapturedHttpTrafficScreenshot5(captureData.imageSub5);
+                                localStorage.setItem('control_capturedHttpTrafficScreenshot5', captureData.imageSub5);
+                            }
                             addLog('HTTP Traffic screenshots captured successfully.', 'success');
                         } else {
                             addLog(`HTTP Traffic capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -820,9 +864,9 @@ export default function ControlPage() {
                         const captureRes = await fetch(getCaptureUrl('firewall', 'firewall'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
-                            const ts = Date.now();
-                            firewallImg = `/captured-firewall.png?v=${ts}`;
+                            firewallImg = captureData.image;
                             setCapturedFirewallScreenshot(firewallImg);
+                            localStorage.setItem('control_capturedFirewallScreenshot', firewallImg);
                             addLog('Event Analytics (Firewall) screenshot captured successfully.', 'success');
                         } else {
                             addLog(`Event Analytics (Firewall) capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -849,9 +893,9 @@ export default function ControlPage() {
                         const captureRes = await fetch(getCaptureUrl('securityRules', 'security-rules'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
-                            const ts = Date.now();
-                            securityRulesImg = `/captured-security-rules.png?v=${ts}`;
+                            securityRulesImg = captureData.image;
                             setCapturedSecurityRulesScreenshot(securityRulesImg);
+                            localStorage.setItem('control_capturedSecurityRulesScreenshot', securityRulesImg);
                             addLog('Security Rules screenshot captured successfully.', 'success');
                         } else {
                             addLog(`Security Rules capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -878,9 +922,9 @@ export default function ControlPage() {
                         const captureRes = await fetch(getCaptureUrl('argo', 'argo'));
                         const captureData = await captureRes.json();
                         if (captureData.success && captureData.image) {
-                            const ts = Date.now();
-                            argoImg = `/captured-argo.png?v=${ts}`;
+                            argoImg = captureData.image;
                             setCapturedArgoScreenshot(argoImg);
+                            localStorage.setItem('control_capturedArgoScreenshot', argoImg);
                             addLog('Argo Smart Routing screenshot captured successfully.', 'success');
                         } else {
                             addLog(`Argo Smart Routing capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -946,9 +990,9 @@ export default function ControlPage() {
                                 const captureRes = await fetch(getCaptureUrl('speed', 'speed'));
                                 const captureData = await captureRes.json();
                                 if (captureData.success && captureData.image) {
-                                    const ts = Date.now();
-                                    speedImg = `/captured-speed.png?v=${ts}`;
+                                    speedImg = captureData.image;
                                     setCapturedSpeedScreenshot(speedImg);
+                                    localStorage.setItem('control_capturedSpeedScreenshot', speedImg);
                                     addLog('Speed Test screenshot captured successfully.', 'success');
                                 } else {
                                     addLog(`Speed Test capture failed: ${captureData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -958,9 +1002,9 @@ export default function ControlPage() {
                                 const captureRes = await fetch(getCaptureUrl('speed', 'speed'));
                                 const captureData = await captureRes.json();
                                 if (captureData.success && captureData.image) {
-                                    const ts = Date.now();
-                                    speedImg = `/captured-speed.png?v=${ts}`;
+                                    speedImg = captureData.image;
                                     setCapturedSpeedScreenshot(speedImg);
+                                    localStorage.setItem('control_capturedSpeedScreenshot', speedImg);
                                     addLog('Speed Test fallback screenshot captured successfully.', 'success');
                                 }
                             }
@@ -988,9 +1032,9 @@ export default function ControlPage() {
                                     const captureMobileRes = await fetch(getCaptureUrl('speed', 'speed-mobile'));
                                     const captureMobileData = await captureMobileRes.json();
                                     if (captureMobileData.success && captureMobileData.image) {
-                                        const ts = Date.now();
-                                        speedMobileImg = `/captured-speed-mobile.png?v=${ts}`;
+                                        speedMobileImg = captureMobileData.image;
                                         setCapturedSpeedMobileScreenshot(speedMobileImg);
+                                        localStorage.setItem('control_capturedSpeedMobileScreenshot', speedMobileImg);
                                         addLog('Mobile Speed Test screenshot captured successfully.', 'success');
                                     } else {
                                         addLog(`Mobile Speed Test capture failed: ${captureMobileData.error || 'Failed to capture screenshot'}`, 'warn');
@@ -1238,16 +1282,19 @@ export default function ControlPage() {
             const captureRes = await fetch(getCaptureUrl(tabId, captureType));
             const captureData = await captureRes.json();
             if (captureData.success && (captureData.image || captureData.dnsPages)) {
-                const ts = Date.now();
                 let imgResult;
                 if (tabId === 'dns') {
-                    imgResult = [`/captured-dns-1.png?v=${ts}`, `/captured-dns-2.png?v=${ts}`];
+                    imgResult = (captureData.dnsPages && captureData.dnsPages.length > 0) ? captureData.dnsPages : [captureData.image];
                 } else if (captureType === 'traffic' && tabId.startsWith('trafficSub')) {
-                    imgResult = `/captured-traffic-${tabId.replace('trafficSub', 'sub')}.png?v=${ts}`;
+                    const subIdx = tabId.replace('trafficSub', '');
+                    imgResult = captureData[`imageSub${subIdx}`] || captureData.image;
                 } else {
-                    imgResult = `/captured-${captureType}.png?v=${ts}`;
+                    imgResult = captureData.image;
                 }
                 stateSetter(imgResult);
+                if (storageKey && typeof window !== 'undefined') {
+                    localStorage.setItem(storageKey, Array.isArray(imgResult) ? JSON.stringify(imgResult) : imgResult);
+                }
 
                 // Record capture metadata (timestamp and user)
                 const uName = currentUser?.username || auth.getCurrentUser()?.username || 'root';
