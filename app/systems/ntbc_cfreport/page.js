@@ -521,38 +521,38 @@ const processTemplate = (tmpl, safeData, now = new Date(), dashboardImage = null
         '@LEAKED_CREDENTIALS': safeData.leakedCredentials || 'unknown',
         '@BROWSER_INTEGRITY_CHECK': safeData.browserIntegrityCheck || 'unknown',
         '@HOTLINK_PROTECTION': safeData.hotlinkProtection || 'unknown',
-        '@captured_domain_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedDomainImage || safeData.captured_domains_page, '/captured-domains.png')}" alt="Captured Domain Page" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_domain_page': (safeData.capturedDomainImage || safeData.captured_domains_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedDomainImage || safeData.captured_domains_page)}" alt="Captured Domain Page" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
         '@captured_dns_page': (() => {
             const pages = safeData.capturedDnsPages || [];
             if (pages.length > 0) {
                 return pages.map((pageSrc, idx) => 
-                    `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(pageSrc, '/captured-dns.png')}" alt="Captured DNS Records Page ${idx + 1}" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
+                    `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(pageSrc)}" alt="Captured DNS Records Page ${idx + 1}" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`
                 ).join('<br/>');
             }
-            const fallbackSrc = cleanImageSrc(safeData.capturedDnsImage || safeData.captured_dns_page, '/captured-dns.png');
-            return `<div class="mb-6" style="text-align: center;"><img src="${fallbackSrc}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`;
+            const fallbackSrc = cleanImageSrc(safeData.capturedDnsImage || safeData.captured_dns_page);
+            return fallbackSrc ? `<div class="mb-6" style="text-align: center;"><img src="${fallbackSrc}" alt="Captured DNS Records" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '';
         })(),
-        '@captured_request_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub1 || safeData.captured_request_traffic_page, '/captured-traffic-sub1.png')}" alt="Captured HTTP Traffic Requests" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_data_transfer_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub2 || safeData.captured_data_transfer_traffic_page, '/captured-traffic-sub2.png')}" alt="Captured HTTP Traffic Data Transfer" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_page_views_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub3 || safeData.captured_page_views_traffic_page, '/captured-traffic-sub3.png')}" alt="Captured HTTP Traffic Page Views" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_visits_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub4 || safeData.captured_visits_traffic_page, '/captured-traffic-sub4.png')}" alt="Captured HTTP Traffic Visits" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_api_requests_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub5 || safeData.captured_api_requests_traffic_page, '/captured-traffic-sub5.png')}" alt="Captured HTTP Traffic API Requests" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_firewall_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedFirewallImage || safeData.captured_firewall_page, '/captured-firewall.png')}" alt="Captured Firewall Overview" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_security_rules_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page, '/captured-security-rules.png')}" alt="Captured Security Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_argo_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedArgoImage || safeData.captured_argo_page, '/captured-argo.png')}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_speed_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedImage || safeData.captured_speed_page, '/captured-speed.png')}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_speed_mobile_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page, '/captured-speed-mobile.png')}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_traffic_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImage || safeData.captured_traffic_page, '/captured-traffic.png')}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_bot_management': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedBotManagementImage || safeData.captured_bot_management, '/captured-bot-management.png')}" alt="Captured Bot Management" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_security_level': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityLevelImage || safeData.captured_security_level, '/captured-security-level.png')}" alt="Captured Security Level" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_ssl_overview': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSslOverviewImage || safeData.captured_ssl_overview, '/captured-ssl-overview.png')}" alt="Captured SSL/TLS Encryption" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_ssl_edge': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSslEdgeImage || safeData.captured_ssl_edge, '/captured-ssl-edge.png')}" alt="Captured Edge Certificates" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_rate_limiting_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedRateLimitingImage || safeData.captured_rate_limiting_page, '/captured-rate-limiting.png')}" alt="Captured Rate Limiting Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_managed_rules_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedManagedRulesImage || safeData.captured_managed_rules_page, '/captured-managed-rules.png')}" alt="Captured Managed WAF Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_ip_access_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedIpAccessImage || safeData.captured_ip_access_page, '/captured-ip-access.png')}" alt="Captured IP Access Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_zone_lockdown_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedZoneLockdownImage || safeData.captured_zone_lockdown_page, '/captured-zone-lockdown.png')}" alt="Captured Zone Lockdown Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_traffic_countries_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficCountriesImage || safeData.captured_traffic_countries_page, '/captured-traffic-countries.png')}" alt="Captured Traffic by Country" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
-        '@captured_top_events_source_page': `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTopEventsSourceImage || safeData.captured_top_events_source_page, '/captured-top-events-source.png')}" alt="Captured Top Events by Source" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>`,
+        '@captured_request_traffic_page': (safeData.capturedTrafficImageSub1 || safeData.captured_request_traffic_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub1 || safeData.captured_request_traffic_page)}" alt="Captured HTTP Traffic Requests" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_data_transfer_traffic_page': (safeData.capturedTrafficImageSub2 || safeData.captured_data_transfer_traffic_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub2 || safeData.captured_data_transfer_traffic_page)}" alt="Captured HTTP Traffic Data Transfer" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_page_views_traffic_page': (safeData.capturedTrafficImageSub3 || safeData.captured_page_views_traffic_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub3 || safeData.captured_page_views_traffic_page)}" alt="Captured HTTP Traffic Page Views" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_visits_traffic_page': (safeData.capturedTrafficImageSub4 || safeData.captured_visits_traffic_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub4 || safeData.captured_visits_traffic_page)}" alt="Captured HTTP Traffic Visits" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_api_requests_traffic_page': (safeData.capturedTrafficImageSub5 || safeData.captured_api_requests_traffic_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImageSub5 || safeData.captured_api_requests_traffic_page)}" alt="Captured HTTP Traffic API Requests" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_firewall_page': (safeData.capturedFirewallImage || safeData.captured_firewall_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedFirewallImage || safeData.captured_firewall_page)}" alt="Captured Firewall Overview" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_security_rules_page': (safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityRulesImage || safeData.captured_security_rules_page)}" alt="Captured Security Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_argo_page': (safeData.capturedArgoImage || safeData.captured_argo_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedArgoImage || safeData.captured_argo_page)}" alt="Captured Argo Smart Routing" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_speed_page': (safeData.capturedSpeedImage || safeData.captured_speed_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedImage || safeData.captured_speed_page)}" alt="Captured Speed Test" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_speed_mobile_page': (safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSpeedMobileImage || safeData.captured_speed_mobile_page)}" alt="Captured Speed Test (Mobile)" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_traffic_page': (safeData.capturedTrafficImage || safeData.captured_traffic_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficImage || safeData.captured_traffic_page)}" alt="Captured HTTP Traffic" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_bot_management': (safeData.capturedBotManagementImage || safeData.captured_bot_management) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedBotManagementImage || safeData.captured_bot_management)}" alt="Captured Bot Management" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_security_level': (safeData.capturedSecurityLevelImage || safeData.captured_security_level) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSecurityLevelImage || safeData.captured_security_level)}" alt="Captured Security Level" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_ssl_overview': (safeData.capturedSslOverviewImage || safeData.captured_ssl_overview) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSslOverviewImage || safeData.captured_ssl_overview)}" alt="Captured SSL/TLS Encryption" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_ssl_edge': (safeData.capturedSslEdgeImage || safeData.captured_ssl_edge) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedSslEdgeImage || safeData.captured_ssl_edge)}" alt="Captured Edge Certificates" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_rate_limiting_page': (safeData.capturedRateLimitingImage || safeData.captured_rate_limiting_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedRateLimitingImage || safeData.captured_rate_limiting_page)}" alt="Captured Rate Limiting Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_managed_rules_page': (safeData.capturedManagedRulesImage || safeData.captured_managed_rules_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedManagedRulesImage || safeData.captured_managed_rules_page)}" alt="Captured Managed WAF Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_ip_access_page': (safeData.capturedIpAccessImage || safeData.captured_ip_access_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedIpAccessImage || safeData.captured_ip_access_page)}" alt="Captured IP Access Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_zone_lockdown_page': (safeData.capturedZoneLockdownImage || safeData.captured_zone_lockdown_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedZoneLockdownImage || safeData.captured_zone_lockdown_page)}" alt="Captured Zone Lockdown Rules" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_traffic_countries_page': (safeData.capturedTrafficCountriesImage || safeData.captured_traffic_countries_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTrafficCountriesImage || safeData.captured_traffic_countries_page)}" alt="Captured Traffic by Country" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
+        '@captured_top_events_source_page': (safeData.capturedTopEventsSourceImage || safeData.captured_top_events_source_page) ? `<div class="mb-6" style="text-align: center;"><img src="${cleanImageSrc(safeData.capturedTopEventsSourceImage || safeData.captured_top_events_source_page)}" alt="Captured Top Events by Source" width="504" style="height: auto; display: block; margin: 0 auto; border: 1px solid #ddd;" /></div>` : '',
 
 
         // DDoS Protection - individual protections (convert Always On to Enable)
@@ -3844,32 +3844,37 @@ export default function NTBCCFReportPage() {
     const [capturedTopEventsSourceImage, setCapturedTopEventsSourceImage] = useState(null);
 
     // Load saved screenshots from control center session
-    // Always load screenshot images from server files
     useEffect(() => {
-        setCapturedDomainImage('/captured-domains.png');
-        setCapturedDnsImage('/captured-dns.png');
-        setCapturedDnsPages(['/captured-dns-1.png', '/captured-dns-2.png']);
-        setCapturedTrafficImage('/captured-traffic.png');
-        setCapturedTrafficImageSub1('/captured-traffic-sub1.png');
-        setCapturedTrafficImageSub2('/captured-traffic-sub2.png');
-        setCapturedTrafficImageSub3('/captured-traffic-sub3.png');
-        setCapturedTrafficImageSub4('/captured-traffic-sub4.png');
-        setCapturedTrafficImageSub5('/captured-traffic-sub5.png');
-        setCapturedFirewallImage('/captured-firewall.png');
-        setCapturedSecurityRulesImage('/captured-security-rules.png');
-        setCapturedArgoImage('/captured-argo.png');
-        setCapturedSpeedImage('/captured-speed.png');
-        setCapturedSpeedMobileImage('/captured-speed-mobile.png');
-        setCapturedBotManagementImage('/captured-bot-management.png');
-        setCapturedSecurityLevelImage('/captured-security-level.png');
-        setCapturedSslOverviewImage('/captured-ssl-overview.png');
-        setCapturedSslEdgeImage('/captured-ssl-edge.png');
-        setCapturedRateLimitingImage('/captured-rate-limiting.png');
-        setCapturedManagedRulesImage('/captured-managed-rules.png');
-        setCapturedIpAccessImage('/captured-ip-access.png');
-        setCapturedZoneLockdownImage('/captured-zone-lockdown.png');
-        setCapturedTrafficCountriesImage('/captured-traffic-countries.png');
-        setCapturedTopEventsSourceImage('/captured-top-events-source.png');
+        if (typeof window !== 'undefined') {
+            setCapturedDomainImage(localStorage.getItem('control_capturedScreenshot') || null);
+            try {
+                const dnsVal = localStorage.getItem('control_capturedDnsScreenshot');
+                setCapturedDnsPages(dnsVal ? JSON.parse(dnsVal) : null);
+            } catch (e) {
+                setCapturedDnsPages(null);
+            }
+            setCapturedTrafficImage(localStorage.getItem('control_capturedHttpTrafficScreenshot') || null);
+            setCapturedTrafficImageSub1(localStorage.getItem('control_capturedHttpTrafficScreenshot1') || null);
+            setCapturedTrafficImageSub2(localStorage.getItem('control_capturedHttpTrafficScreenshot2') || null);
+            setCapturedTrafficImageSub3(localStorage.getItem('control_capturedHttpTrafficScreenshot3') || null);
+            setCapturedTrafficImageSub4(localStorage.getItem('control_capturedHttpTrafficScreenshot4') || null);
+            setCapturedTrafficImageSub5(localStorage.getItem('control_capturedHttpTrafficScreenshot5') || null);
+            setCapturedFirewallImage(localStorage.getItem('control_capturedFirewallScreenshot') || null);
+            setCapturedSecurityRulesImage(localStorage.getItem('control_capturedSecurityRulesScreenshot') || null);
+            setCapturedArgoImage(localStorage.getItem('control_capturedArgoScreenshot') || null);
+            setCapturedSpeedImage(localStorage.getItem('control_capturedSpeedScreenshot') || null);
+            setCapturedSpeedMobileImage(localStorage.getItem('control_capturedSpeedMobileScreenshot') || null);
+            setCapturedBotManagementImage(localStorage.getItem('control_capturedBotManagementScreenshot') || null);
+            setCapturedSecurityLevelImage(localStorage.getItem('control_capturedSecurityLevelScreenshot') || null);
+            setCapturedSslOverviewImage(localStorage.getItem('control_capturedSslOverviewScreenshot') || null);
+            setCapturedSslEdgeImage(localStorage.getItem('control_capturedSslEdgeScreenshot') || null);
+            setCapturedRateLimitingImage(localStorage.getItem('control_capturedRateLimitingScreenshot') || null);
+            setCapturedManagedRulesImage(localStorage.getItem('control_capturedManagedRulesScreenshot') || null);
+            setCapturedIpAccessImage(localStorage.getItem('control_capturedIpAccessScreenshot') || null);
+            setCapturedZoneLockdownImage(localStorage.getItem('control_capturedZoneLockdownScreenshot') || null);
+            setCapturedTrafficCountriesImage(localStorage.getItem('control_capturedTrafficCountriesScreenshot') || null);
+            setCapturedTopEventsSourceImage(localStorage.getItem('control_capturedTopEventsSourceScreenshot') || null);
+        }
     }, [isReportModalOpen]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);

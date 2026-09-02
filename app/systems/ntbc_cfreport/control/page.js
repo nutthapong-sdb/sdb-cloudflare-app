@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
     CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
-    Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome
+    Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome,
+    Camera, Image as ImageIcon
 } from 'lucide-react';
 import Swal from '../utils/alert';
 import { Editor } from '@tinymce/tinymce-react';
@@ -49,29 +50,29 @@ export default function ControlPage() {
      const [envSubdomain, setEnvSubdomain] = useState('');
      const [envStartDate, setEnvStartDate] = useState('2026-05-30');
      const [envEndDate, setEnvEndDate] = useState('2026-06-04');
-     const [capturedScreenshot, setCapturedScreenshot] = useState('/captured-domains.png');
-     const [capturedDnsScreenshot, setCapturedDnsScreenshot] = useState(['/captured-dns-1.png', '/captured-dns-2.png']);
-     const [capturedHttpTrafficScreenshot, setCapturedHttpTrafficScreenshot] = useState('/captured-traffic.png');
-     const [capturedHttpTrafficScreenshot1, setCapturedHttpTrafficScreenshot1] = useState('/captured-traffic-sub1.png');
-     const [capturedHttpTrafficScreenshot2, setCapturedHttpTrafficScreenshot2] = useState('/captured-traffic-sub2.png');
-     const [capturedHttpTrafficScreenshot3, setCapturedHttpTrafficScreenshot3] = useState('/captured-traffic-sub3.png');
-     const [capturedHttpTrafficScreenshot4, setCapturedHttpTrafficScreenshot4] = useState('/captured-traffic-sub4.png');
-     const [capturedHttpTrafficScreenshot5, setCapturedHttpTrafficScreenshot5] = useState('/captured-traffic-sub5.png');
-     const [capturedFirewallScreenshot, setCapturedFirewallScreenshot] = useState('/captured-firewall.png');
-     const [capturedSecurityRulesScreenshot, setCapturedSecurityRulesScreenshot] = useState('/captured-security-rules.png');
-     const [capturedArgoScreenshot, setCapturedArgoScreenshot] = useState('/captured-argo.png');
-     const [capturedSpeedScreenshot, setCapturedSpeedScreenshot] = useState('/captured-speed.png');
-     const [capturedSpeedMobileScreenshot, setCapturedSpeedMobileScreenshot] = useState('/captured-speed-mobile.png');
-     const [capturedBotManagementScreenshot, setCapturedBotManagementScreenshot] = useState('/captured-bot-management.png');
-     const [capturedSecurityLevelScreenshot, setCapturedSecurityLevelScreenshot] = useState('/captured-security-level.png');
-     const [capturedSslOverviewScreenshot, setCapturedSslOverviewScreenshot] = useState('/captured-ssl-overview.png');
-     const [capturedSslEdgeScreenshot, setCapturedSslEdgeScreenshot] = useState('/captured-ssl-edge.png');
-     const [capturedRateLimitingScreenshot, setCapturedRateLimitingScreenshot] = useState('/captured-rate-limiting.png');
-     const [capturedManagedRulesScreenshot, setCapturedManagedRulesScreenshot] = useState('/captured-managed-rules.png');
-     const [capturedIpAccessScreenshot, setCapturedIpAccessScreenshot] = useState('/captured-ip-access.png');
-     const [capturedZoneLockdownScreenshot, setCapturedZoneLockdownScreenshot] = useState('/captured-zone-lockdown.png');
-     const [capturedTrafficCountriesScreenshot, setCapturedTrafficCountriesScreenshot] = useState('/captured-traffic-countries.png');
-     const [capturedTopEventsSourceScreenshot, setCapturedTopEventsSourceScreenshot] = useState('/captured-top-events-source.png');
+     const [capturedScreenshot, setCapturedScreenshot] = useState(null);
+     const [capturedDnsScreenshot, setCapturedDnsScreenshot] = useState(null);
+     const [capturedHttpTrafficScreenshot, setCapturedHttpTrafficScreenshot] = useState(null);
+     const [capturedHttpTrafficScreenshot1, setCapturedHttpTrafficScreenshot1] = useState(null);
+     const [capturedHttpTrafficScreenshot2, setCapturedHttpTrafficScreenshot2] = useState(null);
+     const [capturedHttpTrafficScreenshot3, setCapturedHttpTrafficScreenshot3] = useState(null);
+     const [capturedHttpTrafficScreenshot4, setCapturedHttpTrafficScreenshot4] = useState(null);
+     const [capturedHttpTrafficScreenshot5, setCapturedHttpTrafficScreenshot5] = useState(null);
+     const [capturedFirewallScreenshot, setCapturedFirewallScreenshot] = useState(null);
+     const [capturedSecurityRulesScreenshot, setCapturedSecurityRulesScreenshot] = useState(null);
+     const [capturedArgoScreenshot, setCapturedArgoScreenshot] = useState(null);
+     const [capturedSpeedScreenshot, setCapturedSpeedScreenshot] = useState(null);
+     const [capturedSpeedMobileScreenshot, setCapturedSpeedMobileScreenshot] = useState(null);
+     const [capturedBotManagementScreenshot, setCapturedBotManagementScreenshot] = useState(null);
+     const [capturedSecurityLevelScreenshot, setCapturedSecurityLevelScreenshot] = useState(null);
+     const [capturedSslOverviewScreenshot, setCapturedSslOverviewScreenshot] = useState(null);
+     const [capturedSslEdgeScreenshot, setCapturedSslEdgeScreenshot] = useState(null);
+     const [capturedRateLimitingScreenshot, setCapturedRateLimitingScreenshot] = useState(null);
+     const [capturedManagedRulesScreenshot, setCapturedManagedRulesScreenshot] = useState(null);
+     const [capturedIpAccessScreenshot, setCapturedIpAccessScreenshot] = useState(null);
+     const [capturedZoneLockdownScreenshot, setCapturedZoneLockdownScreenshot] = useState(null);
+     const [capturedTrafficCountriesScreenshot, setCapturedTrafficCountriesScreenshot] = useState(null);
+     const [capturedTopEventsSourceScreenshot, setCapturedTopEventsSourceScreenshot] = useState(null);
      const [captureMeta, setCaptureMeta] = useState({});
      const [isCapturingDirect, setIsCapturingDirect] = useState(false);
 
@@ -1420,23 +1421,23 @@ export default function ControlPage() {
                             {/* Left-hand sidebar nav bar */}
                             <div className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:pr-3 border-b md:border-b-0 md:border-r border-gray-900 scrollbar-thin scrollbar-thumb-gray-800 shrink-0 md:w-[150px] max-h-[550px] md:overflow-y-auto">
                                 {[
-                                    { id: 'domains', label: 'Domains', hasData: !!(capturedScreenshot || '/captured-domains.png'), icon: '🌐', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot', isDynamic: true },
-                                    { id: 'dns', label: 'DNS Records', hasData: !!(capturedDnsScreenshot || '/captured-dns.png'), icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isDynamic: true },
-                                    { id: 'botManagement', label: 'Bot Management', hasData: !!(capturedBotManagementScreenshot || '/captured-bot-management.png'), icon: '🤖', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
-                                    { id: 'securityLevel', label: 'Security Level', hasData: !!(capturedSecurityLevelScreenshot || '/captured-security-level.png'), icon: '🛡️', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
-                                    { id: 'sslOverview', label: 'SSL/TLS Mode', hasData: !!(capturedSslOverviewScreenshot || '/captured-ssl-overview.png'), icon: '🔒', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
-                                    { id: 'sslEdge', label: 'Edge Certificates', hasData: !!(capturedSslEdgeScreenshot || '/captured-ssl-edge.png'), icon: '📜', type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
-                                    { id: 'traffic', label: 'HTTP Traffic', hasData: !!(capturedHttpTrafficScreenshot || '/captured-traffic.png'), icon: '📈', type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
-                                    { id: 'trafficCountries', label: 'Traffic Countries', hasData: !!(capturedTrafficCountriesScreenshot || '/captured-traffic-countries.png'), icon: '🗺️', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
-                                    { id: 'firewall', label: 'Firewall', hasData: !!(capturedFirewallScreenshot || '/captured-firewall.png'), icon: '🔥', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
-                                    { id: 'topEventsSource', label: 'Events by Source', hasData: !!(capturedTopEventsSourceScreenshot || '/captured-top-events-source.png'), icon: '📊', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
-                                    { id: 'securityRules', label: 'Custom Rules', hasData: !!(capturedSecurityRulesScreenshot || '/captured-security-rules.png'), icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot', isDynamic: true },
-                                    { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!(capturedRateLimitingScreenshot || '/captured-rate-limiting.png'), icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot', isDynamic: true },
-                                    { id: 'managedRules', label: 'Managed WAF', hasData: !!(capturedManagedRulesScreenshot || '/captured-managed-rules.png'), icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot', isDynamic: true },
-                                    { id: 'ipAccess', label: 'IP Access', hasData: !!(capturedIpAccessScreenshot || '/captured-ip-access.png'), icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot', isDynamic: true },
-                                    { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!(capturedZoneLockdownScreenshot || '/captured-zone-lockdown.png'), icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot', isDynamic: true },
-                                    { id: 'argo', label: 'Argo Smart', hasData: !!(capturedArgoScreenshot || '/captured-argo.png'), icon: '⚡', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
-                                    { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot || '/captured-speed.png'), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
+                                    { id: 'domains', label: 'Domains', hasData: !!capturedScreenshot, icon: '🌐', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot', isDynamic: true },
+                                    { id: 'dns', label: 'DNS Records', hasData: !!(capturedDnsScreenshot && (Array.isArray(capturedDnsScreenshot) ? capturedDnsScreenshot.length > 0 : true)), icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isDynamic: true },
+                                    { id: 'botManagement', label: 'Bot Management', hasData: !!capturedBotManagementScreenshot, icon: '🤖', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
+                                    { id: 'securityLevel', label: 'Security Level', hasData: !!capturedSecurityLevelScreenshot, icon: '🛡️', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
+                                    { id: 'sslOverview', label: 'SSL/TLS Mode', hasData: !!capturedSslOverviewScreenshot, icon: '🔒', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
+                                    { id: 'sslEdge', label: 'Edge Certificates', hasData: !!capturedSslEdgeScreenshot, icon: '📜', type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
+                                    { id: 'traffic', label: 'HTTP Traffic', hasData: !!capturedHttpTrafficScreenshot, icon: '📈', type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
+                                    { id: 'trafficCountries', label: 'Traffic Countries', hasData: !!capturedTrafficCountriesScreenshot, icon: '🗺️', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
+                                    { id: 'firewall', label: 'Firewall', hasData: !!capturedFirewallScreenshot, icon: '🔥', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
+                                    { id: 'topEventsSource', label: 'Events by Source', hasData: !!capturedTopEventsSourceScreenshot, icon: '📊', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
+                                    { id: 'securityRules', label: 'Custom Rules', hasData: !!capturedSecurityRulesScreenshot, icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot', isDynamic: true },
+                                    { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!capturedRateLimitingScreenshot, icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot', isDynamic: true },
+                                    { id: 'managedRules', label: 'Managed WAF', hasData: !!capturedManagedRulesScreenshot, icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot', isDynamic: true },
+                                    { id: 'ipAccess', label: 'IP Access', hasData: !!capturedIpAccessScreenshot, icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot', isDynamic: true },
+                                    { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!capturedZoneLockdownScreenshot, icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot', isDynamic: true },
+                                    { id: 'argo', label: 'Argo Smart', hasData: !!capturedArgoScreenshot, icon: '⚡', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
+                                    { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
                                 ].map((tab) => (
                                     <button
                                         key={tab.id}
@@ -1474,23 +1475,23 @@ export default function ControlPage() {
                                 {/* Generic function to render preview with capture button */}
                                 {(() => {
                                     const tabMap = {
-                                        domains: { label: 'Domains Overview', img: capturedScreenshot || '/captured-domains.png', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
-                                        dns: { label: 'DNS Records', img: (capturedDnsScreenshot && Array.isArray(capturedDnsScreenshot) && capturedDnsScreenshot.length > 0) ? capturedDnsScreenshot : (capturedDnsScreenshot ? [capturedDnsScreenshot] : ['/captured-dns-1.png', '/captured-dns-2.png']), type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isArray: true },
-                                        botManagement: { label: 'Bot Management', img: capturedBotManagementScreenshot || '/captured-bot-management.png', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
-                                        securityLevel: { label: 'Security Level & BIC', img: capturedSecurityLevelScreenshot || '/captured-security-level.png', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
-                                        sslOverview: { label: 'SSL/TLS Encryption', img: capturedSslOverviewScreenshot || '/captured-ssl-overview.png', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
-                                        sslEdge: { label: 'Edge Certificates (TLS 1.2/1.3)', img: capturedSslEdgeScreenshot || '/captured-ssl-edge.png', type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
-                                        traffic: { label: 'HTTP Traffic Overview', img: capturedHttpTrafficScreenshot || '/captured-traffic.png', type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
-                                        trafficCountries: { label: 'Traffic by Country', img: capturedTrafficCountriesScreenshot || '/captured-traffic-countries.png', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
-                                        firewall: { label: 'Firewall Overview', img: capturedFirewallScreenshot || '/captured-firewall.png', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
-                                        topEventsSource: { label: 'Top Events by Source', img: capturedTopEventsSourceScreenshot || '/captured-top-events-source.png', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
-                                        securityRules: { label: 'Security Custom Rules', img: capturedSecurityRulesScreenshot || '/captured-security-rules.png', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot' },
-                                        rateLimiting: { label: 'Rate Limiting Rules', img: capturedRateLimitingScreenshot || '/captured-rate-limiting.png', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot' },
-                                        managedRules: { label: 'Managed WAF Rules', img: capturedManagedRulesScreenshot || '/captured-managed-rules.png', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot' },
-                                        ipAccess: { label: 'IP Access Rules', img: capturedIpAccessScreenshot || '/captured-ip-access.png', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot' },
-                                        zoneLockdown: { label: 'Zone Lockdown Rules', img: capturedZoneLockdownScreenshot || '/captured-zone-lockdown.png', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot' },
-                                        argo: { label: 'Argo Smart Routing', img: capturedArgoScreenshot || '/captured-argo.png', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
-                                        speed: { label: 'Speed Test Results', img: capturedSpeedScreenshot || '/captured-speed.png', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
+                                        domains: { label: 'Domains Overview', img: capturedScreenshot, type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
+                                        dns: { label: 'DNS Records', img: (capturedDnsScreenshot && Array.isArray(capturedDnsScreenshot) && capturedDnsScreenshot.length > 0) ? capturedDnsScreenshot : (capturedDnsScreenshot ? [capturedDnsScreenshot] : null), type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isArray: true },
+                                        botManagement: { label: 'Bot Management', img: capturedBotManagementScreenshot, type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
+                                        securityLevel: { label: 'Security Level & BIC', img: capturedSecurityLevelScreenshot, type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
+                                        sslOverview: { label: 'SSL/TLS Encryption', img: capturedSslOverviewScreenshot, type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
+                                        sslEdge: { label: 'Edge Certificates (TLS 1.2/1.3)', img: capturedSslEdgeScreenshot, type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
+                                        traffic: { label: 'HTTP Traffic Overview', img: capturedHttpTrafficScreenshot, type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
+                                        trafficCountries: { label: 'Traffic by Country', img: capturedTrafficCountriesScreenshot, type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
+                                        firewall: { label: 'Firewall Overview', img: capturedFirewallScreenshot, type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
+                                        topEventsSource: { label: 'Top Events by Source', img: capturedTopEventsSourceScreenshot, type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
+                                        securityRules: { label: 'Security Custom Rules', img: capturedSecurityRulesScreenshot, type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot' },
+                                        rateLimiting: { label: 'Rate Limiting Rules', img: capturedRateLimitingScreenshot, type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot' },
+                                        managedRules: { label: 'Managed WAF Rules', img: capturedManagedRulesScreenshot, type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot' },
+                                        ipAccess: { label: 'IP Access Rules', img: capturedIpAccessScreenshot, type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot' },
+                                        zoneLockdown: { label: 'Zone Lockdown Rules', img: capturedZoneLockdownScreenshot, type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot' },
+                                        argo: { label: 'Argo Smart Routing', img: capturedArgoScreenshot, type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
+                                        speed: { label: 'Speed Test Results', img: capturedSpeedScreenshot, type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
                                     };
 
                                     const current = tabMap[activeCaptureTab];
@@ -1558,8 +1559,14 @@ export default function ControlPage() {
                                                     </div>
                                                 )
                                             ) : (
-                                                <div className="py-12 text-center text-xs text-gray-500 font-mono bg-gray-900/30 rounded-xl border border-gray-800/50">
-                                                    No {current.label} captured yet. Click "Capture This Page Now" to capture.
+                                                <div className="py-16 px-4 text-center bg-gray-950/40 rounded-2xl border border-dashed border-gray-800 flex flex-col items-center justify-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-500">
+                                                        <Camera className="w-6 h-6" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <p className="text-sm font-bold text-gray-300">ยังไม่มีรูปภาพที่บันทึกไว้</p>
+                                                        <p className="text-xs text-gray-500 max-w-md">กดปุ่ม <strong>"📸 Capture This Page Now"</strong> ด้านบน เพื่อจับภาพหน้าจอนี้จากเบราว์เซอร์สด</p>
+                                                    </div>
                                                 </div>
                                             )}
 
