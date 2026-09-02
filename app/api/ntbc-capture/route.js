@@ -104,40 +104,25 @@ export async function GET(request) {
             console.error('Failed to reset zoom via Ctrl+0:', err);
         }
 
-        // Ensure Cloudflare sidebar navigation is EXPANDED to keep layout standardized
+        // Ensure Cloudflare sidebar navigation is EXPANDED (Press 't' + 's' only if currently collapsed)
         try {
-            const sidebarState = await page.evaluate(() => {
-                const nav = document.querySelector('nav') || document.querySelector('aside');
-                const navWidth = nav ? nav.offsetWidth : 0;
-                const expandBtn = document.querySelector('button[aria-label*="Expand sidebar"], button[aria-label*="Expand navigation"], button[aria-label*="Open navigation"]');
-                return {
-                    isCollapsed: navWidth > 0 && navWidth < 150,
-                    hasExpandBtn: !!expandBtn
-                };
+            const isCollapsed = await page.evaluate(() => {
+                const nav = document.querySelector('nav') || document.querySelector('aside') || document.querySelector('[aria-label*="navigation"]');
+                return nav ? nav.offsetWidth < 150 : false;
             });
 
-            if (sidebarState.isCollapsed || sidebarState.hasExpandBtn) {
-                console.log('Sidebar is collapsed. Expanding sidebar deterministically...');
-                const clicked = await page.evaluate(() => {
-                    const expandBtn = document.querySelector('button[aria-label*="Expand sidebar"], button[aria-label*="Expand navigation"], button[aria-label*="Open navigation"]');
-                    if (expandBtn) {
-                        expandBtn.click();
-                        return true;
-                    }
-                    return false;
-                });
-                if (!clicked) {
-                    await page.keyboard.press('KeyT');
-                    await new Promise(r => setTimeout(r, 100));
-                    await page.keyboard.press('KeyS');
-                }
-                await new Promise(r => setTimeout(r, 500));
-                console.log('Sidebar expanded successfully.');
+            if (isCollapsed) {
+                console.log('Sidebar is currently collapsed. Expanding via keyboard shortcut "t" then "s"...');
+                await page.keyboard.press('KeyT');
+                await new Promise(r => setTimeout(r, 100));
+                await page.keyboard.press('KeyS');
+                await new Promise(r => setTimeout(r, 400));
+                console.log('Sidebar expansion triggered.');
             } else {
-                console.log('Sidebar is already expanded.');
+                console.log('Sidebar is already expanded. No action needed.');
             }
         } catch (err) {
-            console.warn('Could not ensure sidebar is expanded:', err.message);
+            console.warn('Could not check/ensure sidebar expanded state:', err.message);
         }
 
         // Wait up to 3 seconds for either the login page to appear or the dashboard to load

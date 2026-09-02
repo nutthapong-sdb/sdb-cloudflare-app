@@ -49,26 +49,23 @@ export async function GET(request) {
             console.error('Failed to reset zoom via Ctrl+0:', err);
         }
 
-        // Collapse Cloudflare sidebar navigation to keep layout standardized
+        // Ensure Cloudflare sidebar navigation is EXPANDED (Press 't' + 's' only if currently collapsed)
         try {
-            const isExpanded = await page.evaluate(() => {
+            const isCollapsed = await page.evaluate(() => {
                 const nav = document.querySelector('nav') || document.querySelector('aside') || document.querySelector('[aria-label*="navigation"]');
-                if (nav) {
-                    return nav.offsetWidth > 120;
-                }
-                return false;
+                return nav ? nav.offsetWidth < 150 : false;
             });
-            if (isExpanded) {
-                console.log('Sidebar is expanded, collapsing it using keyboard shortcut "t" then "s"...');
+            if (isCollapsed) {
+                console.log('Sidebar is currently collapsed. Expanding via keyboard shortcut "t" then "s"...');
                 await page.keyboard.press('KeyT');
                 await new Promise(r => setTimeout(r, 100));
                 await page.keyboard.press('KeyS');
-                await new Promise(r => setTimeout(r, 600));
+                await new Promise(r => setTimeout(r, 400));
             } else {
-                console.log('Sidebar is already collapsed.');
+                console.log('Sidebar is already expanded. No action needed.');
             }
         } catch (err) {
-            console.warn('Failed to collapse Cloudflare sidebar:', err.message);
+            console.warn('Could not check/ensure sidebar expanded state:', err.message);
         }
 
         // Check if browser is already on target URL
