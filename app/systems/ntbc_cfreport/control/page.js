@@ -523,6 +523,11 @@ export default function ControlPage() {
             if (savedEndDate) {
                 setEnvEndDate(savedEndDate);
             }
+            const savedActiveTab = localStorage.getItem('control_activeCaptureTab');
+            if (savedActiveTab) {
+                setActiveCaptureTab(savedActiveTab);
+            }
+
             try {
                 const savedMeta = localStorage.getItem('control_captureMeta');
                 if (savedMeta) {
@@ -565,6 +570,13 @@ export default function ControlPage() {
         init();
     }, [router]);
 
+    // Save activeCaptureTab to localStorage on change
+    useEffect(() => {
+        if (typeof window !== 'undefined' && activeCaptureTab) {
+            localStorage.setItem('control_activeCaptureTab', activeCaptureTab);
+        }
+    }, [activeCaptureTab]);
+
     // Trigger zone loading when account changes
     useEffect(() => {
         if (envAccount) {
@@ -578,35 +590,6 @@ export default function ControlPage() {
             loadSubdomainsForZone(envZone);
         }
     }, [envZone]);
-
-    // Auto-select tab when a screenshot is captured
-    useEffect(() => {
-        if (capturedScreenshot) setActiveCaptureTab('domains');
-    }, [capturedScreenshot]);
-
-    useEffect(() => {
-        if (capturedDnsScreenshot) setActiveCaptureTab('dns');
-    }, [capturedDnsScreenshot]);
-
-    useEffect(() => {
-        if (capturedHttpTrafficScreenshot) setActiveCaptureTab('traffic');
-    }, [capturedHttpTrafficScreenshot]);
-
-    useEffect(() => {
-        if (capturedFirewallScreenshot) setActiveCaptureTab('firewall');
-    }, [capturedFirewallScreenshot]);
-
-    useEffect(() => {
-        if (capturedSecurityRulesScreenshot) setActiveCaptureTab('securityRules');
-    }, [capturedSecurityRulesScreenshot]);
-
-    useEffect(() => {
-        if (capturedArgoScreenshot) setActiveCaptureTab('argo');
-    }, [capturedArgoScreenshot]);
-
-    useEffect(() => {
-        if (capturedSpeedScreenshot || capturedSpeedMobileScreenshot) setActiveCaptureTab('speed');
-    }, [capturedSpeedScreenshot, capturedSpeedMobileScreenshot]);
 
     const saveAsDefault = () => {
         localStorage.setItem('control_envAccount', envAccount);
