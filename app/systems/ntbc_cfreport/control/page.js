@@ -1420,8 +1420,8 @@ export default function ControlPage() {
                             {/* Left-hand sidebar nav bar */}
                             <div className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:pr-3 border-b md:border-b-0 md:border-r border-gray-900 scrollbar-thin scrollbar-thumb-gray-800 shrink-0 md:w-[150px] max-h-[550px] md:overflow-y-auto">
                                 {[
-                                    { id: 'domains', label: 'Domains', hasData: !!(capturedScreenshot || '/captured-domains.png'), icon: '🌐', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot' },
-                                    { id: 'dns', label: 'DNS Records', hasData: !!(capturedDnsScreenshot || '/captured-dns.png'), icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot' },
+                                    { id: 'domains', label: 'Domains', hasData: !!(capturedScreenshot || '/captured-domains.png'), icon: '🌐', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot', isDynamic: true },
+                                    { id: 'dns', label: 'DNS Records', hasData: !!(capturedDnsScreenshot || '/captured-dns.png'), icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isDynamic: true },
                                     { id: 'botManagement', label: 'Bot Management', hasData: !!(capturedBotManagementScreenshot || '/captured-bot-management.png'), icon: '🤖', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
                                     { id: 'securityLevel', label: 'Security Level', hasData: !!(capturedSecurityLevelScreenshot || '/captured-security-level.png'), icon: '🛡️', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
                                     { id: 'sslOverview', label: 'SSL/TLS Mode', hasData: !!(capturedSslOverviewScreenshot || '/captured-ssl-overview.png'), icon: '🔒', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
@@ -1430,11 +1430,11 @@ export default function ControlPage() {
                                     { id: 'trafficCountries', label: 'Traffic Countries', hasData: !!(capturedTrafficCountriesScreenshot || '/captured-traffic-countries.png'), icon: '🗺️', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
                                     { id: 'firewall', label: 'Firewall', hasData: !!(capturedFirewallScreenshot || '/captured-firewall.png'), icon: '🔥', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
                                     { id: 'topEventsSource', label: 'Events by Source', hasData: !!(capturedTopEventsSourceScreenshot || '/captured-top-events-source.png'), icon: '📊', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
-                                    { id: 'securityRules', label: 'Custom Rules', hasData: !!(capturedSecurityRulesScreenshot || '/captured-security-rules.png'), icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot' },
-                                    { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!(capturedRateLimitingScreenshot || '/captured-rate-limiting.png'), icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot' },
-                                    { id: 'managedRules', label: 'Managed WAF', hasData: !!(capturedManagedRulesScreenshot || '/captured-managed-rules.png'), icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot' },
-                                    { id: 'ipAccess', label: 'IP Access', hasData: !!(capturedIpAccessScreenshot || '/captured-ip-access.png'), icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot' },
-                                    { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!(capturedZoneLockdownScreenshot || '/captured-zone-lockdown.png'), icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot' },
+                                    { id: 'securityRules', label: 'Custom Rules', hasData: !!(capturedSecurityRulesScreenshot || '/captured-security-rules.png'), icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot', isDynamic: true },
+                                    { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!(capturedRateLimitingScreenshot || '/captured-rate-limiting.png'), icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot', isDynamic: true },
+                                    { id: 'managedRules', label: 'Managed WAF', hasData: !!(capturedManagedRulesScreenshot || '/captured-managed-rules.png'), icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot', isDynamic: true },
+                                    { id: 'ipAccess', label: 'IP Access', hasData: !!(capturedIpAccessScreenshot || '/captured-ip-access.png'), icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot', isDynamic: true },
+                                    { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!(capturedZoneLockdownScreenshot || '/captured-zone-lockdown.png'), icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot', isDynamic: true },
                                     { id: 'argo', label: 'Argo Smart', hasData: !!(capturedArgoScreenshot || '/captured-argo.png'), icon: '⚡', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
                                     { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot || '/captured-speed.png'), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
                                 ].map((tab) => (
@@ -1449,7 +1449,12 @@ export default function ControlPage() {
                                     >
                                         <span>{tab.icon}</span>
                                         <span className="truncate">{tab.label}</span>
-                                        {tab.hasData && (
+                                        {tab.isDynamic && (
+                                            <span className="px-1 py-0.2 rounded text-[7px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 ml-auto shrink-0 font-normal">
+                                                📏 Auto
+                                            </span>
+                                        )}
+                                        {tab.hasData && !tab.isDynamic && (
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ml-auto shrink-0"></span>
                                         )}
                                     </button>
@@ -1605,59 +1610,98 @@ export default function ControlPage() {
                                                     </div>
                                                 )}
 
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
-                                                        <input
-                                                            type="number"
-                                                            placeholder="Auto"
-                                                            value={coords[activeCaptureTab]?.xStart || ''}
-                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'xStart', e.target.value)}
-                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Xend</span>
-                                                        <input
-                                                            type="number"
-                                                            placeholder="Auto"
-                                                            value={coords[activeCaptureTab]?.xEnd || ''}
-                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'xEnd', e.target.value)}
-                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Ystart</span>
-                                                        <input
-                                                            type="number"
-                                                            placeholder="Auto"
-                                                            value={coords[activeCaptureTab]?.yStart || ''}
-                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'yStart', e.target.value)}
-                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Yend (Offset)</span>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Auto (+0)"
-                                                            value={coords[activeCaptureTab]?.yEnd || ''}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                if (/^-?\d*$/.test(val)) {
-                                                                    handleCoordChange(activeCaptureTab, 'yEnd', val);
-                                                                }
-                                                            }}
-                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
-                                                        />
-                                                    </div>
-                                                </div>
+                                                {/* Coordinates Setting Grid */}
+                                                {(() => {
+                                                    const DYNAMIC_TABS = ['domains', 'dns', 'securityRules', 'rateLimiting', 'managedRules', 'ipAccess', 'zoneLockdown'];
+                                                    const isDynamicTab = DYNAMIC_TABS.includes(activeCaptureTab);
 
-                                                <div className="text-[10px] text-gray-400 font-sans pt-1">
-                                                    {activeCaptureTab === 'domains' || activeCaptureTab === 'dns'
-                                                        ? '💡 Yend เป็นค่า Offset (+/- px) จากจุดล่างสุดของตาราง (เช่น +50 เพื่อยืดลงล่าง, -30 เพื่อตัดขึ้นบน, ว่าง = Auto) | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now"'
-                                                        : '* ความละเอียดมาตรฐาน 1920x1080 (Chrome Live Monitor) | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now" ด้านบน'}
-                                                </div>
+                                                    return (
+                                                        <>
+                                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        placeholder="Auto"
+                                                                        value={coords[activeCaptureTab]?.xStart || ''}
+                                                                        onChange={(e) => handleCoordChange(activeCaptureTab, 'xStart', e.target.value)}
+                                                                        className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">Xend</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        placeholder="Auto"
+                                                                        value={coords[activeCaptureTab]?.xEnd || ''}
+                                                                        onChange={(e) => handleCoordChange(activeCaptureTab, 'xEnd', e.target.value)}
+                                                                        className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] text-cyan-400 font-mono font-medium flex items-center gap-1">
+                                                                        Ystart (Offset)
+                                                                    </span>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Auto (+0)"
+                                                                        value={coords[activeCaptureTab]?.yStart || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (/^-?\d*$/.test(val)) {
+                                                                                handleCoordChange(activeCaptureTab, 'yStart', val);
+                                                                            }
+                                                                        }}
+                                                                        className="bg-gray-950/90 border border-cyan-800/40 rounded px-2.5 py-1 text-xs text-cyan-200 focus:outline-none focus:border-cyan-500/50 transition-colors w-full font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className={`text-[10px] font-mono font-medium flex items-center gap-1 ${isDynamicTab ? 'text-cyan-400' : 'text-gray-400'}`}>
+                                                                        {isDynamicTab ? 'Yend (Offset)' : 'Yend'}
+                                                                    </span>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Auto (+0)"
+                                                                        value={coords[activeCaptureTab]?.yEnd || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (/^-?\d*$/.test(val)) {
+                                                                                handleCoordChange(activeCaptureTab, 'yEnd', val);
+                                                                            }
+                                                                        }}
+                                                                        className={`bg-gray-950/90 border rounded px-2.5 py-1 text-xs focus:outline-none transition-colors w-full font-mono ${isDynamicTab ? 'border-cyan-800/40 text-cyan-200 focus:border-cyan-500/50' : 'border-gray-800 text-gray-200 focus:border-rose-500/50'}`}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="pt-2">
+                                                                {isDynamicTab ? (
+                                                                    <div className="text-[11px] text-cyan-300/90 bg-cyan-950/30 border border-cyan-800/50 rounded-lg p-2.5 space-y-1">
+                                                                        <div className="font-semibold flex items-center gap-1.5 text-cyan-200">
+                                                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-500/20 border border-cyan-500/40 text-cyan-300">📏 Dynamic Content Height</span>
+                                                                            <span>แท็บนี้แคปภาพตามความยาวของเนื้อหา/ตารางจริงอัตโนมัติ</span>
+                                                                        </div>
+                                                                        <p className="text-[10px] text-gray-300">
+                                                                            • <strong>Ystart (Offset)</strong>: ยึดส่วนบนสุดจาก <strong>ชื่อหัวข้อ (Title Heading)</strong> เสมอ | ใส่ค่า +/- เพื่อขยับขึ้น/ลง
+                                                                        </p>
+                                                                        <p className="text-[10px] text-gray-300">
+                                                                            • <strong>Yend (Offset)</strong>: ยึดส่วนล่างสุดจาก <strong>ท้ายตารางจริง</strong> เสมอ | ใส่ค่า +/- เพื่อขยายหรือลดระยะจากท้ายตาราง (ว่าง = Auto)
+                                                                        </p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-[11px] text-gray-300/90 bg-gray-900/60 border border-gray-800 rounded-lg p-2.5 space-y-1">
+                                                                        <p className="text-[10px] text-gray-300">
+                                                                            • <strong>Ystart (Offset)</strong>: ยึดส่วนบนสุดจาก <strong>ชื่อหัวข้อ (Title Heading)</strong> เสมอ (ว่าง = Auto พอดีหัวข้อ)
+                                                                        </p>
+                                                                        <p className="text-[10px] text-gray-400">
+                                                                            * ควบคุม Sidebar กางออกเสมอ (1920×1080) เพื่อพิกัดที่คงที่ทุกครั้ง | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now"
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     );
