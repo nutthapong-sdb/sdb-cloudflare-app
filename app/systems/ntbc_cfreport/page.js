@@ -6013,16 +6013,6 @@ export default function NTBCCFReportPage() {
                                             onClick={() => { 
                                                 setIsReportMenuOpen(false); 
                                                 setIsTemplateSubmenuOpen(false); 
-                                                setIsImageSettingsModalOpen(true); 
-                                            }}
-                                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
-                                        >
-                                            <Settings className="w-3 h-3" /> Image Size Settings
-                                        </button>
-                                        <button
-                                            onClick={() => { 
-                                                setIsReportMenuOpen(false); 
-                                                setIsTemplateSubmenuOpen(false); 
                                                 setIsTableSettingsModalOpen(true); 
                                             }}
                                             className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 border border-transparent ${theme.text || 'text-gray-300'} ${theme.id === 'corporate' ? 'hover:bg-blue-600 hover:border-blue-500 hover:text-white' : (theme.dropdown?.hover || 'hover:bg-gray-700') + ' hover:text-white'}`}
