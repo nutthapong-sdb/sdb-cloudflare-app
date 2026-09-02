@@ -71,6 +71,29 @@ export async function GET(request) {
             console.warn('Failed to collapse Cloudflare sidebar:', err.message);
         }
 
+        // Check if browser is already on target URL
+        const currentUrl = page.url() || '';
+        const normalizeUrl = (u) => {
+            try {
+                const parsed = new URL(u);
+                return (parsed.origin + parsed.pathname).replace(/\/+$/, '') + parsed.search;
+            } catch {
+                return (u || '').replace(/\/+$/, '');
+            }
+        };
+
+        const isSameUrl = normalizeUrl(currentUrl) === normalizeUrl(targetUrl);
+        if (isSameUrl) {
+            console.log(`⚡ [SKIP REDIRECT] Browser is already on target URL: ${currentUrl}. Skipping navigation to prevent Cloudflare bot detection.`);
+            await browser.disconnect();
+            return Response.json({ 
+                success: true, 
+                redirectedUrl: currentUrl, 
+                skippedRedirect: true,
+                message: 'Already on target page' 
+            });
+        }
+
         console.log(`Redirecting active tab to: ${targetUrl}`);
         await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 });
 

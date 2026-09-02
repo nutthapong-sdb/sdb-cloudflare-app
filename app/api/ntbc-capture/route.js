@@ -158,9 +158,8 @@ export async function GET(request) {
             }, { status: 401 });
         }
 
-        // 1. First wait exactly 3 seconds to allow initial scripts/redirect to stabilize
-        console.log('Waiting 3 seconds for initial page initialization...');
-        await new Promise(r => setTimeout(r, 3000));
+        // 1. Initial short stabilization delay
+        await new Promise(r => setTimeout(r, 500));
 
         let pageIndex = 1;
         let hasNextPage = true;
