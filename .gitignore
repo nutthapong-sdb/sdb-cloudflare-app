@@ -68,6 +68,8 @@ next-env.d.ts
 # Chrome Debug Profile
 .chrome-debug-profile/
 /chrome-config
-/public/captured-*.png
+/public/captured*
+/db/captured/
+/db/captured/*
 /scratch/
 /scripts/tmp_downloads
