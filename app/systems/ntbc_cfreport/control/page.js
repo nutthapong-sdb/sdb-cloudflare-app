@@ -45,7 +45,7 @@ export default function ControlPage() {
      const [subdomains, setSubdomains] = useState([]);
  
      // Environment Selection States
-     const [envAccount, setEnvAccount] = useState('ae240d50da44461d1fc5e34f708ebec8');
+     const [envAccount, setEnvAccount] = useState('');
      const [envZone, setEnvZone] = useState('');
      const [envSubdomain, setEnvSubdomain] = useState('');
      const [envStartDate, setEnvStartDate] = useState('2026-05-30');
@@ -355,10 +355,7 @@ export default function ControlPage() {
                     const accName = res.data.find(a => a.id === savedAccount)?.name || savedAccount;
                     addLog(`Loaded saved account from defaults: ${accName}`, 'info');
                 } else {
-                    setEnvAccount('ae240d50da44461d1fc5e34f708ebec8');
-                    const matchedAcc = res.data.find(a => a.id === 'ae240d50da44461d1fc5e34f708ebec8');
-                    const accName = matchedAcc ? matchedAcc.name : 'ae240d50da44461d1fc5e34f708ebec8';
-                    addLog(`Loaded default account: ${accName}`, 'info');
+                    setEnvAccount('');
                 }
             }
         } finally {
@@ -368,7 +365,11 @@ export default function ControlPage() {
 
     // Load Zones
     const loadZonesForAccount = async (accountId) => {
-        if (!accountId) return;
+        if (!accountId) {
+            setZones([]);
+            setEnvZone('');
+            return;
+        }
         setIsLoadingSettings(true);
         addLog(`Loading zones for account ${accountId}...`, 'info');
         try {
@@ -383,15 +384,8 @@ export default function ControlPage() {
                     setEnvZone(savedZone);
                     const zoneName = res.data.find(z => z.id === savedZone)?.name || savedZone;
                     addLog(`Loaded saved zone from defaults: ${zoneName}`, 'info');
-                    return;
-                }
-
-                const matchedZone = res.data.find(z => z.name.toLowerCase().trim() === 'sesalpglpn.go.th');
-                if (matchedZone) {
-                    setEnvZone(matchedZone.id);
-                    addLog(`Auto-selected zone: ${matchedZone.name}`, 'info');
-                } else if (res.data.length > 0) {
-                    setEnvZone(res.data[0].id);
+                } else {
+                    setEnvZone('');
                 }
             }
         } finally {
@@ -1276,14 +1270,47 @@ export default function ControlPage() {
         { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
     ];
 
+    const isEnvReady = Boolean(envAccount && envZone && envStartDate && envEndDate);
+
     const handleDirectCapture = async (tabId, captureType, stateSetter, storageKey, relativePath, isSilent = false) => {
+        if (!envAccount) {
+            if (!isSilent) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'กรุณาเลือก Account ก่อน',
+                    text: 'กรุณาเลือก Cloudflare Account ในส่วน Active Environment Settings ให้เรียบร้อยก่อนทำการแคปภาพ',
+                    confirmButtonColor: '#e11d48',
+                    background: '#111827',
+                    color: '#fff'
+                });
+            }
+            return false;
+        }
+
+        if (!envZone && tabId !== 'domains') {
+            if (!isSilent) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'กรุณาเลือก Zone (โดเมน) ก่อน',
+                    text: 'กรุณาเลือก Zone ในส่วน Active Environment Settings ให้เรียบร้อยก่อนทำการแคปภาพ',
+                    confirmButtonColor: '#e11d48',
+                    background: '#111827',
+                    color: '#fff'
+                });
+            }
+            return false;
+        }
+
         if (!isSilent) setIsCapturingDirect(true);
         try {
-            const targetDomain = zones.find(z => z.id === envZone)?.name || 'log.softdebut.online';
+            const targetDomain = zones.find(z => z.id === envZone)?.name || (tabId === 'domains' ? 'overview' : null);
+            if (!targetDomain && tabId !== 'domains') {
+                throw new Error('ไม่พบข้อมูลโดเมน (Zone) กรุณาเลือก Zone ใน Active Environment Settings');
+            }
             let targetUrl = null;
             if (relativePath === 'domains' || relativePath === '/domains/overview') {
                 targetUrl = `https://dash.cloudflare.com/${envAccount}/domains/overview`;
-            } else if (relativePath) {
+            } else if (relativePath && targetDomain) {
                 targetUrl = `https://dash.cloudflare.com/${envAccount}/${targetDomain}${relativePath}`;
             }
 
@@ -1377,6 +1404,18 @@ export default function ControlPage() {
 
     const handleCaptureAll = async () => {
         if (isCapturingAll || isCapturingDirect) return;
+
+        if (!envAccount || !envZone) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'กรุณาเลือก Account และ Zone ก่อน',
+                text: 'จำเป็นต้องเลือก Cloudflare Account และ Zone (Domain) ในส่วน Active Environment Settings ให้ครบถ้วนก่อนจึงจะสามารถเริ่มแคปภาพทั้งหมดได้',
+                confirmButtonColor: '#e11d48',
+                background: '#111827',
+                color: '#fff'
+            });
+            return;
+        }
 
         const result = await Swal.fire({
             title: 'ยืนยันการแคปภาพทั้งหมด 17 หมวดหมู่?',
@@ -1613,6 +1652,25 @@ export default function ControlPage() {
                                 )}
                             </div>
                         </div>
+
+                        {/* Environment Incomplete Warning Banner */}
+                        {!isEnvReady && (
+                            <div className="mb-3 bg-amber-950/40 border border-amber-500/50 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-200 animate-pulse">
+                                <div className="flex items-center gap-2">
+                                    <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                                    <span><b>จำเป็นต้องตั้งค่าก่อน:</b> กรุณาเลือก <b>Account</b> และ <b>Zone</b> ในส่วน <i>Active Environment Settings</i> ด้านล่าง ก่อนเริ่มกดแคปภาพหน้าจอ</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        document.getElementById('active-env-settings-card')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded border border-amber-500/40 font-bold text-[10px] shrink-0 cursor-pointer self-start sm:self-auto"
+                                >
+                                    ไปที่การตั้งค่า ↓
+                                </button>
+                            </div>
+                        )}
 
                         {/* Tab Sidebar layout */}
                         <div className="flex flex-col md:flex-row gap-4 flex-1">
@@ -1924,21 +1982,32 @@ export default function ControlPage() {
                         </div>
                     </div>
                     {/* Live status info / Active Environment */}
-                    <div className="bg-gradient-to-br from-rose-950/20 to-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl">
-                        <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
-                            <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                                <Activity className="w-4 h-4 text-rose-500" />
-                                Active Environment Settings
+                    <div id="active-env-settings-card" className="bg-gradient-to-br from-rose-950/20 to-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl scroll-mt-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-gray-800/40 pb-3 gap-2">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                                    <Activity className="w-4 h-4 text-rose-500" />
+                                    Active Environment Settings
+                                </h3>
+                                {isEnvReady ? (
+                                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                                        <Check className="w-3 h-3 text-emerald-400" /> พร้อมแคปภาพ
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 animate-pulse">
+                                        <ShieldAlert className="w-3 h-3 text-amber-400" /> จำเป็นต้องเลือก Account & Zone
+                                    </span>
+                                )}
                                 {isLoadingSettings && (
-                                    <span className="flex items-center gap-1.5 text-xs text-rose-400 font-normal lowercase normal-case ml-3 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                    <span className="flex items-center gap-1.5 text-xs text-rose-400 font-normal lowercase normal-case bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
                                         <RefreshCw className="w-3 h-3 animate-spin text-rose-500" />
                                         Loading...
                                     </span>
                                 )}
-                            </h3>
+                            </div>
                             <button
                                 onClick={saveAsDefault}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 border border-rose-500/30 rounded-lg text-[10px] font-bold text-white transition-colors shadow-md"
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 border border-rose-500/30 rounded-lg text-[10px] font-bold text-white transition-colors shadow-md self-start sm:self-auto cursor-pointer"
                             >
                                 <Check className="w-3.5 h-3.5 text-white" />
                                 Set as Default
@@ -1948,7 +2017,7 @@ export default function ControlPage() {
                             {/* Account Dropdown */}
                             <div className="flex flex-col gap-1 py-1 justify-end">
                                 <SearchableDropdown 
-                                    label="Account"
+                                    label="Account (จำเป็น) *"
                                     placeholder="Select Account"
                                     options={accounts.map(acc => ({ value: acc.id, label: acc.name, subtitle: acc.id }))}
                                     value={envAccount}
@@ -1963,7 +2032,7 @@ export default function ControlPage() {
                             {/* Zone Dropdown */}
                             <div className="flex flex-col gap-1 py-1 justify-end">
                                 <SearchableDropdown 
-                                    label="Zone"
+                                    label="Zone / Domain (จำเป็น) *"
                                     placeholder="Select Zone"
                                     options={zones.map(z => ({ value: z.id, label: z.name, subtitle: z.id }))}
                                     value={envZone}
