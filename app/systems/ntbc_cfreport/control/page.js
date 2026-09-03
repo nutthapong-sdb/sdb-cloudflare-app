@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
     CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
     Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome,
-    Camera, Image as ImageIcon
+    Camera, Image as ImageIcon, Sparkles
 } from 'lucide-react';
 import Swal from '../utils/alert';
 import { Editor } from '@tinymce/tinymce-react';
@@ -75,6 +75,9 @@ export default function ControlPage() {
      const [capturedTopEventsSourceScreenshot, setCapturedTopEventsSourceScreenshot] = useState(null);
      const [captureMeta, setCaptureMeta] = useState({});
      const [isCapturingDirect, setIsCapturingDirect] = useState(false);
+     const [isCapturingAll, setIsCapturingAll] = useState(false);
+     const [captureAllStatus, setCaptureAllStatus] = useState({ current: 0, total: 17, currentLabel: '' });
+     const abortCaptureAllRef = useRef(false);
 
      const [captureDomains, setCaptureDomains] = useState(true);
      const [captureDnsRecord, setCaptureDnsRecord] = useState(true);
@@ -1253,8 +1256,28 @@ export default function ControlPage() {
         });
     };
 
-    const handleDirectCapture = async (tabId, captureType, stateSetter, storageKey, relativePath) => {
-        setIsCapturingDirect(true);
+    const ALL_CAPTURE_TABS = [
+        { id: 'domains', label: 'Domains', hasData: !!capturedScreenshot, icon: '🌐', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot', isDynamic: true },
+        { id: 'dns', label: 'DNS Records', hasData: !!(capturedDnsScreenshot && (Array.isArray(capturedDnsScreenshot) ? capturedDnsScreenshot.length > 0 : true)), icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isDynamic: true },
+        { id: 'botManagement', label: 'Bot Management', hasData: !!capturedBotManagementScreenshot, icon: '🤖', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
+        { id: 'securityLevel', label: 'Security Level', hasData: !!capturedSecurityLevelScreenshot, icon: '🛡️', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
+        { id: 'sslOverview', label: 'SSL/TLS Mode', hasData: !!capturedSslOverviewScreenshot, icon: '🔒', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
+        { id: 'sslEdge', label: 'Edge Certificates', hasData: !!capturedSslEdgeScreenshot, icon: '📜', type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
+        { id: 'traffic', label: 'HTTP Traffic', hasData: !!capturedHttpTrafficScreenshot, icon: '📈', type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
+        { id: 'trafficCountries', label: 'Traffic Countries', hasData: !!capturedTrafficCountriesScreenshot, icon: '🗺️', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
+        { id: 'firewall', label: 'Firewall', hasData: !!capturedFirewallScreenshot, icon: '🔥', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
+        { id: 'topEventsSource', label: 'Events by Source', hasData: !!capturedTopEventsSourceScreenshot, icon: '📊', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
+        { id: 'securityRules', label: 'Custom Rules', hasData: !!capturedSecurityRulesScreenshot, icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot', isDynamic: true },
+        { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!capturedRateLimitingScreenshot, icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot', isDynamic: true },
+        { id: 'managedRules', label: 'Managed WAF', hasData: !!capturedManagedRulesScreenshot, icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot', isDynamic: true },
+        { id: 'ipAccess', label: 'IP Access', hasData: !!capturedIpAccessScreenshot, icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot', isDynamic: true },
+        { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!capturedZoneLockdownScreenshot, icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot', isDynamic: true },
+        { id: 'argo', label: 'Argo Smart', hasData: !!capturedArgoScreenshot, icon: '⚡', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
+        { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
+    ];
+
+    const handleDirectCapture = async (tabId, captureType, stateSetter, storageKey, relativePath, isSilent = false) => {
+        if (!isSilent) setIsCapturingDirect(true);
         try {
             const targetDomain = zones.find(z => z.id === envZone)?.name || 'log.softdebut.online';
             let targetUrl = null;
@@ -1326,23 +1349,107 @@ export default function ControlPage() {
                 });
 
                 addLog(`Screenshot for [${tabId}] captured successfully!`, 'success');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Captured!',
-                    text: `Screenshot for ${tabId} captured successfully.`,
-                    timer: 1500,
-                    showConfirmButton: false,
-                    background: '#111827',
-                    color: '#fff'
-                });
+                if (!isSilent) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Captured!',
+                        text: `Screenshot for ${tabId} captured successfully.`,
+                        timer: 1500,
+                        showConfirmButton: false,
+                        background: '#111827',
+                        color: '#fff'
+                    });
+                }
+                return true;
             } else {
                 throw new Error(captureData.error || 'Failed to capture screenshot');
             }
         } catch (err) {
             addLog(`Direct capture failed for [${tabId}]: ${err.message}`, 'error');
-            Swal.fire('Capture Error', err.message, 'error');
+            if (!isSilent) {
+                Swal.fire('Capture Error', err.message, 'error');
+            }
+            return false;
         } finally {
-            setIsCapturingDirect(false);
+            if (!isSilent) setIsCapturingDirect(false);
+        }
+    };
+
+    const handleCaptureAll = async () => {
+        if (isCapturingAll || isCapturingDirect) return;
+
+        const result = await Swal.fire({
+            title: 'ยืนยันการแคปภาพทั้งหมด 17 หมวดหมู่?',
+            text: 'ระบบจะนำทางเบราว์เซอร์สดและบันทึกภาพหน้าจอทั้ง 17 รายการอัตโนมัติ',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '🚀 เริ่มแคปทั้งหมด',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#e11d48',
+            cancelButtonColor: '#374151',
+            background: '#0f172a',
+            color: '#f8fafc'
+        });
+
+        if (!result.isConfirmed) return;
+
+        setIsCapturingAll(true);
+        abortCaptureAllRef.current = false;
+        addLog(`=== 🚀 เริ่มต้นกระบวนการแคปภาพทั้งหมด (17 รายการ) ===`, 'info');
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let i = 0; i < ALL_CAPTURE_TABS.length; i++) {
+            if (abortCaptureAllRef.current) {
+                addLog(`⚠️ กระบวนการแคปทั้งหมดถูกยกเลิกโดยผู้ใช้`, 'warn');
+                break;
+            }
+
+            const item = ALL_CAPTURE_TABS[i];
+            setCaptureAllStatus({ current: i + 1, total: ALL_CAPTURE_TABS.length, currentLabel: item.label });
+            setActiveCaptureTab(item.id);
+
+            addLog(`[${i + 1}/${ALL_CAPTURE_TABS.length}] กำลังนำทางและแคป: ${item.label}...`, 'info');
+            try {
+                const ok = await handleDirectCapture(item.id, item.type, item.setter, item.key, item.path, true);
+                if (ok) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } catch (err) {
+                failCount++;
+                addLog(`❌ แคป ${item.label} ไม่สำเร็จ: ${err.message}`, 'error');
+            }
+
+            // Brief pause between pages to prevent browser throttling
+            if (i < ALL_CAPTURE_TABS.length - 1 && !abortCaptureAllRef.current) {
+                await new Promise(r => setTimeout(r, 1200));
+            }
+        }
+
+        setIsCapturingAll(false);
+        setCaptureAllStatus({ current: 0, total: ALL_CAPTURE_TABS.length, currentLabel: '' });
+
+        if (abortCaptureAllRef.current) {
+            Swal.fire({
+                icon: 'info',
+                title: 'ยกเลิกการแคปแล้ว',
+                text: `แคปสำเร็จไป ${successCount} จาก ${ALL_CAPTURE_TABS.length} รายการ`,
+                background: '#111827',
+                color: '#fff'
+            });
+        } else {
+            addLog(`🎉 กระบวนการแคปทั้งหมดเสร็จสิ้น! สำเร็จ: ${successCount}, ผิดพลาด: ${failCount}`, successCount > 0 ? 'success' : 'warn');
+            Swal.fire({
+                icon: successCount === ALL_CAPTURE_TABS.length ? 'success' : 'info',
+                title: 'แคปภาพทั้งหมดเสร็จสิ้น!',
+                html: `บันทึกรูปภาพเรียบร้อย <b>${successCount}</b> / ${ALL_CAPTURE_TABS.length} รายการ${failCount > 0 ? `<br/><span style="color:#f87171">มีข้อผิดพลาด ${failCount} รายการ</span>` : ''}`,
+                background: '#111827',
+                color: '#fff',
+                confirmButtonColor: '#e11d48'
+            });
         }
     };
 
@@ -1461,7 +1568,7 @@ export default function ControlPage() {
 
                     {/* Consolidated Captured Screenshots (Step 2) */}
                     <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl relative animate-scale-up">
-                        <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-3 mb-3 gap-2">
                             <div className="flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                                 <span className="text-xs font-bold text-gray-300 font-mono">Captured Screenshots ({[
@@ -1473,31 +1580,45 @@ export default function ControlPage() {
                                     capturedArgoScreenshot, capturedSpeedScreenshot
                                 ].filter(Boolean).length}/17)</span>
                             </div>
+
+                            {/* Top-Right Capture All Button & Live Progress */}
+                            <div className="flex items-center gap-2">
+                                {isCapturingAll ? (
+                                    <div className="flex items-center gap-2 bg-rose-950/70 border border-rose-500/60 px-3 py-1.5 rounded-xl shadow-lg animate-pulse">
+                                        <RefreshCw className="w-3.5 h-3.5 text-rose-400 animate-spin shrink-0" />
+                                        <span className="text-xs font-bold text-rose-200 font-mono">
+                                            แคปทั้งหมด: {captureAllStatus.current}/{captureAllStatus.total} ({captureAllStatus.currentLabel})
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { abortCaptureAllRef.current = true; }}
+                                            className="ml-1 px-2.5 py-0.5 bg-rose-700/80 hover:bg-rose-600 text-white rounded text-[10px] font-bold transition-colors cursor-pointer"
+                                        >
+                                            หยุด
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        disabled={isCapturingDirect || isCapturingAll}
+                                        onClick={handleCaptureAll}
+                                        className={`px-3.5 py-1.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/20 hover:scale-[1.02] active:scale-95 ${
+                                            (isCapturingDirect || isCapturingAll) ? 'opacity-60 cursor-not-allowed' : ''
+                                        }`}
+                                        title="กดเพื่อสั่งเบราว์เซอร์สดไล่จับภาพหน้าจอครบทั้ง 17 รายการอัตโนมัติ"
+                                    >
+                                        <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                                        <span>⚡ แคปทั้งหมด (Capture All 17 Pages)</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Tab Sidebar layout */}
                         <div className="flex flex-col md:flex-row gap-4 flex-1">
                             {/* Left-hand sidebar nav bar */}
                             <div className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:pr-3 border-b md:border-b-0 md:border-r border-gray-900 scrollbar-thin scrollbar-thumb-gray-800 shrink-0 md:w-[150px] max-h-[550px] md:overflow-y-auto">
-                                {[
-                                    { id: 'domains', label: 'Domains', hasData: !!capturedScreenshot, icon: '🌐', type: 'domains', path: '/domains/overview', setter: setCapturedScreenshot, key: 'control_capturedScreenshot', isDynamic: true },
-                                    { id: 'dns', label: 'DNS Records', hasData: !!(capturedDnsScreenshot && (Array.isArray(capturedDnsScreenshot) ? capturedDnsScreenshot.length > 0 : true)), icon: '💾', type: 'dns', path: '/dns/records', setter: setCapturedDnsScreenshot, key: 'control_capturedDnsScreenshot', isDynamic: true },
-                                    { id: 'botManagement', label: 'Bot Management', hasData: !!capturedBotManagementScreenshot, icon: '🤖', type: 'bot-management', path: '/security/settings', setter: setCapturedBotManagementScreenshot, key: 'control_capturedBotManagementScreenshot' },
-                                    { id: 'securityLevel', label: 'Security Level', hasData: !!capturedSecurityLevelScreenshot, icon: '🛡️', type: 'security-level', path: '/security/settings', setter: setCapturedSecurityLevelScreenshot, key: 'control_capturedSecurityLevelScreenshot' },
-                                    { id: 'sslOverview', label: 'SSL/TLS Mode', hasData: !!capturedSslOverviewScreenshot, icon: '🔒', type: 'ssl-overview', path: '/ssl-tls', setter: setCapturedSslOverviewScreenshot, key: 'control_capturedSslOverviewScreenshot' },
-                                    { id: 'sslEdge', label: 'Edge Certificates', hasData: !!capturedSslEdgeScreenshot, icon: '📜', type: 'ssl-edge', path: '/ssl-tls/edge-certificates', setter: setCapturedSslEdgeScreenshot, key: 'control_capturedSslEdgeScreenshot' },
-                                    { id: 'traffic', label: 'HTTP Traffic', hasData: !!capturedHttpTrafficScreenshot, icon: '📈', type: 'traffic', path: '/analytics/traffic', setter: setCapturedHttpTrafficScreenshot, key: 'control_capturedHttpTrafficScreenshot' },
-                                    { id: 'trafficCountries', label: 'Traffic Countries', hasData: !!capturedTrafficCountriesScreenshot, icon: '🗺️', type: 'traffic-countries', path: '/analytics/traffic', setter: setCapturedTrafficCountriesScreenshot, key: 'control_capturedTrafficCountriesScreenshot' },
-                                    { id: 'firewall', label: 'Firewall', hasData: !!capturedFirewallScreenshot, icon: '🔥', type: 'firewall', path: '/security/analytics/events', setter: setCapturedFirewallScreenshot, key: 'control_capturedFirewallScreenshot' },
-                                    { id: 'topEventsSource', label: 'Events by Source', hasData: !!capturedTopEventsSourceScreenshot, icon: '📊', type: 'top-events-source', path: '/security/analytics/events', setter: setCapturedTopEventsSourceScreenshot, key: 'control_capturedTopEventsSourceScreenshot' },
-                                    { id: 'securityRules', label: 'Custom Rules', hasData: !!capturedSecurityRulesScreenshot, icon: '🛡️', type: 'security-rules', path: '/security/security-rules', setter: setCapturedSecurityRulesScreenshot, key: 'control_capturedSecurityRulesScreenshot', isDynamic: true },
-                                    { id: 'rateLimiting', label: 'Rate Limiting', hasData: !!capturedRateLimitingScreenshot, icon: '⏱️', type: 'rate-limiting', path: '/security/security-rules', setter: setCapturedRateLimitingScreenshot, key: 'control_capturedRateLimitingScreenshot', isDynamic: true },
-                                    { id: 'managedRules', label: 'Managed WAF', hasData: !!capturedManagedRulesScreenshot, icon: '🧱', type: 'managed-rules', path: '/security/security-rules', setter: setCapturedManagedRulesScreenshot, key: 'control_capturedManagedRulesScreenshot', isDynamic: true },
-                                    { id: 'ipAccess', label: 'IP Access', hasData: !!capturedIpAccessScreenshot, icon: '🚫', type: 'ip-access-rules', path: '/security/security-rules', setter: setCapturedIpAccessScreenshot, key: 'control_capturedIpAccessScreenshot', isDynamic: true },
-                                    { id: 'zoneLockdown', label: 'Zone Lockdown', hasData: !!capturedZoneLockdownScreenshot, icon: '🔐', type: 'zone-lockdown', path: '/security/security-rules', setter: setCapturedZoneLockdownScreenshot, key: 'control_capturedZoneLockdownScreenshot', isDynamic: true },
-                                    { id: 'argo', label: 'Argo Smart', hasData: !!capturedArgoScreenshot, icon: '⚡', type: 'argo', path: '/traffic', setter: setCapturedArgoScreenshot, key: 'control_capturedArgoScreenshot' },
-                                    { id: 'speed', label: 'Speed Test', hasData: !!(capturedSpeedScreenshot || capturedSpeedMobileScreenshot), icon: '🚀', type: 'speed', path: '/speed/test/browser', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' }
-                                ].map((tab) => (
+                                {ALL_CAPTURE_TABS.map((tab) => (
                                     <button
                                         key={tab.id}
                                         onClick={() => setActiveCaptureTab(tab.id)}
