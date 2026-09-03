@@ -1375,17 +1375,32 @@ export default function ControlPage() {
                     return next;
                 });
 
-                addLog(`Screenshot for [${tabId}] captured successfully!`, 'success');
-                if (!isSilent) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Captured!',
-                        text: `Screenshot for ${tabId} captured successfully.`,
-                        timer: 1500,
-                        showConfirmButton: false,
-                        background: '#111827',
-                        color: '#fff'
-                    });
+                if (captureData.isUnavailable) {
+                    addLog(`ℹ️ [${tabId}] ไม่พบฟีเจอร์นี้บนหน้าเว็บ Cloudflare - บันทึกรูปภาพแจ้ง Feature Not Available เรียบร้อย`, 'warn');
+                    if (!isSilent) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'ไม่พบฟีเจอร์นี้ในระบบ',
+                            text: `ไม่พบ ${tabId} ใน Account/Zone นี้ ระบบได้บันทึกรูปภาพแจ้งเตือน (Feature Not Available) ให้เรียบร้อยแล้ว`,
+                            timer: 2200,
+                            showConfirmButton: false,
+                            background: '#111827',
+                            color: '#fff'
+                        });
+                    }
+                } else {
+                    addLog(`Screenshot for [${tabId}] captured successfully!`, 'success');
+                    if (!isSilent) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Captured!',
+                            text: `Screenshot for ${tabId} captured successfully.`,
+                            timer: 1500,
+                            showConfirmButton: false,
+                            background: '#111827',
+                            color: '#fff'
+                        });
+                    }
                 }
                 return true;
             } else {

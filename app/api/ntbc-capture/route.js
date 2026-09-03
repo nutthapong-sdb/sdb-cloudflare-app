@@ -5,6 +5,118 @@ import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 
+const FILE_MAPPING = {
+    dns: 'captured-dns.png',
+    traffic: 'captured-traffic.png',
+    firewall: 'captured-firewall.png',
+    'security-rules': 'captured-security-rules.png',
+    argo: 'captured-argo.png',
+    speed: 'captured-speed.png',
+    'speed-mobile': 'captured-speed-mobile.png',
+    domains: 'captured-domains.png',
+    'bot-management': 'captured-bot-management.png',
+    'security-level': 'captured-security-level.png',
+    'ssl-overview': 'captured-ssl-overview.png',
+    'ssl-edge': 'captured-ssl-edge.png',
+    'rate-limiting': 'captured-rate-limiting.png',
+    'managed-rules': 'captured-managed-rules.png',
+    'ip-access-rules': 'captured-ip-access.png',
+    'zone-lockdown': 'captured-zone-lockdown.png',
+    'traffic-countries': 'captured-traffic-countries.png',
+    'top-events-source': 'captured-top-events-source.png'
+};
+
+const SECTION_TARGETS = {
+    'bot-management': {
+        title: '🤖 Bot Management',
+        keywords: ['bot management', 'bot fight mode', 'super bot fight mode', 'bot protection', 'fight bots', 'bots'],
+        description: 'ไม่พบเมนูหรือการตั้งค่า Bot Management ในแพ็กเกจหรือ Account Cloudflare ปัจจุบัน'
+    },
+    'security-level': {
+        title: '🛡️ Security Level & Settings',
+        keywords: ['security level', 'browser integrity check', 'challenge passage', 'privacy pass'],
+        description: 'ไม่พบเมนู Security Level ในหน้าการตั้งค่าความปลอดภัย'
+    },
+    'argo': {
+        title: '⚡ Argo Smart Routing',
+        keywords: ['argo smart routing', 'argo', 'smart routing', 'tiered cache'],
+        description: 'ไม่พบฟีเจอร์ Argo Smart Routing ในโดเมนหรือแพ็กเกจนี้'
+    },
+    'rate-limiting': {
+        title: '⏱️ Rate Limiting Rules',
+        keywords: ['rate limiting', 'rate limiting rules', 'rate limits'],
+        description: 'ไม่พบเมนู Rate Limiting Rules ในโดเมนนี้'
+    },
+    'managed-rules': {
+        title: '🧱 Managed WAF Rules',
+        keywords: ['managed rules', 'cloudflare managed rules', 'owasp', 'managed ruleset', 'waf rules'],
+        description: 'ไม่พบเมนู Managed WAF Rules ในโดเมนนี้'
+    },
+    'zone-lockdown': {
+        title: '🔐 Zone Lockdown Rules',
+        keywords: ['zone lockdown', 'lockdown rules', 'lockdown'],
+        description: 'ไม่พบเมนู Zone Lockdown Rules ในโดเมนนี้'
+    },
+    'ip-access-rules': {
+        title: '🚫 IP Access Rules',
+        keywords: ['ip access rules', 'ip access', 'ip firewall'],
+        description: 'ไม่พบเมนู IP Access Rules ในโดเมนนี้'
+    }
+};
+
+async function generateUnavailableImage(title, subtitle = 'ไม่พบข้อมูลหรือฟีเจอร์นี้ใน Cloudflare Zone / Account ปัจจุบัน') {
+    const svg = `
+    <svg width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#090d16" />
+                <stop offset="50%" stop-color="#0f172a" />
+                <stop offset="100%" stop-color="#020617" />
+            </linearGradient>
+            <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#1e293b" />
+                <stop offset="100%" stop-color="#0f172a" />
+            </linearGradient>
+        </defs>
+
+        <!-- Background -->
+        <rect width="1280" height="720" fill="url(#bgGrad)" />
+
+        <!-- Grid pattern overlay -->
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.8" stroke-opacity="0.4"/>
+        </pattern>
+        <rect width="1280" height="720" fill="url(#grid)" />
+
+        <!-- Main Card Container -->
+        <rect x="140" y="100" width="1000" height="520" rx="24" fill="url(#cardGrad)" stroke="#334155" stroke-width="2" />
+
+        <!-- Top Header Bar inside card -->
+        <path d="M 140 124 Q 140 100 164 100 L 1116 100 Q 1140 100 1140 124 L 1140 160 L 140 160 Z" fill="#090d16" fill-opacity="0.8" />
+        <circle cx="175" cy="130" r="6" fill="#f43f5e" />
+        <circle cx="195" cy="130" r="6" fill="#fbbf24" />
+        <circle cx="215" cy="130" r="6" fill="#34d399" />
+        <text x="640" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" text-anchor="middle" fill="#94a3b8">Cloudflare Dashboard &gt; Feature Verification</text>
+
+        <!-- Alert Icon -->
+        <circle cx="640" cy="270" r="54" fill="#334155" fill-opacity="0.6" stroke="#475569" stroke-width="2" />
+        <text x="640" y="290" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="52" text-anchor="middle" fill="#cbd5e1">ℹ️</text>
+
+        <!-- Main Title -->
+        <text x="640" y="380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="34" font-weight="bold" text-anchor="middle" fill="#f8fafc">${title}</text>
+
+        <!-- Subtitle & Reason -->
+        <text x="640" y="430" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" text-anchor="middle" fill="#94a3b8">${subtitle}</text>
+        <text x="640" y="465" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" text-anchor="middle" fill="#64748b">(ไม่สามารถแคปรูปภาพได้เนื่องจากไม่พบส่วนนี้ในแพ็กเกจหรือ Account ปัจจุบัน)</text>
+
+        <!-- Status Tag Badge -->
+        <rect x="440" y="510" width="400" height="46" rx="23" fill="#e11d48" fill-opacity="0.15" stroke="#f43f5e" stroke-width="1.5" />
+        <text x="640" y="539" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#fda4af">⚠️ Feature Not Found / ไม่พบข้อมูลบนหน้าเว็บ</text>
+    </svg>
+    `;
+    return await sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -258,7 +370,47 @@ export async function GET(request) {
         }
 
         // 1. Initial short stabilization delay
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 600));
+
+        // Check if the requested feature/section exists on the Cloudflare page
+        const targetCheck = SECTION_TARGETS[type];
+        if (targetCheck) {
+            console.log(`Checking if feature "${targetCheck.title}" is present on Cloudflare page...`);
+            const isFound = await page.evaluate((keywords) => {
+                const elements = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, [role="heading"], [data-testid], section, [class*="card"], [class*="setting"], div, span, p, label, a, button'));
+                for (const kw of keywords) {
+                    const match = elements.find(el => {
+                        const txt = (el.textContent || '').toLowerCase().trim();
+                        const isVisible = (el.offsetWidth > 0 || el.offsetHeight > 0);
+                        return isVisible && txt.includes(kw);
+                    });
+                    if (match) return true;
+                }
+                return false;
+            }, targetCheck.keywords);
+
+            if (!isFound) {
+                console.log(`⚠️ Feature "${targetCheck.title}" NOT found on Cloudflare page. Generating professional placeholder image...`);
+                const placeholderBuffer = await generateUnavailableImage(targetCheck.title, targetCheck.description);
+                const fileName = FILE_MAPPING[type] || `captured-${type}.png`;
+                const filePath = path.join(publicDir, fileName);
+                fs.writeFileSync(filePath, placeholderBuffer);
+                try { fs.writeFileSync(path.join(dbCapturedDir, fileName), placeholderBuffer); } catch (e) {}
+
+                await browser.disconnect();
+
+                return Response.json({
+                    success: true,
+                    image: `data:image/png;base64,${placeholderBuffer.toString('base64')}`,
+                    filePath: `/${fileName}?t=${Date.now()}`,
+                    isUnavailable: true,
+                    unavailableTitle: targetCheck.title,
+                    unavailableMessage: targetCheck.description
+                });
+            } else {
+                console.log(`✅ Feature "${targetCheck.title}" verified present on Cloudflare page.`);
+            }
+        }
 
         let pageIndex = 1;
         let hasNextPage = true;
