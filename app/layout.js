@@ -1,4 +1,5 @@
 import "./globals.css";
+import VisualFeedbackWidget from "./components/VisualFeedbackWidget";
 
 export const metadata = {
   title: "Cloudflare API Dashboard",
@@ -12,6 +13,7 @@ export default function RootLayout({ children }) {
         className="antialiased"
       >
         {children}
+        <VisualFeedbackWidget />
       </body>
     </html>
   );
