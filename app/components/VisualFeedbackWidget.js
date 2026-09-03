@@ -13,6 +13,38 @@ export default function VisualFeedbackWidget() {
 
   const overlayRef = useRef(null);
 
+  // Auto-reload on server update/restart
+  useEffect(() => {
+    let initialBootTime = null;
+    let isReconnecting = false;
+
+    const checkVersion = async () => {
+      try {
+        const res = await fetch(`/api/system-version?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) {
+          isReconnecting = true;
+          return;
+        }
+        const data = await res.json();
+        if (data && data.bootTime) {
+          if (initialBootTime === null) {
+            initialBootTime = data.bootTime;
+          } else if (initialBootTime !== data.bootTime || isReconnecting) {
+            console.log('🔄 New server build/restart detected! Auto-reloading page...');
+            window.location.reload();
+          }
+          isReconnecting = false;
+        }
+      } catch {
+        isReconnecting = true;
+      }
+    };
+
+    checkVersion();
+    const interval = setInterval(checkVersion, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
   // Toggle inspect via keyboard shortcut (Alt+F or Option+F)
   useEffect(() => {
     const handleKeyDown = (e) => {
