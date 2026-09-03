@@ -1630,12 +1630,7 @@ export default function ControlPage() {
                                     >
                                         <span>{tab.icon}</span>
                                         <span className="truncate">{tab.label}</span>
-                                        {tab.isDynamic && (
-                                            <span className="px-1 py-0.2 rounded text-[7px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 ml-auto shrink-0 font-normal">
-                                                📏 Auto
-                                            </span>
-                                        )}
-                                        {tab.hasData && !tab.isDynamic && (
+                                        {tab.hasData && (
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ml-auto shrink-0"></span>
                                         )}
                                     </button>
