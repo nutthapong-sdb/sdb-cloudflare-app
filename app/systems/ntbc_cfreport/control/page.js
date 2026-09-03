@@ -1593,186 +1593,182 @@ export default function ControlPage() {
                                                 </button>
                                             </div>
 
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-                                                {/* Col 1: Screenshot Preview */}
-                                                <div className="flex flex-col gap-2">
-                                                    {current.img ? (
-                                                        current.isArray && Array.isArray(current.img) ? (
-                                                            <div className="flex flex-col gap-2">
-                                                                {current.img.map((imgSrc, idx) => (
-                                                                    <div key={idx} className="rounded-xl border border-gray-800/80 bg-black flex items-center justify-center p-2 overflow-hidden group relative">
-                                                                        <img src={imgSrc} className="max-w-full rounded h-auto max-h-[360px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={`${current.label} - Page ${idx + 1}`} />
-                                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                                            <button type="button" onClick={() => openImageInNewTab(imgSrc)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
-                                                                                View Full Image
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="rounded-xl border border-gray-800/80 bg-black flex items-center justify-center p-2 overflow-hidden group relative">
-                                                                <img src={current.img} className="max-w-full rounded h-auto max-h-[360px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={current.label} />
+                                            {/* Screenshot Preview (Multi-image in 2 columns, single image centered) */}
+                                            {current.img ? (
+                                                current.isArray && Array.isArray(current.img) ? (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        {current.img.map((imgSrc, idx) => (
+                                                            <div key={idx} className="rounded-xl border border-gray-800/80 bg-black flex items-center justify-center p-2 overflow-hidden group relative">
+                                                                <img src={imgSrc} className="max-w-full rounded h-auto max-h-[360px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={`${current.label} - Page ${idx + 1}`} />
                                                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                                                                    <button type="button" onClick={() => openImageInNewTab(current.img)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                                    <button type="button" onClick={() => openImageInNewTab(imgSrc)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
                                                                         View Full Image
                                                                     </button>
                                                                 </div>
                                                             </div>
-                                                        )
-                                                    ) : (
-                                                        <div className="py-16 px-4 text-center bg-gray-950/40 rounded-2xl border border-dashed border-gray-800 flex flex-col items-center justify-center gap-3">
-                                                            <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-500">
-                                                                <Camera className="w-6 h-6" />
-                                                            </div>
-                                                            <div className="flex flex-col gap-1">
-                                                                <p className="text-sm font-bold text-gray-300">ยังไม่มีรูปภาพที่บันทึกไว้</p>
-                                                                <p className="text-xs text-gray-500 max-w-md">กดปุ่ม <strong>"📸 Capture This Page Now"</strong> ด้านบน เพื่อจับภาพหน้าจอนี้จากเบราว์เซอร์สด</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Col 2: Crop Coordinates Controls */}
-                                                <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2.5">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
-                                                            <span>✂️</span>
-                                                            <span>Crop Coordinates ({current.label})</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={pullFromImageSizeSettings}
-                                                                className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[10px] font-semibold rounded transition-colors cursor-pointer flex items-center gap-1"
-                                                                title="ดึงค่าจาก Image Size Setting"
-                                                            >
-                                                                📥 ดึงจาก Image Size
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={saveCoordsToDatabase}
-                                                                className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded transition-colors cursor-pointer shadow-sm"
-                                                            >
-                                                                💾 Save to DB
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="rounded-xl border border-gray-800/80 bg-black flex items-center justify-center p-2 overflow-hidden group relative">
+                                                        <img src={current.img} className="max-w-full rounded h-auto max-h-[380px] object-contain transition-transform group-hover:scale-[1.02] duration-300" alt={current.label} />
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                                            <button type="button" onClick={() => openImageInNewTab(current.img)} className="px-3 py-1.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 transition-colors">
+                                                                View Full Image
                                                             </button>
                                                         </div>
                                                     </div>
-
-                                                    {/* Quick Options for HTTP Traffic and Traffic Countries */}
-                                                    {(activeCaptureTab === 'traffic' || activeCaptureTab === 'trafficCountries') && (
-                                                        <div className="flex flex-col gap-2 p-2.5 bg-gray-950/70 rounded-lg border border-gray-800/80 my-1">
-                                                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                                                                <span className="text-gray-400 font-bold min-w-[85px]">Quick Options:</span>
-                                                                <button type="button" onClick={() => setTrafficTimeWindow('1440')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '1440' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>1 Day</button>
-                                                                <button type="button" onClick={() => setTrafficTimeWindow('10080')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '10080' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>7 Days</button>
-                                                                <button type="button" onClick={() => setTrafficTimeWindow('43200')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '43200' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>30 Days</button>
-                                                                <button type="button" onClick={() => setTrafficTimeWindow('custom')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === 'custom' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>Custom</button>
-                                                            </div>
-                                                            {trafficTimeWindow === 'custom' && (
-                                                                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
-                                                                    <span className="text-gray-400 font-bold min-w-[85px]">Date Range:</span>
-                                                                    <input type="datetime-local" value={trafficStartDate} onChange={(e) => setTrafficStartDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-200 rounded px-2 py-1 text-xs" />
-                                                                    <span className="text-gray-500 font-bold px-1">to</span>
-                                                                    <input type="datetime-local" value={trafficEndDate} onChange={(e) => setTrafficEndDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-200 rounded px-2 py-1 text-xs" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    {/* Coordinates Setting Grid */}
-                                                    {(() => {
-                                                        const DYNAMIC_TABS = ['domains', 'dns', 'securityRules', 'rateLimiting', 'managedRules', 'ipAccess', 'zoneLockdown'];
-                                                        const isDynamicTab = DYNAMIC_TABS.includes(activeCaptureTab);
-
-                                                        return (
-                                                            <>
-                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="Auto"
-                                                                            value={coords[activeCaptureTab]?.xStart || ''}
-                                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'xStart', e.target.value)}
-                                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-[10px] text-gray-400 font-mono font-medium">Xend</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="Auto"
-                                                                            value={coords[activeCaptureTab]?.xEnd || ''}
-                                                                            onChange={(e) => handleCoordChange(activeCaptureTab, 'xEnd', e.target.value)}
-                                                                            className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className="text-[10px] text-cyan-400 font-mono font-medium flex items-center gap-1">
-                                                                            Ystart (Offset)
-                                                                        </span>
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Auto (+0)"
-                                                                            value={coords[activeCaptureTab]?.yStart || ''}
-                                                                            onChange={(e) => {
-                                                                                const val = e.target.value;
-                                                                                if (/^-?\d*$/.test(val)) {
-                                                                                    handleCoordChange(activeCaptureTab, 'yStart', val);
-                                                                                }
-                                                                            }}
-                                                                            className="bg-gray-950/90 border border-cyan-800/40 rounded px-2.5 py-1 text-xs text-cyan-200 focus:outline-none focus:border-cyan-500/50 transition-colors w-full font-mono"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className={`text-[10px] font-mono font-medium flex items-center gap-1 ${isDynamicTab ? 'text-cyan-400' : 'text-gray-400'}`}>
-                                                                            {isDynamicTab ? 'Yend (Offset)' : 'Yend'}
-                                                                        </span>
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Auto (+0)"
-                                                                            value={coords[activeCaptureTab]?.yEnd || ''}
-                                                                            onChange={(e) => {
-                                                                                const val = e.target.value;
-                                                                                if (/^-?\d*$/.test(val)) {
-                                                                                    handleCoordChange(activeCaptureTab, 'yEnd', val);
-                                                                                }
-                                                                            }}
-                                                                            className={`bg-gray-950/90 border rounded px-2.5 py-1 text-xs focus:outline-none transition-colors w-full font-mono ${isDynamicTab ? 'border-cyan-800/40 text-cyan-200 focus:border-cyan-500/50' : 'border-gray-800 text-gray-200 focus:border-rose-500/50'}`}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="pt-2">
-                                                                    {isDynamicTab ? (
-                                                                        <div className="text-[11px] text-cyan-300/90 bg-cyan-950/30 border border-cyan-800/50 rounded-lg p-2.5 space-y-1">
-                                                                            <div className="font-semibold flex items-center gap-1.5 text-cyan-200">
-                                                                                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-500/20 border border-cyan-500/40 text-cyan-300">📏 Dynamic Content Height</span>
-                                                                                <span>แท็บนี้แคปภาพตามความยาวของเนื้อหา/ตารางจริงอัตโนมัติ</span>
-                                                                            </div>
-                                                                            <p className="text-[10px] text-gray-300">
-                                                                                • <strong>Ystart (Offset)</strong>: ยึดส่วนบนสุดจาก <strong>ชื่อหัวข้อ (Title Heading)</strong> เสมอ | ใส่ค่า +/- เพื่อขยับขึ้น/ลง
-                                                                            </p>
-                                                                            <p className="text-[10px] text-gray-300">
-                                                                                • <strong>Yend (Offset)</strong>: ยึดส่วนล่างสุดจาก <strong>ท้ายตารางจริง</strong> เสมอ | ใส่ค่า +/- เพื่อขยายหรือลดระยะจากท้ายตาราง (ว่าง = Auto)
-                                                                            </p>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="text-[11px] text-gray-300/90 bg-gray-900/60 border border-gray-800 rounded-lg p-2.5 space-y-1">
-                                                                            <p className="text-[10px] text-gray-300">
-                                                                                • <strong>Ystart (Offset)</strong>: ยึดส่วนบนสุดจาก <strong>ชื่อหัวข้อ (Title Heading)</strong> เสมอ (ว่าง = Auto พอดีหัวข้อ)
-                                                                            </p>
-                                                                            <p className="text-[10px] text-gray-400">
-                                                                                * ควบคุม Sidebar กางออกเสมอ (1920×1080) เพื่อพิกัดที่คงที่ทุกครั้ง | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now"
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        );
-                                                    })()}
+                                                )
+                                            ) : (
+                                                <div className="py-16 px-4 text-center bg-gray-950/40 rounded-2xl border border-dashed border-gray-800 flex flex-col items-center justify-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-500">
+                                                        <Camera className="w-6 h-6" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <p className="text-sm font-bold text-gray-300">ยังไม่มีรูปภาพที่บันทึกไว้</p>
+                                                        <p className="text-xs text-gray-500 max-w-md">กดปุ่ม <strong>"📸 Capture This Page Now"</strong> ด้านบน เพื่อจับภาพหน้าจอนี้จากเบราว์เซอร์สด</p>
+                                                    </div>
                                                 </div>
+                                            )}
+
+                                            {/* Crop Coordinates Controls directly under the screenshot image */}
+                                            <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
+                                                        <span>✂️</span>
+                                                        <span>Crop Coordinates ({current.label})</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={pullFromImageSizeSettings}
+                                                            className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[10px] font-semibold rounded transition-colors cursor-pointer flex items-center gap-1"
+                                                            title="ดึงค่าจาก Image Size Setting"
+                                                        >
+                                                            📥 ดึงจาก Image Size
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={saveCoordsToDatabase}
+                                                            className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded transition-colors cursor-pointer shadow-sm"
+                                                        >
+                                                            💾 Save to DB
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Quick Options for HTTP Traffic and Traffic Countries */}
+                                                {(activeCaptureTab === 'traffic' || activeCaptureTab === 'trafficCountries') && (
+                                                    <div className="flex flex-col gap-2 p-2.5 bg-gray-950/70 rounded-lg border border-gray-800/80 my-1">
+                                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                            <span className="text-gray-400 font-bold min-w-[85px]">Quick Options:</span>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('1440')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '1440' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>1 Day</button>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('10080')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '10080' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>7 Days</button>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('43200')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === '43200' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>30 Days</button>
+                                                            <button type="button" onClick={() => setTrafficTimeWindow('custom')} className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors cursor-pointer ${trafficTimeWindow === 'custom' ? 'bg-rose-600 text-white border-rose-500 shadow-sm' : 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-700'}`}>Custom</button>
+                                                        </div>
+                                                        {trafficTimeWindow === 'custom' && (
+                                                            <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                                                                <span className="text-gray-400 font-bold min-w-[85px]">Date Range:</span>
+                                                                <input type="datetime-local" value={trafficStartDate} onChange={(e) => setTrafficStartDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-200 rounded px-2 py-1 text-xs" />
+                                                                <span className="text-gray-500 font-bold px-1">to</span>
+                                                                <input type="datetime-local" value={trafficEndDate} onChange={(e) => setTrafficEndDate(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-200 rounded px-2 py-1 text-xs" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Coordinates Setting Grid */}
+                                                {(() => {
+                                                    const DYNAMIC_TABS = ['domains', 'dns', 'securityRules', 'rateLimiting', 'managedRules', 'ipAccess', 'zoneLockdown'];
+                                                    const isDynamicTab = DYNAMIC_TABS.includes(activeCaptureTab);
+
+                                                    return (
+                                                        <>
+                                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">Xstart</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        placeholder="Auto"
+                                                                        value={coords[activeCaptureTab]?.xStart || ''}
+                                                                        onChange={(e) => handleCoordChange(activeCaptureTab, 'xStart', e.target.value)}
+                                                                        className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">Xend</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        placeholder="Auto"
+                                                                        value={coords[activeCaptureTab]?.xEnd || ''}
+                                                                        onChange={(e) => handleCoordChange(activeCaptureTab, 'xEnd', e.target.value)}
+                                                                        className="bg-gray-950/90 border border-gray-800 rounded px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-rose-500/50 transition-colors w-full font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] text-cyan-400 font-mono font-medium flex items-center gap-1">
+                                                                        Ystart (Offset)
+                                                                    </span>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Auto (+0)"
+                                                                        value={coords[activeCaptureTab]?.yStart || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (/^-?\d*$/.test(val)) {
+                                                                                handleCoordChange(activeCaptureTab, 'yStart', val);
+                                                                            }
+                                                                        }}
+                                                                        className="bg-gray-950/90 border border-cyan-800/40 rounded px-2.5 py-1 text-xs text-cyan-200 focus:outline-none focus:border-cyan-500/50 transition-colors w-full font-mono"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className={`text-[10px] font-mono font-medium flex items-center gap-1 ${isDynamicTab ? 'text-cyan-400' : 'text-gray-400'}`}>
+                                                                        {isDynamicTab ? 'Yend (Offset)' : 'Yend'}
+                                                                    </span>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Auto (+0)"
+                                                                        value={coords[activeCaptureTab]?.yEnd || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (/^-?\d*$/.test(val)) {
+                                                                                handleCoordChange(activeCaptureTab, 'yEnd', val);
+                                                                            }
+                                                                        }}
+                                                                        className={`bg-gray-950/90 border rounded px-2.5 py-1 text-xs focus:outline-none transition-colors w-full font-mono ${isDynamicTab ? 'border-cyan-800/40 text-cyan-200 focus:border-cyan-500/50' : 'border-gray-800 text-gray-200 focus:border-rose-500/50'}`}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="pt-2">
+                                                                {isDynamicTab ? (
+                                                                    <div className="text-[11px] text-cyan-300/90 bg-cyan-950/30 border border-cyan-800/50 rounded-lg p-2.5 space-y-1">
+                                                                        <div className="font-semibold flex items-center gap-1.5 text-cyan-200">
+                                                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-500/20 border border-cyan-500/40 text-cyan-300">📏 Dynamic Content Height</span>
+                                                                            <span>แท็บนี้แคปภาพตามความยาวของเนื้อหา/ตารางจริงอัตโนมัติ</span>
+                                                                        </div>
+                                                                        <p className="text-[10px] text-gray-300">
+                                                                            • <strong>Ystart (Offset)</strong>: ยึดส่วนบนสุดจาก <strong>ชื่อหัวข้อ (Title Heading)</strong> เสมอ | ใส่ค่า +/- เพื่อขยับขึ้น/ลง
+                                                                        </p>
+                                                                        <p className="text-[10px] text-gray-300">
+                                                                            • <strong>Yend (Offset)</strong>: ยึดส่วนล่างสุดจาก <strong>ท้ายตารางจริง</strong> เสมอ | ใส่ค่า +/- เพื่อขยายหรือลดระยะจากท้ายตาราง (ว่าง = Auto)
+                                                                        </p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-[11px] text-gray-300/90 bg-gray-900/60 border border-gray-800 rounded-lg p-2.5 space-y-1">
+                                                                        <p className="text-[10px] text-gray-300">
+                                                                            • <strong>Ystart (Offset)</strong>: ยึดส่วนบนสุดจาก <strong>ชื่อหัวข้อ (Title Heading)</strong> เสมอ (ว่าง = Auto พอดีหัวข้อ)
+                                                                        </p>
+                                                                        <p className="text-[10px] text-gray-400">
+                                                                            * ควบคุม Sidebar กางออกเสมอ (1920×1080) เพื่อพิกัดที่คงที่ทุกครั้ง | ปรับพิกัดแล้วกดปุ่ม "Capture This Page Now"
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     );
