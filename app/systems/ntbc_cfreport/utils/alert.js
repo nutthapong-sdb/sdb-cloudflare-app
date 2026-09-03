@@ -60,9 +60,9 @@ const customSwal = {
             const options = args[0];
 
             // If it's a confirmation / prompt requiring user interaction
-            if (options.showCancelButton || options.input || (typeof options.html === 'string' && options.html.includes('<input'))) {
+            if (options.showCancelButton || options.input || options.position === 'center' || (typeof options.html === 'string' && options.html.includes('<input'))) {
                 return Swal.fire({
-                    position: 'top-end',
+                    position: options.position || 'center',
                     background: '#111827',
                     color: '#f3f4f6',
                     customClass: {
