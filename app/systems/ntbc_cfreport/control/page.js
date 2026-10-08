@@ -71,6 +71,8 @@ export default function ControlPage() {
      // Dropdown Data States
      const [currentUser, setCurrentUser] = useState(null);
      const [vncUrl, setVncUrl] = useState('');
+    const [vncRestartKey, setVncRestartKey] = useState(0);
+    const [isRestartingVnc, setIsRestartingVnc] = useState(false);
      const [accounts, setAccounts] = useState([]);
      const [zones, setZones] = useState([]);
      const [subdomains, setSubdomains] = useState([]);
@@ -2558,6 +2560,36 @@ export default function ControlPage() {
                     </div>
     );
 
+    // Re-creates the Live Browser Monitor (noVNC) iframe so it reconnects from scratch. This only
+    // refreshes the viewer in this page; it does not restart the Chrome/VNC containers.
+    const handleRestartMonitor = () => {
+        if (isRestartingVnc) return;
+        setIsRestartingVnc(true);
+        addLog('🔄 กำลังรีสตาร์ท Live Browser Monitor (เชื่อมต่อ VNC ใหม่)...', 'info');
+        setVncUrl('');
+        setTimeout(() => {
+            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`);
+            setVncRestartKey(k => k + 1);
+            setIsRestartingVnc(false);
+            addLog('✅ รีสตาร์ท Live Browser Monitor แล้ว', 'success');
+        }, 600);
+    };
+
+    const renderVncRestartBar = () => (
+        <div className="flex items-center justify-end gap-3 mb-3">
+            <span className="text-[10px] text-gray-500 font-mono">จอ Live Browser Monitor ค้าง / ไม่ขึ้นภาพ? กดเพื่อเชื่อมต่อใหม่</span>
+            <button
+                type="button"
+                onClick={handleRestartMonitor}
+                disabled={isRestartingVnc}
+                className={`flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700/60 rounded-xl text-xs font-bold transition-all shadow cursor-pointer ${isRestartingVnc ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRestartingVnc ? 'animate-spin' : ''}`} />
+                {isRestartingVnc ? 'Restarting Monitor...' : 'Restart Monitor'}
+            </button>
+        </div>
+    );
+
     const renderVncCard = () => (
         <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col mb-6">
             <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
@@ -2586,6 +2618,7 @@ export default function ControlPage() {
                     <div className="absolute top-0 left-0 bg-rose-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Live Browser Monitor</div>
                     {mounted && vncUrl ? (
                         <iframe 
+                            key={vncRestartKey}
                             ref={vncIframeRef}
                             src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`}
                             allowFullScreen
@@ -2640,6 +2673,7 @@ export default function ControlPage() {
 
             {/* VNC Card rendering when maximized */}
             {isVncMaximized && renderStep1Card()}
+            {isVncMaximized && renderVncRestartBar()}
             {isVncMaximized && renderVncCard()}
 
             {/* Main section tabs — keeps the page from being one long scroll: pick one view
@@ -2675,6 +2709,7 @@ export default function ControlPage() {
                 <div className={`${activeMainTab === 'capture' ? 'lg:col-span-12' : 'hidden'} space-y-6 flex flex-col`}>
                     {/* Live Browser Monitor Card */}
                     {!isVncMaximized && renderStep1Card()}
+                    {!isVncMaximized && renderVncRestartBar()}
                     {!isVncMaximized && renderVncCard()}
 
                     {/* Consolidated Captured Screenshots (Step 2) */}
