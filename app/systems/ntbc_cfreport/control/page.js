@@ -2590,7 +2590,7 @@ export default function ControlPage() {
                         <iframe 
                             key={vncRestartKey}
                             ref={vncIframeRef}
-                            src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`}
+                            src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`}
                             allowFullScreen
                             className="w-full h-full border-none min-h-[250px]"
                             title="Live Browser Monitor"
