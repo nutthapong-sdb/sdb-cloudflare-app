@@ -6565,8 +6565,19 @@ export default function NTBCCFReportPage() {
 
         } catch (error) {
             if (error.message === 'UNAUTHENTICATED_CLOUDFLARE') {
+                // Surface the failure so batch/background callers stop instead of waiting forever.
+                window.__ntbcLastBatchReportError = 'UNAUTHENTICATED_CLOUDFLARE: ยังไม่ได้ล็อกอิน Cloudflare — กรุณาล็อกอินใน Live Browser Monitor ก่อน';
                 setIsVncModalOpen(true);
-                Swal.close();
+                Swal.fire({
+                    title: 'ยังไม่ได้ล็อกอิน Cloudflare',
+                    text: 'กรุณาล็อกอิน Cloudflare ในหน้าต่าง Live Browser Monitor ที่เปิดขึ้นมา แล้วกดสร้างรายงานอีกครั้ง',
+                    icon: 'warning',
+                    position: 'center',
+                    confirmButtonText: 'รับทราบ',
+                    confirmButtonColor: '#f59e0b',
+                    background: theme?.modalBg || '#111827',
+                    color: theme?.text || '#fff'
+                });
                 return false;
             }
             if (error.message === 'Force stopped by user') {
