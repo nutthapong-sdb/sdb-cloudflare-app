@@ -38,6 +38,21 @@ export default function ControlPage() {
     // (live monitor + captured/inapp/uploaded preview), 'console' (debug log). Splits what used
     // to be one very long two-column scroll into three focused views.
     const [activeMainTab, setActiveMainTab] = useState('setup');
+    const MAIN_TAB_STORAGE_KEY = 'ntbc_control_activeMainTab';
+    const MAIN_TAB_IDS = ['setup', 'capture', 'console'];
+    // Remember which section the user last opened. Restored after mount (not in the useState
+    // initializer) so the server-rendered HTML and the first client render still match.
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(MAIN_TAB_STORAGE_KEY);
+            if (saved && MAIN_TAB_IDS.includes(saved)) setActiveMainTab(saved);
+        } catch (e) { /* localStorage unavailable (private mode etc.) - keep default */ }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const selectMainTab = (tabId) => {
+        setActiveMainTab(tabId);
+        try { localStorage.setItem(MAIN_TAB_STORAGE_KEY, tabId); } catch (e) { /* ignore */ }
+    };
     const vncIframeRef = useRef(null);
     const [isVncMaximized, setIsVncMaximized] = useState(false);
 
@@ -2493,6 +2508,56 @@ export default function ControlPage() {
         }
     };
 
+    const renderStep1Card = () => (
+                    <div className={`bg-gradient-to-br from-gray-900/60 to-gray-950/80 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col gap-4 `}>
+                        <div className="flex items-center justify-between border-b border-gray-800/40 pb-3">
+                            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                                <Chrome className="w-4 h-4 text-rose-500" />
+                                Step 1: เปิด Debug Browser และไปที่หน้าแรกของ Cloudflare
+                            </h3>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                                stepStatus[0] === 'completed'
+                                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
+                                    : stepStatus[0] === 'running'
+                                    ? 'bg-rose-950/50 text-rose-400 border-rose-500/30 animate-pulse'
+                                    : 'bg-gray-900 text-gray-400 border-gray-800'
+                            }`}>
+                                {stepStatus[0] === 'completed' ? '● Connected' : stepStatus[0] === 'running' ? '● Launching...' : '● Ready'}
+                            </span>
+                        </div>
+                        
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                            กดปุ่มด้านขวาเพื่อสั่งให้ Remote Debugging Browser (พอร์ต 9222) ไปยังหน้าแรกของ Cloudflare (dash.cloudflare.com) ใช้เมื่อต้องการล็อกอินหรือกลับมาเริ่มที่หน้าแรกก่อนแคปภาพ ผลจะแสดงในกล่อง Live Browser Monitor ด้านล่าง
+                        </p>
+
+                        <div className="flex items-center justify-between pt-1">
+                            <span className="text-[11px] font-mono text-gray-500">
+                                Target: dash.cloudflare.com (หน้าแรก)
+                            </span>
+                            <button
+                                type="button"
+                                disabled={!mounted || stepStatus[0] === 'running'}
+                                onClick={() => runStep(0)}
+                                className={`flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer ${
+                                    stepStatus[0] === 'running' ? 'opacity-60 cursor-not-allowed' : ''
+                                }`}
+                            >
+                                {stepStatus[0] === 'running' ? (
+                                    <>
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                        Launching Browser...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                        Launch / Go to Cloudflare Home
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+    );
+
     const renderVncCard = () => (
         <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col mb-6">
             <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
@@ -2574,6 +2639,7 @@ export default function ControlPage() {
             </div>
 
             {/* VNC Card rendering when maximized */}
+            {isVncMaximized && renderStep1Card()}
             {isVncMaximized && renderVncCard()}
 
             {/* Main section tabs — keeps the page from being one long scroll: pick one view
@@ -2588,7 +2654,7 @@ export default function ControlPage() {
                     <button
                         key={tab.id}
                         type="button"
-                        onClick={() => setActiveMainTab(tab.id)}
+                        onClick={() => selectMainTab(tab.id)}
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer border ${
                             activeMainTab === tab.id
                                 ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-900/30'
@@ -2608,6 +2674,7 @@ export default function ControlPage() {
                 {/* Steps and Environment Section (Left) */}
                 <div className={`${activeMainTab === 'capture' ? 'lg:col-span-12' : 'hidden'} space-y-6 flex flex-col`}>
                     {/* Live Browser Monitor Card */}
+                    {!isVncMaximized && renderStep1Card()}
                     {!isVncMaximized && renderVncCard()}
 
                     {/* Consolidated Captured Screenshots (Step 2) */}
@@ -3385,54 +3452,7 @@ export default function ControlPage() {
                         </div>
                     </div>
 
-                    {/* Step 1: Launch Debug Browser Card */}
-                    <div className={`bg-gradient-to-br from-gray-900/60 to-gray-950/80 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col gap-4 ${activeMainTab === 'setup' ? '' : 'hidden'}`}>
-                        <div className="flex items-center justify-between border-b border-gray-800/40 pb-3">
-                            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                                <Chrome className="w-4 h-4 text-rose-500" />
-                                Step 1: Launch Debug Browser
-                            </h3>
-                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
-                                stepStatus[0] === 'completed'
-                                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
-                                    : stepStatus[0] === 'running'
-                                    ? 'bg-rose-950/50 text-rose-400 border-rose-500/30 animate-pulse'
-                                    : 'bg-gray-900 text-gray-400 border-gray-800'
-                            }`}>
-                                {stepStatus[0] === 'completed' ? '● Connected' : stepStatus[0] === 'running' ? '● Launching...' : '● Ready'}
-                            </span>
-                        </div>
-                        
-                        <p className="text-xs text-gray-400 leading-relaxed">
-                            เปิดหน้าต่าง Cloudflare Login บน Remote Debugging Browser (พอร์ต 9222) เพื่อให้สามารถล็อกอินหรือเข้าสู่ระบบจัดการ Cloudflare ได้โดยตรงผ่าน Live Browser Monitor
-                        </p>
 
-                        <div className="flex items-center justify-between pt-1">
-                            <span className="text-[11px] font-mono text-gray-500">
-                                Target: dash.cloudflare.com
-                            </span>
-                            <button
-                                type="button"
-                                disabled={!mounted || stepStatus[0] === 'running'}
-                                onClick={() => runStep(0)}
-                                className={`flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer ${
-                                    stepStatus[0] === 'running' ? 'opacity-60 cursor-not-allowed' : ''
-                                }`}
-                            >
-                                {stepStatus[0] === 'running' ? (
-                                    <>
-                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                        Launching Browser...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="w-3.5 h-3.5 fill-current" />
-                                        Launch / Go to Login
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
 
                 </div>
             </div>
