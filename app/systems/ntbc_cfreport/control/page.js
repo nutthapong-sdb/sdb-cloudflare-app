@@ -2510,9 +2510,9 @@ export default function ControlPage() {
         }
     };
 
-    // Single button that sends the debug browser to the Cloudflare home page (step 0 of runStep).
+    // Button row above the Live Browser Monitor: go to the Cloudflare home page (step 0 of runStep) + restart the monitor.
     const renderStep1Card = () => (
-        <div className="flex items-center justify-start mb-3">
+        <div className="flex items-center justify-start gap-3 mb-3 flex-wrap">
             <button
                 type="button"
                 disabled={!mounted || stepStatus[0] === 'running'}
@@ -2533,6 +2533,15 @@ export default function ControlPage() {
                     </>
                 )}
             </button>
+            <button
+                type="button"
+                onClick={handleRestartMonitor}
+                disabled={isRestartingVnc}
+                className={`flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700/60 rounded-xl text-xs font-bold transition-all shadow cursor-pointer ${isRestartingVnc ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRestartingVnc ? 'animate-spin' : ''}`} />
+                {isRestartingVnc ? 'Restarting Monitor...' : 'Restart Monitor'}
+            </button>
         </div>
     );
 
@@ -2550,21 +2559,6 @@ export default function ControlPage() {
             addLog('✅ รีสตาร์ท Live Browser Monitor แล้ว', 'success');
         }, 600);
     };
-
-    const renderVncRestartBar = () => (
-        <div className="flex items-center justify-end gap-3 mb-3">
-            <span className="text-[10px] text-gray-500 font-mono">จอ Live Browser Monitor ค้าง / ไม่ขึ้นภาพ? กดเพื่อเชื่อมต่อใหม่</span>
-            <button
-                type="button"
-                onClick={handleRestartMonitor}
-                disabled={isRestartingVnc}
-                className={`flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700/60 rounded-xl text-xs font-bold transition-all shadow cursor-pointer ${isRestartingVnc ? 'opacity-60 cursor-not-allowed' : ''}`}
-            >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRestartingVnc ? 'animate-spin' : ''}`} />
-                {isRestartingVnc ? 'Restarting Monitor...' : 'Restart Monitor'}
-            </button>
-        </div>
-    );
 
     const renderVncCard = () => (
         <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col mb-6">
@@ -2649,7 +2643,6 @@ export default function ControlPage() {
 
             {/* VNC Card rendering when maximized */}
             {isVncMaximized && renderStep1Card()}
-            {isVncMaximized && renderVncRestartBar()}
             {isVncMaximized && renderVncCard()}
 
             {/* Main section tabs — keeps the page from being one long scroll: pick one view
@@ -2685,7 +2678,6 @@ export default function ControlPage() {
                 <div className={`${activeMainTab === 'capture' ? 'lg:col-span-12' : 'hidden'} space-y-6 flex flex-col`}>
                     {/* Live Browser Monitor Card */}
                     {!isVncMaximized && renderStep1Card()}
-                    {!isVncMaximized && renderVncRestartBar()}
                     {!isVncMaximized && renderVncCard()}
 
                     {/* Consolidated Captured Screenshots (Step 2) */}
