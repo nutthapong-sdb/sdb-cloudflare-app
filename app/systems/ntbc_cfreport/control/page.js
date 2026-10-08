@@ -2510,54 +2510,30 @@ export default function ControlPage() {
         }
     };
 
+    // Single button that sends the debug browser to the Cloudflare home page (step 0 of runStep).
     const renderStep1Card = () => (
-                    <div className={`bg-gradient-to-br from-gray-900/60 to-gray-950/80 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col gap-4 `}>
-                        <div className="flex items-center justify-between border-b border-gray-800/40 pb-3">
-                            <h3 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                                <Chrome className="w-4 h-4 text-rose-500" />
-                                Step 1: เปิด Debug Browser และไปที่หน้าแรกของ Cloudflare
-                            </h3>
-                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
-                                stepStatus[0] === 'completed'
-                                    ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
-                                    : stepStatus[0] === 'running'
-                                    ? 'bg-rose-950/50 text-rose-400 border-rose-500/30 animate-pulse'
-                                    : 'bg-gray-900 text-gray-400 border-gray-800'
-                            }`}>
-                                {stepStatus[0] === 'completed' ? '● Connected' : stepStatus[0] === 'running' ? '● Launching...' : '● Ready'}
-                            </span>
-                        </div>
-                        
-                        <p className="text-xs text-gray-400 leading-relaxed">
-                            กดปุ่มด้านขวาเพื่อสั่งให้ Remote Debugging Browser (พอร์ต 9222) ไปยังหน้าแรกของ Cloudflare (dash.cloudflare.com) ใช้เมื่อต้องการล็อกอินหรือกลับมาเริ่มที่หน้าแรกก่อนแคปภาพ ผลจะแสดงในกล่อง Live Browser Monitor ด้านล่าง
-                        </p>
-
-                        <div className="flex items-center justify-between pt-1">
-                            <span className="text-[11px] font-mono text-gray-500">
-                                Target: dash.cloudflare.com (หน้าแรก)
-                            </span>
-                            <button
-                                type="button"
-                                disabled={!mounted || stepStatus[0] === 'running'}
-                                onClick={() => runStep(0)}
-                                className={`flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer ${
-                                    stepStatus[0] === 'running' ? 'opacity-60 cursor-not-allowed' : ''
-                                }`}
-                            >
-                                {stepStatus[0] === 'running' ? (
-                                    <>
-                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                        Launching Browser...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="w-3.5 h-3.5 fill-current" />
-                                        Launch / Go to Cloudflare Home
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
+        <div className="flex items-center justify-start mb-3">
+            <button
+                type="button"
+                disabled={!mounted || stepStatus[0] === 'running'}
+                onClick={() => runStep(0)}
+                className={`flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer ${
+                    stepStatus[0] === 'running' ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+            >
+                {stepStatus[0] === 'running' ? (
+                    <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        กำลังเปิดเบราว์เซอร์...
+                    </>
+                ) : (
+                    <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        ไปยังหน้าแรก Cloudflare
+                    </>
+                )}
+            </button>
+        </div>
     );
 
     // Re-creates the Live Browser Monitor (noVNC) iframe so it reconnects from scratch. This only
