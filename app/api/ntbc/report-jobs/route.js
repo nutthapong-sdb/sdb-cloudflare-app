@@ -38,6 +38,27 @@ export async function GET(request) {
             });
         }
 
+        if (action === 'screenshot') {
+            // Error screenshots are served through this route (not as a static /reports/*.png
+            // file): Next.js production only serves files that existed in public/ at build time,
+            // so a PNG written there at runtime always returned 404.
+            if (!id || !/^\d+$/.test(String(id))) {
+                return NextResponse.json({ success: false, message: 'Missing or invalid id' }, { status: 400 });
+            }
+            const shotName = `error_screenshot_ntbc_${id}.png`;
+            const candidates = [
+                path.join(process.cwd(), 'db', 'error_screenshots', shotName),
+                path.join(process.cwd(), 'public', 'reports', shotName), // legacy location
+            ];
+            const found = candidates.find(f => fs.existsSync(f));
+            if (!found) {
+                return NextResponse.json({ success: false, message: 'Screenshot not found (it may have been lost on a rebuild, or the page could not be captured when the job failed).' }, { status: 404 });
+            }
+            return new NextResponse(fs.readFileSync(found), {
+                headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }
+            });
+        }
+
         if (action === 'delete') {
             if (!id) {
                 return NextResponse.json({ success: false, message: 'Missing ID' }, { status: 400 });
@@ -59,6 +80,13 @@ export async function GET(request) {
                 }
             }
 
+            try {
+                const shotPath = path.join(process.cwd(), 'db', 'error_screenshots', `error_screenshot_ntbc_${String(id).replace(/\D/g, '')}.png`);
+                if (fs.existsSync(shotPath)) fs.unlinkSync(shotPath);
+            } catch (err) {
+                console.error('Failed to delete NTBC error screenshot:', err.message);
+            }
+
             await deleteNtbcReportJob(id);
             return NextResponse.json({ success: true, message: 'Job deleted successfully' });
         }
@@ -69,7 +97,9 @@ export async function GET(request) {
         }
 
         const jobs = await getNtbcReportJobs(userId);
-        return NextResponse.json({ success: true, data: jobs });
+        // Never send the stored user_session (it contains the user's Cloudflare API token) to the browser.
+        const safeJobs = jobs.map(({ user_session, ...rest }) => rest);
+        return NextResponse.json({ success: true, data: safeJobs });
     } catch (error) {
         console.error('API Error:', error.message);
         return NextResponse.json({ success: false, message: error.message }, { status: 500 });

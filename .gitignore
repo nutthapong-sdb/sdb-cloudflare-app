@@ -86,3 +86,4 @@ next-env.d.ts
 .fuse_hidden*
 /Claude outputs/
 /app/data/ntbc_templates.json
+/db/error_screenshots/
