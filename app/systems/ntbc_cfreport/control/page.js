@@ -1421,7 +1421,7 @@ export default function ControlPage() {
         // Initialize logs with first entry containing client-side timestamp
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'System initialized and ready.', type: 'info' }]);
         if (typeof window !== 'undefined') {
-            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`);
+            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`);
         }
         setMounted(true);
         init();
@@ -2553,7 +2553,7 @@ export default function ControlPage() {
         addLog('🔄 กำลังรีสตาร์ท Live Browser Monitor (เชื่อมต่อ VNC ใหม่)...', 'info');
         setVncUrl('');
         setTimeout(() => {
-            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`);
+            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`);
             setVncRestartKey(k => k + 1);
             setIsRestartingVnc(false);
             addLog('✅ รีสตาร์ท Live Browser Monitor แล้ว', 'success');
@@ -2590,7 +2590,7 @@ export default function ControlPage() {
                         <iframe 
                             key={vncRestartKey}
                             ref={vncIframeRef}
-                            src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`}
+                            src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`}
                             allowFullScreen
                             className="w-full h-full border-none min-h-[250px]"
                             title="Live Browser Monitor"

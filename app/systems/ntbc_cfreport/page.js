@@ -1347,7 +1347,7 @@ const VncModal = ({ isOpen, onClose, theme }) => {
     
     useEffect(() => {
         if (isOpen && typeof window !== 'undefined') {
-            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`);
+            setVncUrl(`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`);
         }
     }, [isOpen]);
 
@@ -1372,7 +1372,7 @@ const VncModal = ({ isOpen, onClose, theme }) => {
                         <div className="rounded border border-gray-700/60 bg-black relative flex flex-col h-full">
                             <div className="absolute top-0 left-0 bg-rose-600 text-white text-[10px] px-2 py-0.5 z-10 rounded-br-lg font-bold">Live Browser Monitor</div>
                             {vncUrl ? (
-                                <iframe src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor" />
+                                <iframe src={`${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify`} className="w-full flex-1 border-none" title="Live Browser Monitor" />
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-gray-500 italic text-sm">Loading Browser...</div>
                             )}
@@ -5939,7 +5939,7 @@ export default function NTBCCFReportPage() {
                     <div style="flex: 2.5; display: flex; flex-direction: column; gap: 10px;">
                         <div style="border: 1px solid #374151; border-radius: 8px; overflow: hidden; position: relative; height: 100%; min-height: 380px; background: #000;">
                             <div style="position: absolute; top: 0; left: 0; background: #e11d48; color: white; font-size: 10px; padding: 2px 6px; z-index: 10; border-bottom-right-radius: 6px; font-weight: bold;">Live Browser Monitor</div>
-                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=vnc/websockify" style="width: 100%; height: 100%; border: none;" title="Live Browser Monitor"></iframe>
+                            <iframe src="${window.location.origin}/vnc/?autoconnect=1&resize=scale&path=websockify" style="width: 100%; height: 100%; border: none;" title="Live Browser Monitor"></iframe>
                         </div>
                     </div>
                     <div style="flex: 1.5; display: flex; flex-direction: column; justify-content: flex-start; border-left: 1px solid #374151; padding-left: 16px; max-height: 480px; overflow-y: auto;">
