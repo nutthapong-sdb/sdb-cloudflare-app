@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createNtbcReportJob, getNtbcReportJobs, getNtbcReportJobById, deleteNtbcReportJob, hasActiveNtbcJob } from '@/lib/ntbc-db';
+import { createNtbcReportJob, getNtbcReportJobs, getNtbcReportJobById, deleteNtbcReportJob, hasActiveNtbcJob, getNextPendingNtbcJob } from '@/lib/ntbc-db';
+import { clampNtbcTimeout } from '@/lib/ntbc-report-steps';
 import { runBackgroundNtbcReportJob } from '@/lib/ntbc-report-worker';
 import fs from 'fs';
 import path from 'path';
@@ -97,6 +98,21 @@ export async function GET(request) {
         }
 
         const jobs = await getNtbcReportJobs(userId);
+
+        // If a crashed job was just marked failed, nothing would ever start the jobs queued
+        // behind it (the worker chains them only when it finishes normally) — start the next one.
+        if (!(await hasActiveNtbcJob())) {
+            const nextJob = await getNextPendingNtbcJob();
+            let nextSession = null;
+            try { nextSession = nextJob?.user_session ? JSON.parse(nextJob.user_session) : null; } catch (e) {}
+            if (nextJob && nextSession) {
+                console.log(`🤖 [NTBC] Resuming queue with pending job #${nextJob.id}...`);
+                runBackgroundNtbcReportJob(nextJob.id, new URL(request.url).origin, nextSession).catch(err => {
+                    console.error(`❌ NTBC background job ${nextJob.id} failed:`, err.message);
+                });
+            }
+        }
+
         // Never send the stored user_session (it contains the user's Cloudflare API token) to the browser.
         const safeJobs = jobs.map(({ user_session, ...rest }) => rest);
         return NextResponse.json({ success: true, data: safeJobs });
@@ -120,6 +136,7 @@ export async function POST(request) {
             endDate,
             templateId,
             exportThaiDigits,
+            timeoutMinutes,
             userSession
         } = body;
 
@@ -138,7 +155,8 @@ export async function POST(request) {
             endDate,
             templateId || 'default',
             exportThaiDigits || false,
-            userSession
+            userSession,
+            clampNtbcTimeout(timeoutMinutes)
         );
 
         // Serial-queue: NTBC captures share ONE authenticated debug browser tab, so only one

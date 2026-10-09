@@ -14,6 +14,7 @@ import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import BackgroundJobsModal from './BackgroundJobsModal';
 import SearchableDropdown from './SearchableDropdown';
+import { NTBC_REPORT_STEPS, NTBC_TIMEOUT_DEFAULT_MIN, NTBC_TIMEOUT_MIN_MIN, NTBC_TIMEOUT_MAX_MIN } from '@/lib/ntbc-report-steps';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -2267,6 +2268,9 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                 formData.append('title', filename.includes('template') ? 'Report Template' : 'Cloudflare Report');
                 if (marginsValue) formData.append('margins', marginsValue);
 
+                if (window.__ntbcProgress) {
+                    window.__ntbcProgress = { ...window.__ntbcProgress, detail: 'แปลงรายงานเป็นไฟล์ Word', updatedAt: Date.now() };
+                }
                 const res = await fetch('/api/export-docx', { method: 'POST', body: formData });
                 if (!res.ok) throw new Error(`export-docx failed: HTTP ${res.status}`);
                 const arrayBuffer = await res.arrayBuffer();
@@ -3097,6 +3101,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
     const [exportThaiDigits, setExportThaiDigits] = useState(false);
+    const [timeoutMinutes, setTimeoutMinutes] = useState(NTBC_TIMEOUT_DEFAULT_MIN);
     
     // Global Queue State
     const [batchQueue, setBatchQueue] = useState([]);
@@ -3321,6 +3326,20 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                     <span>Export using Thai Digits (เลขไทย)</span>
                                 </label>
                             </div>
+                            <div className="flex items-center gap-2 mt-2 mb-1" title="ถ้าสร้างรายงานนานเกินเวลานี้ งานจะถูกหยุดและแจ้งว่าค้างอยู่ที่ขั้นไหน">
+                                <label htmlFor="batch-timeout-minutes" className={`text-xs ${t.subText}`}>Time limit per zone (นาที):</label>
+                                <input
+                                    id="batch-timeout-minutes"
+                                    type="number"
+                                    min={NTBC_TIMEOUT_MIN_MIN}
+                                    max={NTBC_TIMEOUT_MAX_MIN}
+                                    step={5}
+                                    value={timeoutMinutes}
+                                    onChange={e => setTimeoutMinutes(e.target.value)}
+                                    onBlur={e => setTimeoutMinutes(Math.min(NTBC_TIMEOUT_MAX_MIN, Math.max(NTBC_TIMEOUT_MIN_MIN, parseInt(e.target.value, 10) || NTBC_TIMEOUT_DEFAULT_MIN)))}
+                                    className={`w-20 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`}
+                                />
+                            </div>
                             <div className="flex items-center gap-1.5 mt-2 justify-end">
                                 <span className={`text-[10px] ${t.subText} font-bold mr-1 uppercase`}>Quick:</span>
                                 {[
@@ -3388,7 +3407,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
                 <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
                     <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
-                    <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId, [], null, false, [], exportThaiDigits); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
+                    <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId, [], null, false, [], exportThaiDigits, timeoutMinutes); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
                         <FileText className="w-3 h-3" /> Start Processing Queue
                     </button>
                 </div>
@@ -5592,7 +5611,7 @@ export default function NTBCCFReportPage() {
         }
     };
 
-    const handleCaptureScreenshotConfirm = async (batchQueue, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false) => {
+    const handleCaptureScreenshotConfirm = async (batchQueue, batchStartDate, batchEndDate, templateId = 'default', promotedHosts = [], zoneId = null, exportSeparated = false, batchModalZones = [], exportThaiDigits = false, timeoutMinutes = NTBC_TIMEOUT_DEFAULT_MIN) => {
         setUseThaiDigits(exportThaiDigits);
         if(!batchQueue || batchQueue.length === 0) { setIsBatchModalOpen(false); return; }
 
@@ -5649,6 +5668,7 @@ export default function NTBCCFReportPage() {
                             endDate: batchEndDate,
                             templateId: templateId,
                             exportThaiDigits: exportThaiDigits,
+                            timeoutMinutes: timeoutMinutes,
                             userSession: currentUser
                         })
                     });
@@ -5848,6 +5868,24 @@ export default function NTBCCFReportPage() {
         const errorMap = {};
         const capturedImagesMap = {};
 
+        // Mirror step state onto window so the background worker can show which step is
+        // running (and where it failed) in the job status.
+        let stepDetail = '';
+        const publishProgress = () => {
+            if (typeof window === 'undefined') return;
+            window.__ntbcProgress = {
+                zone: domainName,
+                steps: NTBC_REPORT_STEPS.map(s => ({ key: s.key, label: s.label, status: statusMap[s.key] || 'pending', error: errorMap[s.key] || null })),
+                detail: stepDetail,
+                updatedAt: Date.now()
+            };
+        };
+        const setStepDetail = (detail) => {
+            stepDetail = detail;
+            publishProgress();
+        };
+        publishProgress();
+
         const showImageLightbox = (imgSrc, title) => {
             if (!imgSrc) return;
             let overlay = document.getElementById('ntbc-live-image-lightbox');
@@ -5943,27 +5981,7 @@ export default function NTBCCFReportPage() {
                         </div>
                     </div>
                     <div style="flex: 1.5; display: flex; flex-direction: column; justify-content: flex-start; border-left: 1px solid #374151; padding-left: 16px; max-height: 480px; overflow-y: auto;">
-                        ${renderLine('launch', '1. Start debug browser')}
-                        ${renderLine('domains', '2. Capture Domains Overview')}
-                        ${renderLine('dns', '3. Capture DNS Records')}
-                        ${renderLine('bot', '4. Capture Bot Management')}
-                        ${renderLine('securityLevel', '5. Capture Security Level & BIC')}
-                        ${renderLine('sslOverview', '6. Capture SSL/TLS Overview')}
-                        ${renderLine('sslEdge', '7. Capture Min TLS & TLS 1.3')}
-                        ${renderLine('traffic', '8. Capture HTTP Traffic')}
-                        ${renderLine('trafficCountries', '9. Capture Traffic by Country')}
-                        ${renderLine('firewall', '10. Capture Firewall Events')}
-                        ${renderLine('topEvents', '11. Capture Top Events by Source')}
-                        ${renderLine('rules', '12. Capture Security Rules')}
-                        ${renderLine('rateLimiting', '13. Capture Rate Limiting Rules')}
-                        ${renderLine('managedRules', '14. Capture Managed WAF Rules')}
-                        ${renderLine('ipAccess', '15. Capture IP Access Rules')}
-                        ${renderLine('zoneLockdown', '16. Capture Zone Lockdown')}
-                        ${renderLine('argo', '17. Capture Argo Routing')}
-                        ${renderLine('speed', '18. Capture Speed Test')}
-                        ${renderLine('speedMobile', '19. Capture Speed Test Mobile')}
-                        ${renderLine('stats', '20. Fetch CF Statistics')}
-                        ${renderLine('report', '21. Generate & Download Report')}
+                        ${NTBC_REPORT_STEPS.map(step => renderLine(step.key, step.label)).join('')}
                         <div style="text-align: left; margin-top: 10px;">
                             <button id="force-stop-btn" style="background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; width: 100%;">
                                 Force Stop
@@ -5999,6 +6017,8 @@ export default function NTBCCFReportPage() {
         });
 
         const updateProgress = () => {
+            stepDetail = '';
+            publishProgress();
             if (isCancelled || userForcedStop) return;
             Swal.update({
                 title: totalZones > 1 ? `Generating Report... (${currentIndex + 1}/${totalZones}) [${domainName}]` : 'Generating Report & Capturing Screenshots...',
@@ -6098,6 +6118,7 @@ export default function NTBCCFReportPage() {
                     updateProgress();
                     try {
                         checkCancelled();
+                        setStepDetail('เปิดหน้า Cloudflare');
                         const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(url)}`);
                         const data = await res.json();
                         checkCancelled();
@@ -6105,12 +6126,14 @@ export default function NTBCCFReportPage() {
                             throw new Error('UNAUTHENTICATED_CLOUDFLARE');
                         }
                         if (data.success) {
+                            setStepDetail('รอหน้าเว็บโหลด');
                             const loops = Math.ceil(DELAY_CONFIG.NAV_STABILIZE_MS / DELAY_CONFIG.SHORT_RETRY_MS);
                             for (let i = 0; i < loops; i++) {
                                 checkCancelled();
                                 await new Promise(r => setTimeout(r, DELAY_CONFIG.SHORT_RETRY_MS));
                             }
                             checkCancelled();
+                            setStepDetail('ถ่ายภาพหน้าจอ');
                             const captureRes = await fetch(`/api/ntbc-capture?type=${type}${getCoordParams(type)}`);
                             const captureData = await captureRes.json();
                             if (captureRes.status === 401 || captureData.errorType === 'unauthenticated') {
@@ -6491,6 +6514,11 @@ export default function NTBCCFReportPage() {
                     console.error('Speed test capture failed:', err);
                     statusMap.speed = 'warn';
                 }
+                if (statusMap.speedMobile !== 'success') {
+                    // Don't leave step 19 silently "pending" — the job status lists it as a warning.
+                    statusMap.speedMobile = 'warn';
+                    errorMap.speedMobile = 'Speed Test (Mobile) was not captured — the Cloudflare speed test run could not be triggered or switched to Mobile';
+                }
                 updateProgress();
             } else {
                 statusMap.launch = 'success';
@@ -6537,6 +6565,7 @@ export default function NTBCCFReportPage() {
             updateProgress();
 
             // Load template
+            setStepDetail('โหลด template');
             const domainTmpl = await loadStaticTemplate(templateId);
             checkCancelled();
             
@@ -6554,6 +6583,7 @@ export default function NTBCCFReportPage() {
 
             statusMap.report = 'success';
             updateProgress();
+            setStepDetail('จัดหน้ารายงานและสร้างไฟล์ Word');
 
             isFinished = true;
 
@@ -6582,6 +6612,7 @@ export default function NTBCCFReportPage() {
             }
             if (error.message === 'Force stopped by user') {
                 console.log('Workflow force stopped by user.');
+                window.__ntbcLastBatchReportError = 'Force stopped by user';
                 Swal.fire({
                     title: 'Cancelled',
                     text: 'Report generation was stopped.',
@@ -6597,7 +6628,10 @@ export default function NTBCCFReportPage() {
             }
             console.error('Workflow error:', error);
             statusMap.report = 'error';
+            errorMap.report = error.message || 'Unknown error';
             updateProgress();
+            // Let the background worker fail right away (with the reason) instead of waiting for its time limit.
+            window.__ntbcLastBatchReportError = error.message || 'An error occurred during report generation.';
             Swal.fire({
                 title: 'Workflow Failed',
                 text: error.message || 'An error occurred during report generation.',

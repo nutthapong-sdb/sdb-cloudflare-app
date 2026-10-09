@@ -1,12 +1,19 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, RefreshCw, Trash2, Download, AlertCircle, CheckCircle, Clock, FileText } from 'lucide-react';
+import { X, RefreshCw, Trash2, Download, AlertCircle, CheckCircle, Clock, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import Swal from 'sweetalert2';
+
+const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', running: '🔄', pending: '⚪' };
+
+const parseStepLog = (job) => {
+    try { return job.step_log ? JSON.parse(job.step_log) : null; } catch (e) { return null; }
+};
 
 export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUser }) {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [expandedJobs, setExpandedJobs] = useState({});
     const intervalRef = useRef(null);
 
     const fetchJobs = async () => {
@@ -127,6 +134,11 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                         <div className="space-y-4">
                             {jobs.map(job => {
                                 const subdomains = JSON.parse(job.subdomains || '[]');
+                                const stepLog = parseStepLog(job);
+                                const steps = stepLog?.steps || [];
+                                const warnCount = steps.filter(s => s.status === 'warn' || s.status === 'error').length;
+                                // Expanded by default while running or after a failure; click to toggle.
+                                const expanded = expandedJobs[job.id] ?? (job.status === 'processing' || job.status === 'failed');
 
                                 return (
                                     <div
@@ -173,10 +185,47 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                                 <span><b>Created:</b> {new Date(job.created_at).toLocaleString('th-TH')}</span>
                                             </div>
 
-                                            {(job.status === 'processing' || job.status === 'failed') && job.status_message && (
-                                                <p className={`text-[11px] font-medium font-mono ${job.status === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>
+                                            {job.status === 'processing' && job.status_message && (
+                                                <p className="text-[11px] font-medium font-mono text-blue-400">
                                                     &gt; {job.status_message}
                                                 </p>
+                                            )}
+
+                                            {job.status === 'failed' && (
+                                                <div className="mt-1 p-2 rounded-lg bg-red-950/30 border border-red-900/40 text-[11px] space-y-0.5">
+                                                    <p className="text-red-300"><b>ล้มเหลวตอน:</b> {job.failed_step || '-'}</p>
+                                                    <p className="text-red-400 break-words"><b>สาเหตุ:</b> {job.error_message || job.status_message || 'ไม่ทราบสาเหตุ'}</p>
+                                                </div>
+                                            )}
+
+                                            {job.status === 'completed' && warnCount > 0 && (
+                                                <p className="text-[11px] text-yellow-400">⚠️ สร้างเสร็จ แต่มี {warnCount} ขั้นที่ถ่ายภาพไม่สำเร็จ (ดูรายละเอียดด้านล่าง)</p>
+                                            )}
+
+                                            {steps.length > 0 && (
+                                                <div className="mt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedJobs(prev => ({ ...prev, [job.id]: !expanded }))}
+                                                        className="text-[11px] text-gray-400 hover:text-gray-200 flex items-center gap-1"
+                                                    >
+                                                        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                                        รายละเอียดแต่ละขั้น ({steps.filter(s => s.status === 'success').length}/{steps.length} สำเร็จ)
+                                                    </button>
+                                                    {expanded && (
+                                                        <ul className="mt-1 ml-4 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-gray-400">
+                                                            {steps.map(step => (
+                                                                <li key={step.key} className="min-w-0">
+                                                                    <span className={step.status === 'running' ? 'text-blue-400 font-semibold' : ''}>
+                                                                        {STEP_ICON[step.status] || '⚪'} {step.label}
+                                                                        {step.status === 'running' && stepLog?.detail ? ` — ${stepLog.detail}` : ''}
+                                                                    </span>
+                                                                    {step.error && <div className="ml-5 text-red-400 break-words">{step.error}</div>}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
                                             )}
 
                                             {job.status === 'processing' && (

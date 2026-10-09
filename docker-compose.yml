@@ -40,7 +40,10 @@ services:
     environment:
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
-      - CHROME_CUSTOM_ARGS=--window-size=1920,1080 --window-position=0,0 --start-maximized --no-first-run --force-device-scale-factor=1
+      # The background report worker drives its own tab while the Cloudflare tab is in front.
+      # Without the --disable-background* flags Chrome throttles the hidden worker tab's timers
+      # (1s -> ~1 min), so the 21 steps and the Word export crawl until the job times out.
+      - CHROME_CUSTOM_ARGS=--window-size=1920,1080 --window-position=0,0 --start-maximized --no-first-run --force-device-scale-factor=1 --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows
     volumes:
       - ./chrome-config:/config
       - ./docker-chrome-policy:/etc/chromium/policies:ro
