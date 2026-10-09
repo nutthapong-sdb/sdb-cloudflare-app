@@ -6399,125 +6399,134 @@ export default function NTBCCFReportPage() {
                     safeSetItem('control_capturedArgoScreenshot', argoData.image);
                 }
 
-                // Step 8: Speed Test Desktop + Mobile
+                // Step 18/19: Speed Test Desktop + Mobile (same flow as the Control page's speed capture)
                 checkCancelled();
                 statusMap.speed = 'running';
                 updateProgress();
+                let speedProblem = null; // why the Mobile result could not be captured
                 try {
+                    const scrapeSpeed = async (payload) => {
+                        const r = await fetch('/api/scrape', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apiToken: currentUser?.cloudflare_api_token, ...payload })
+                        });
+                        return r.json();
+                    };
+
+                    setStepDetail('เปิดหน้า Speed Test');
                     const targetSpeedUrl = `https://dash.cloudflare.com/${activeAccountId}/${domainName}/speed/test/browser`;
                     const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetSpeedUrl)}`);
                     const data = await res.json();
                     checkCancelled();
-                    if (data.success) {
-                        const loops = Math.ceil(DELAY_CONFIG.NAV_STABILIZE_MS / DELAY_CONFIG.SHORT_RETRY_MS);
-                        for (let i = 0; i < loops; i++) {
-                            checkCancelled();
-                            await new Promise(r => setTimeout(r, DELAY_CONFIG.SHORT_RETRY_MS));
-                        }
-                        
-                        // Trigger speed test run
-                        const runRes = await fetch('/api/scrape', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                action: 'run-speed-test',
-                                apiToken: currentUser?.cloudflare_api_token,
-                                domainVal: domainName
-                            })
-                        });
-                        const runData = await runRes.json();
+                    if (res.status === 401 || data.errorType === 'unauthenticated') {
+                        throw new Error('UNAUTHENTICATED_CLOUDFLARE');
+                    }
+                    if (!data.success) throw new Error(data.message || data.error || 'Failed to open the Speed Test page');
+                    for (let i = 0; i < Math.ceil(DELAY_CONFIG.NAV_STABILIZE_MS / DELAY_CONFIG.SHORT_RETRY_MS); i++) {
                         checkCancelled();
-                        if (runData.success) {
-                            // Fast Polling loop (Max 60 seconds, check every 3 seconds)
-                            let isSuccess = false;
-                            const maxAttempts = DELAY_CONFIG.SPEED_TEST_MAX_ATTEMPTS;
-                            for (let retry = 0; retry < maxAttempts; retry++) {
-                                checkCancelled();
-                                const checkRes = await fetch('/api/scrape', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        action: 'check-speed-results',
-                                        apiToken: currentUser?.cloudflare_api_token
-                                    })
-                                });
-                                const checkData = await checkRes.json();
-                                checkCancelled();
-                                if (checkData.success && checkData.found) {
-                                    isSuccess = true;
-                                    break;
-                                }
-                                // Wait 3 seconds before next check
-                                for (let s = 0; s < 3; s++) {
-                                    checkCancelled();
-                                    await new Promise(r => setTimeout(r, 1000));
-                                }
-                            }
+                        await new Promise(r => setTimeout(r, DELAY_CONFIG.SHORT_RETRY_MS));
+                    }
 
-                            // Capture Speed Desktop
-                            checkCancelled();
-                            const captureRes = await fetch(`/api/ntbc-capture?type=speed${getCoordParams('speed')}`);
-                            const captureData = await captureRes.json();
-                            let desktopSpeedImg = null;
-                            if (captureData.success && captureData.image) {
-                                desktopSpeedImg = captureData.image;
-                                capturedImagesMap.speed = captureData.image;
-                                setCapturedSpeedImage(captureData.image);
-                                safeSetItem('control_capturedSpeedScreenshot', captureData.image);
-                            }
+                    setStepDetail('สั่งรัน Speed Test');
+                    const runData = await scrapeSpeed({ action: 'run-speed-test', domainVal: domainName });
+                    checkCancelled();
+                    if (!runData.success) {
+                        // Keep going: an earlier successful result may still be usable.
+                        console.warn('Speed test run not started:', runData.error || runData.message);
+                        speedProblem = `Cloudflare did not start a new speed test: ${runData.error || runData.message || 'unknown reason'}`;
+                    }
 
-                            // Capture Speed Mobile
-                            if (desktopSpeedImg) {
-                                checkCancelled();
-                                const mobileClickRes = await fetch('/api/scrape', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        action: 'click-speed-mobile',
-                                        apiToken: currentUser?.cloudflare_api_token
-                                    })
-                                });
-                                const mobileClickData = await mobileClickRes.json();
-                                checkCancelled();
-                                if (mobileClickData.success) {
-                                    const captureMobileRes = await fetch(`/api/ntbc-capture?type=speed-mobile${getCoordParams('speed-mobile')}`);
-                                    const captureMobileData = await captureMobileRes.json();
-                                    if (captureMobileData.success && captureMobileData.image) {
-                                        capturedImagesMap.speedMobile = captureMobileData.image;
-                                        setCapturedSpeedMobileImage(captureMobileData.image);
-                                        safeSetItem('control_capturedSpeedMobileScreenshot', captureMobileData.image);
-                                        statusMap.speedMobile = 'success';
-                                    }
-                                }
-                            }
-
-                            statusMap.speed = 'success';
-                        } else {
-                            // Fallback capture Speed Desktop
-                            checkCancelled();
-                            const captureRes = await fetch(`/api/ntbc-capture?type=speed${getCoordParams('speed')}`);
-                            const captureData = await captureRes.json();
-                            if (captureData.success && captureData.image) {
-                                capturedImagesMap.speed = captureData.image;
-                                setCapturedSpeedImage(captureData.image);
-                                safeSetItem('control_capturedSpeedScreenshot', captureData.image);
-                                statusMap.speed = 'success';
-                            } else {
-                                statusMap.speed = 'warn';
-                            }
+                    // Poll until Cloudflare shows a finished result (check-speed-results then opens
+                    // the result page, which is where the Desktop/Mobile tabs live).
+                    let onResultPage = false;
+                    for (let attempt = 1; attempt <= DELAY_CONFIG.SPEED_TEST_MAX_ATTEMPTS; attempt++) {
+                        checkCancelled();
+                        setStepDetail(`รอผล Speed Test (${attempt}/${DELAY_CONFIG.SPEED_TEST_MAX_ATTEMPTS})`);
+                        const checkData = await scrapeSpeed({ action: 'check-speed-results', domainVal: domainName });
+                        checkCancelled();
+                        if (checkData.success && checkData.status === 'completed') {
+                            onResultPage = true;
+                            speedProblem = null;
+                            break;
                         }
+                        // Right after "Run", the table can still show the previous (failed) row —
+                        // only trust an error once the new test has had a few seconds to appear.
+                        if (checkData.status === 'error' && attempt >= 3) {
+                            if (checkData.hasPreviousResult && checkData.previousResultUrl) {
+                                await scrapeSpeed({ action: 'view-previous-speed-result', resultUrl: checkData.previousResultUrl });
+                                onResultPage = true;
+                                speedProblem = null;
+                                errorMap.speed = `Latest Cloudflare test failed — used the last successful result (score ${checkData.previousScore || '-'})`;
+                            } else {
+                                // Open the latest (failed) result to read Cloudflare's own reason,
+                                // e.g. "your test URL ... was redirected to a different domain".
+                                let reason = checkData.error || 'Test failed';
+                                try {
+                                    await scrapeSpeed({ action: 'view-previous-speed-result' });
+                                    const detail = await scrapeSpeed({ action: 'check-speed-results', domainVal: domainName });
+                                    if (detail.status === 'error' && detail.isResultPage && detail.error) reason = detail.error;
+                                } catch (e) {}
+                                speedProblem = `Cloudflare ทดสอบความเร็วของ ${domainName} ไม่สำเร็จ และไม่เคยมีผลที่สำเร็จมาก่อน จึงไม่มีภาพ Mobile — เหตุผลจาก Cloudflare: ${reason}`;
+                            }
+                            break;
+                        }
+                        for (let s = 0; s < 3; s++) {
+                            checkCancelled();
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                    }
+                    if (!onResultPage && !speedProblem) {
+                        speedProblem = `Cloudflare speed test result was not ready after ${DELAY_CONFIG.SPEED_TEST_MAX_ATTEMPTS * 3} seconds`;
+                    }
+
+                    // Desktop: the result page if we reached it, otherwise the Speed Test overview.
+                    setStepDetail('ถ่ายภาพ Speed Test (Desktop)');
+                    const captureRes = await fetch(`/api/ntbc-capture?type=speed${getCoordParams('speed')}`);
+                    const captureData = await captureRes.json();
+                    if (captureData.success && captureData.image) {
+                        capturedImagesMap.speed = captureData.image;
+                        setCapturedSpeedImage(captureData.image);
+                        safeSetItem('control_capturedSpeedScreenshot', captureData.image);
+                        statusMap.speed = 'success';
                     } else {
                         statusMap.speed = 'warn';
+                        errorMap.speed = captureData.error || captureData.message || 'Failed to capture Speed Test (Desktop)';
+                    }
+
+                    // Mobile: only exists on a result page.
+                    if (onResultPage) {
+                        statusMap.speedMobile = 'running';
+                        updateProgress();
+                        setStepDetail('สลับไปแท็บ Mobile');
+                        const mobileClickData = await scrapeSpeed({ action: 'click-speed-mobile' });
+                        checkCancelled();
+                        if (mobileClickData.success) {
+                            setStepDetail('ถ่ายภาพ Speed Test (Mobile)');
+                            const captureMobileRes = await fetch(`/api/ntbc-capture?type=speed-mobile${getCoordParams('speed-mobile')}`);
+                            const captureMobileData = await captureMobileRes.json();
+                            if (captureMobileData.success && captureMobileData.image) {
+                                capturedImagesMap.speedMobile = captureMobileData.image;
+                                setCapturedSpeedMobileImage(captureMobileData.image);
+                                safeSetItem('control_capturedSpeedMobileScreenshot', captureMobileData.image);
+                                statusMap.speedMobile = 'success';
+                            } else {
+                                speedProblem = captureMobileData.error || captureMobileData.message || 'Failed to capture Speed Test (Mobile)';
+                            }
+                        } else {
+                            speedProblem = 'Could not find the "Mobile" tab on the Cloudflare speed test result page';
+                        }
                     }
                 } catch (err) {
-                    if (err.message === 'Force stopped by user') throw err;
+                    if (err.message === 'UNAUTHENTICATED_CLOUDFLARE' || err.message === 'Force stopped by user') throw err;
                     console.error('Speed test capture failed:', err);
                     statusMap.speed = 'warn';
+                    errorMap.speed = err.message || 'Unknown error during Speed Test';
+                    speedProblem = speedProblem || err.message;
                 }
                 if (statusMap.speedMobile !== 'success') {
-                    // Don't leave step 19 silently "pending" — the job status lists it as a warning.
                     statusMap.speedMobile = 'warn';
-                    errorMap.speedMobile = 'Speed Test (Mobile) was not captured — the Cloudflare speed test run could not be triggered or switched to Mobile';
+                    errorMap.speedMobile = speedProblem || 'Speed Test (Mobile) was not captured';
                 }
                 updateProgress();
             } else {

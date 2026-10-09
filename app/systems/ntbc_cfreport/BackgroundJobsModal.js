@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, RefreshCw, Trash2, Download, AlertCircle, CheckCircle, Clock, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { showImportantNotice, escapeHtml } from '@/app/utils/importantNotice';
 
 const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', running: '🔄', pending: '⚪' };
 
@@ -86,6 +87,36 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
         } catch (e) {
             Swal.fire('Error', e.message, 'error');
         }
+    };
+
+    // A report with skipped/failed steps is missing content — make the user read why before
+    // they get the file (centered modal, locked for 5 s).
+    const handleDownload = async (e, job, warnSteps) => {
+        if (warnSteps.length === 0) return; // plain link download
+        e.preventDefault();
+        const items = warnSteps.map(s => `
+            <li style="margin-bottom:8px;">
+                <b>${escapeHtml(s.label)}</b>
+                ${s.error ? `<div style="color:#fca5a5;font-size:12px;margin-top:2px;">${escapeHtml(s.error)}</div>` : ''}
+            </li>`).join('');
+        const ok = await showImportantNotice({
+            title: 'รายงานนี้มีบางส่วนไม่ครบ',
+            html: `
+                <div style="text-align:left;font-size:13px;line-height:1.5;">
+                    <p style="margin-bottom:10px;">รายงาน <b>${escapeHtml(job.zone_name)}</b> สร้างเสร็จแล้ว แต่มี ${warnSteps.length} ขั้นที่ไม่สำเร็จ ข้อมูลส่วนนี้ในไฟล์อาจว่างหรือไม่ใช่ข้อมูลล่าสุด:</p>
+                    <ul style="list-style:disc;padding-left:20px;">${items}</ul>
+                    <p style="margin-top:10px;color:#9ca3af;font-size:12px;">กรุณาตรวจสอบส่วนนี้ในไฟล์ก่อนส่งให้ลูกค้า</p>
+                </div>`,
+            confirmText: 'รับทราบและดาวน์โหลด',
+            cancelText: 'ยกเลิก',
+        });
+        if (!ok) return;
+        const a = document.createElement('a');
+        a.href = `/api/ntbc/report-jobs?action=download&fileName=${job.file_name}`;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
     };
 
     if (!isOpen) return null;
@@ -243,6 +274,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                                 <a
                                                     href={`/api/ntbc/report-jobs?action=download&fileName=${job.file_name}`}
                                                     download
+                                                    onClick={(e) => handleDownload(e, job, steps.filter(s => s.status === 'warn' || s.status === 'error'))}
                                                     className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
                                                 >
                                                     <Download className="w-3.5 h-3.5" /> Download

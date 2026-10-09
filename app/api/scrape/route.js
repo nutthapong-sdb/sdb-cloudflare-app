@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectChrome } from '@/lib/chrome-helper';
+import { connectChrome, findCloudflarePage } from '@/lib/chrome-helper';
 import axios from 'axios';
 import {
     getLatestSyncDate,
@@ -2005,31 +2005,53 @@ export async function POST(request) {
                     console.log('IP Access Rules fetch failed');
                 }
 
-                // Fetch Custom Rules (Firewall Rules)
+                // Fetch Custom Rules. Current WAF custom rules live in the zone's
+                // http_request_firewall_custom ruleset; the legacy /firewall/rules API (deprecated,
+                // returns nothing for migrated zones) is kept only as a fallback.
                 let customRulesData = {
                     status: 'None',
                     rules: []
                 };
                 try {
-                    const customRulesRes = await axios.get(
-                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/rules?per_page=100`,
+                    const customRulesetRes = await axios.get(
+                        `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets/phases/http_request_firewall_custom/entrypoint`,
                         { headers }
-                    ).catch(() => null);
+                    ).catch(err => {
+                        // 404 = zone has no custom rules ruleset yet.
+                        if (err.response?.status !== 404) {
+                            console.log('Custom Rules ruleset fetch failed (api):', err.response?.status, err.response?.data?.errors?.[0]?.message);
+                        }
+                        return null;
+                    });
 
-                    if (customRulesRes && customRulesRes.data.result) {
-                        const rules = customRulesRes.data.result;
-                        // Check if ANY rule is active (not paused)
-                        const anyActive = rules.some(r => !r.paused);
-                        customRulesData.status = rules.length > 0 ? (anyActive ? 'Enabled' : 'Disabled') : 'None';
-
-                        customRulesData.rules = rules.map(r => ({
+                    (customRulesetRes?.data?.result?.rules || []).forEach(r => {
+                        customRulesData.rules.push({
                             description: r.description || 'No Description',
                             action: r.action || 'unknown',
-                            status: r.paused ? 'Disabled' : 'Enabled'
-                        }));
+                            status: r.enabled === false ? 'Disabled' : 'Enabled'
+                        });
+                    });
+
+                    if (customRulesData.rules.length === 0) {
+                        const legacyRes = await axios.get(
+                            `${CLOUDFLARE_API_BASE}/zones/${zoneId}/firewall/rules?per_page=100`,
+                            { headers }
+                        ).catch(() => null);
+                        (legacyRes?.data?.result || []).forEach(r => {
+                            customRulesData.rules.push({
+                                description: r.description || 'No Description',
+                                action: r.action || 'unknown',
+                                status: r.paused ? 'Disabled' : 'Enabled'
+                            });
+                        });
+                    }
+
+                    if (customRulesData.rules.length > 0) {
+                        const anyActive = customRulesData.rules.some(r => r.status === 'Enabled');
+                        customRulesData.status = anyActive ? 'Enabled' : 'Disabled';
                     }
                 } catch (err) {
-                    console.log('Custom Rules fetch failed');
+                    console.log('Custom Rules fetch failed', err.message);
                 }
 
                 // Fetch Rate Limiting Rules (Legacy + Rulesets)
@@ -2611,7 +2633,7 @@ export async function POST(request) {
             console.log(`Running speed test for domainVal: ${domainVal}`);
             const browser = await connectChrome();
             const pages = await browser.pages();
-            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            let page = findCloudflarePage(pages);
             if (!page) {
                 console.log('No active browser tab found. Automatically opening new page...');
                 page = await browser.newPage();
@@ -2751,7 +2773,7 @@ export async function POST(request) {
             const domainVal = body.domainVal || '';
             const browser = await connectChrome();
             const pages = await browser.pages();
-            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            let page = findCloudflarePage(pages);
             if (!page) {
                 await browser.disconnect();
                 return NextResponse.json({ success: false, error: 'No active browser page found.' }, { status: 400 });
@@ -2927,7 +2949,7 @@ export async function POST(request) {
         else if (action === 'view-previous-speed-result') {
             const browser = await connectChrome();
             const pages = await browser.pages();
-            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            let page = findCloudflarePage(pages);
             if (!page) {
                 await browser.disconnect();
                 return NextResponse.json({ success: false, error: 'No active browser page found.' }, { status: 400 });
@@ -2959,7 +2981,7 @@ export async function POST(request) {
         else if (action === 'click-speed-mobile') {
             const browser = await connectChrome();
             const pages = await browser.pages();
-            let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+            let page = findCloudflarePage(pages);
             if (!page) {
                 await browser.disconnect();
                 return NextResponse.json({ success: false, error: 'No active browser page found.' }, { status: 400 });

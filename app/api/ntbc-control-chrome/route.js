@@ -1,4 +1,4 @@
-import { connectChrome } from '@/lib/chrome-helper';
+import { connectChrome, findCloudflarePage } from '@/lib/chrome-helper';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +20,7 @@ export async function GET(request) {
         const browser = await connectChrome();
         const pages = await browser.pages();
         // Find page with cloudflare, otherwise use the first page
-        let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+        let page = findCloudflarePage(pages);
 
         if (!page) {
             console.log('No active browser tab found. Automatically opening new page...');

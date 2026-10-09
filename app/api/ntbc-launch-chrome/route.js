@@ -1,5 +1,5 @@
 import { exec } from 'child_process';
-import { connectChrome } from '@/lib/chrome-helper';
+import { connectChrome, findCloudflarePage } from '@/lib/chrome-helper';
 import axios from 'axios';
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +37,7 @@ export async function GET(request) {
                     console.log('Chrome is already running on port 9222. Navigating active debugging session to Cloudflare...');
                     const browser = await connectChrome();
                     const pages = await browser.pages();
-                    let page = pages.find(p => p.url().includes('cloudflare.com')) || pages[0];
+                    let page = findCloudflarePage(pages);
                     if (!page) {
                         page = await browser.newPage();
                     }
