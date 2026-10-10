@@ -5948,6 +5948,7 @@ export default function NTBCCFReportPage() {
                 if (status === 'success') return '<span style="color: #10b981; margin-right: 8px;">✅</span>';
                 if (status === 'error') return '<span style="color: #ef4444; margin-right: 8px;">❌</span>';
                 if (status === 'warn') return '<span style="color: #f59e0b; margin-right: 8px;">⚠️</span>';
+                if (status === 'skipped') return '<span style="color: #9ca3af; margin-right: 8px;">⏭️</span>';
                 return '<span style="color: #6b7280; margin-right: 8px;">⚪</span>';
             };
 
@@ -6431,6 +6432,16 @@ export default function NTBCCFReportPage() {
                     setStepDetail('สั่งรัน Speed Test');
                     const runData = await scrapeSpeed({ action: 'run-speed-test', domainVal: domainName });
                     checkCancelled();
+                    if (runData.errorType === 'no_permission') {
+                        // The logged-in Cloudflare user can't run tests here: skip both speed steps
+                        // (no point capturing the empty form) and explain why on download.
+                        const note = `ข้าม Speed Test: ${runData.error}`;
+                        statusMap.speed = 'skipped';
+                        statusMap.speedMobile = 'skipped';
+                        errorMap.speed = note;
+                        errorMap.speedMobile = note;
+                        throw Object.assign(new Error(note), { speedSkipped: true });
+                    }
                     if (!runData.success) {
                         // Keep going: an earlier successful result may still be usable.
                         console.warn('Speed test run not started:', runData.error || runData.message);
@@ -6519,12 +6530,14 @@ export default function NTBCCFReportPage() {
                     }
                 } catch (err) {
                     if (err.message === 'UNAUTHENTICATED_CLOUDFLARE' || err.message === 'Force stopped by user') throw err;
-                    console.error('Speed test capture failed:', err);
-                    statusMap.speed = 'warn';
-                    errorMap.speed = err.message || 'Unknown error during Speed Test';
-                    speedProblem = speedProblem || err.message;
+                    if (!err.speedSkipped) {
+                        console.error('Speed test capture failed:', err);
+                        statusMap.speed = 'warn';
+                        errorMap.speed = err.message || 'Unknown error during Speed Test';
+                        speedProblem = speedProblem || err.message;
+                    }
                 }
-                if (statusMap.speedMobile !== 'success') {
+                if (statusMap.speedMobile !== 'success' && statusMap.speedMobile !== 'skipped') {
                     statusMap.speedMobile = 'warn';
                     errorMap.speedMobile = speedProblem || 'Speed Test (Mobile) was not captured';
                 }

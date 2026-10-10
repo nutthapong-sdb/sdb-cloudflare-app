@@ -5,7 +5,7 @@ import { X, RefreshCw, Trash2, Download, AlertCircle, CheckCircle, Clock, FileTe
 import Swal from 'sweetalert2';
 import { showImportantNotice, escapeHtml } from '@/app/utils/importantNotice';
 
-const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', running: '🔄', pending: '⚪' };
+const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', skipped: '⏭️', running: '🔄', pending: '⚪' };
 
 const parseStepLog = (job) => {
     try { return job.step_log ? JSON.parse(job.step_log) : null; } catch (e) { return null; }
@@ -103,7 +103,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
             title: 'รายงานนี้มีบางส่วนไม่ครบ',
             html: `
                 <div style="text-align:left;font-size:13px;line-height:1.5;">
-                    <p style="margin-bottom:10px;">รายงาน <b>${escapeHtml(job.zone_name)}</b> สร้างเสร็จแล้ว แต่มี ${warnSteps.length} ขั้นที่ไม่สำเร็จ ข้อมูลส่วนนี้ในไฟล์อาจว่างหรือไม่ใช่ข้อมูลล่าสุด:</p>
+                    <p style="margin-bottom:10px;">รายงาน <b>${escapeHtml(job.zone_name)}</b> สร้างเสร็จแล้ว แต่มี ${warnSteps.length} ขั้นที่ไม่สำเร็จหรือถูกข้าม ข้อมูลส่วนนี้ในไฟล์อาจว่างหรือไม่ใช่ข้อมูลล่าสุด:</p>
                     <ul style="list-style:disc;padding-left:20px;">${items}</ul>
                     <p style="margin-top:10px;color:#9ca3af;font-size:12px;">กรุณาตรวจสอบส่วนนี้ในไฟล์ก่อนส่งให้ลูกค้า</p>
                 </div>`,
@@ -167,7 +167,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                 const subdomains = JSON.parse(job.subdomains || '[]');
                                 const stepLog = parseStepLog(job);
                                 const steps = stepLog?.steps || [];
-                                const warnCount = steps.filter(s => s.status === 'warn' || s.status === 'error').length;
+                                const warnCount = steps.filter(s => s.status === 'warn' || s.status === 'error' || s.status === 'skipped').length;
                                 // Expanded by default while running or after a failure; click to toggle.
                                 const expanded = expandedJobs[job.id] ?? (job.status === 'processing' || job.status === 'failed');
 
@@ -230,7 +230,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                             )}
 
                                             {job.status === 'completed' && warnCount > 0 && (
-                                                <p className="text-[11px] text-yellow-400">⚠️ สร้างเสร็จ แต่มี {warnCount} ขั้นที่ถ่ายภาพไม่สำเร็จ (ดูรายละเอียดด้านล่าง)</p>
+                                                <p className="text-[11px] text-yellow-400">⚠️ สร้างเสร็จ แต่มี {warnCount} ขั้นที่ไม่สำเร็จหรือถูกข้าม (ดูรายละเอียดด้านล่าง)</p>
                                             )}
 
                                             {steps.length > 0 && (
@@ -274,7 +274,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                                 <a
                                                     href={`/api/ntbc/report-jobs?action=download&fileName=${job.file_name}`}
                                                     download
-                                                    onClick={(e) => handleDownload(e, job, steps.filter(s => s.status === 'warn' || s.status === 'error'))}
+                                                    onClick={(e) => handleDownload(e, job, steps.filter(s => s.status === 'warn' || s.status === 'error' || s.status === 'skipped'))}
                                                     className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
                                                 >
                                                     <Download className="w-3.5 h-3.5" /> Download
