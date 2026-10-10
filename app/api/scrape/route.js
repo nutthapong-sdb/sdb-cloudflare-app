@@ -2641,43 +2641,23 @@ export async function POST(request) {
 
             await page.bringToFront();
 
-            // A read-only Cloudflare role (e.g. "Administrator Read Only") renders the speed test
-            // form with "Run browser test" disabled. Wait for the form, then report that as a
-            // permission problem instead of "Failed to trigger speed test button".
-            const permCheck = await page.waitForFunction(() => {
+            // Wait for the speed test form (or Cloudflare's "no permission" page) before deciding
+            // anything; whether the user may run tests is judged after the URL is filled below.
+            const formState = await page.waitForFunction(() => {
                 const text = document.body ? document.body.innerText.toLowerCase() : '';
-                // No access to this zone at all.
                 if (text.includes('page not found') && text.includes('permission')) return { noAccess: true };
-                const btns = Array.from(document.querySelectorAll('button, [role="button"], a, div, span'))
-                    .filter(e => /^\s*run (browser test|test once)\s*$/i.test(e.textContent || ''));
-                if (btns.length === 0) return false;
-                const isDisabled = (el) => {
-                    for (let n = el, i = 0; n && i < 4; n = n.parentElement, i++) {
-                        if (n.disabled || n.getAttribute('aria-disabled') === 'true') return true;
-                        const cs = getComputedStyle(n);
-                        if (cs.pointerEvents === 'none' || cs.cursor === 'not-allowed') return true;
-                    }
-                    return false;
-                };
-                return { disabled: btns.every(isDisabled) };
+                const hasBtn = Array.from(document.querySelectorAll('button, [role="button"]'))
+                    .some(e => /^\s*run (browser test|test once)\s*$/i.test(e.textContent || ''));
+                return hasBtn ? { ready: true } : false;
             }, { timeout: 10000, polling: 500 }).then(h => h.jsonValue()).catch(() => null);
 
-            if (permCheck?.noAccess) {
+            if (formState?.noAccess) {
                 await browser.disconnect();
                 return NextResponse.json({
                     success: false,
                     status: 'error',
                     errorType: 'no_permission',
                     error: 'user Cloudflare ที่ล็อกอินอยู่เปิดหน้า Speed Test ของโดเมนนี้ไม่ได้ (ไม่มีสิทธิ์เข้าถึง)'
-                });
-            }
-            if (permCheck?.disabled) {
-                await browser.disconnect();
-                return NextResponse.json({
-                    success: false,
-                    status: 'error',
-                    errorType: 'no_permission',
-                    error: 'ปุ่ม "Run browser test" ถูกปิด — user Cloudflare ที่ล็อกอินอยู่ไม่มีสิทธิ์รัน Speed Test ในบัญชีนี้ (เช่น role Read Only)'
                 });
             }
 
@@ -2744,6 +2724,33 @@ export async function POST(request) {
                 }, domainVal);
 
                 await new Promise(r => setTimeout(r, 600));
+
+                // A read-only role (e.g. "Administrator Read Only") locks the whole form: the Run
+                // button AND the Region/Repeats fields. A Run button that is only briefly disabled
+                // (form still validating, a test already running) is not a permission problem.
+                let perm = null;
+                for (let i = 0; i < 10; i++) {
+                    perm = await page.evaluate(() => {
+                        const btn = Array.from(document.querySelectorAll('button, [role="button"]'))
+                            .find(e => /^\s*run (browser test|test once)\s*$/i.test(e.textContent || ''));
+                        if (!btn) return null;
+                        const btnDisabled = btn.disabled || btn.getAttribute('aria-disabled') === 'true';
+                        const controls = Array.from(document.querySelectorAll('input[name="region"], input[name="frequency"]'));
+                        const controlsLocked = controls.length > 0 && controls.every(c => c.disabled || c.readOnly && c.getAttribute('aria-disabled') === 'true');
+                        return { btnDisabled, controlsLocked };
+                    }).catch(() => null);
+                    if (!perm || !perm.btnDisabled) break;
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                if (perm?.btnDisabled && perm.controlsLocked) {
+                    await browser.disconnect();
+                    return NextResponse.json({
+                        success: false,
+                        status: 'error',
+                        errorType: 'no_permission',
+                        error: 'ปุ่ม "Run browser test" และช่องตั้งค่าถูกล็อก — user Cloudflare ที่ล็อกอินอยู่ไม่มีสิทธิ์รัน Speed Test ในบัญชีนี้ (เช่น role Read Only)'
+                    });
+                }
 
                 // Click submit button
                 clickSuccess = await page.evaluate(() => {
