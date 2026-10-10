@@ -5,7 +5,7 @@ import { X, RefreshCw, Trash2, Download, AlertCircle, CheckCircle, Clock, FileTe
 import Swal from 'sweetalert2';
 import { showImportantNotice, escapeHtml } from '@/app/utils/importantNotice';
 
-const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', skipped: '⏭️', running: '🔄', pending: '⚪' };
+const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', skipped: '⏭️', unused: '➖', running: '🔄', pending: '⚪' };
 
 const parseStepLog = (job) => {
     try { return job.step_log ? JSON.parse(job.step_log) : null; } catch (e) { return null; }
@@ -241,13 +241,13 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                                         className="text-[11px] text-gray-400 hover:text-gray-200 flex items-center gap-1"
                                                     >
                                                         {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                                        รายละเอียดแต่ละขั้น ({steps.filter(s => s.status === 'success').length}/{steps.length} สำเร็จ)
+                                                        รายละเอียดแต่ละขั้น ({steps.filter(s => s.status === 'success').length}/{steps.filter(s => s.status !== 'unused').length} สำเร็จ{steps.some(s => s.status === 'unused') ? ` · ไม่ได้แคป ${steps.filter(s => s.status === 'unused').length} หน้าที่ template ไม่ใช้` : ''})
                                                     </button>
                                                     {expanded && (
                                                         <ul className="mt-1 ml-4 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-gray-400">
                                                             {steps.map(step => (
                                                                 <li key={step.key} className="min-w-0">
-                                                                    <span className={step.status === 'running' ? 'text-blue-400 font-semibold' : ''}>
+                                                                    <span className={step.status === 'running' ? 'text-blue-400 font-semibold' : step.status === 'unused' ? 'text-gray-600' : ''}>
                                                                         {STEP_ICON[step.status] || '⚪'} {step.label}
                                                                         {step.status === 'running' && stepLog?.detail ? ` — ${stepLog.detail}` : ''}
                                                                     </span>
