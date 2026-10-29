@@ -5788,6 +5788,17 @@ export default function NTBCCFReportPage() {
         }
     };
 
+    // Report image widths (Image Size Settings) live on the server; copy them into this tab's
+    // localStorage, which processTemplate reads, so the background worker's tab uses them too.
+    useEffect(() => {
+        fetch('/api/ntbc-image-widths')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.widths) localStorage.setItem('ntbc:cropped-image-widths', JSON.stringify(data.widths));
+            })
+            .catch(e => console.error('Failed to load image widths:', e));
+    }, []);
+
     // Expose the batch-capture entry point on window so a headless worker-mode
     // Puppeteer tab (?mode=worker) can invoke it directly, mirroring GDCC's
     // window.__handleBatchReport pattern.

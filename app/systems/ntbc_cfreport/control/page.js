@@ -217,6 +217,30 @@ export default function ControlPage() {
     }, []);
 
     const activePreset = presets.find(p => p.id === activePresetId) || null;
+
+    // On open, show the coordinates of the preset that was selected last time — not the old
+    // central set — so edits continue from what the preset (and the reports using it) hold.
+    const presetCoordsAppliedRef = useRef(false);
+    useEffect(() => {
+        if (presetCoordsAppliedRef.current || !activePreset?.coords) return;
+        presetCoordsAppliedRef.current = true;
+        setCoords(activePreset.coords);
+    }, [activePreset]);
+
+    // Coordinates edited but not yet saved into the active preset ('' and '0' both mean Auto +0).
+    const coordsDirty = Boolean(activePreset) && (() => {
+        const norm = (v) => (v === undefined || v === null || String(v).trim() === '' ? '0' : String(v).trim());
+        const saved = activePreset.coords || {};
+        const keys = new Set([...Object.keys(coords || {}), ...Object.keys(saved)]);
+        return [...keys].some(k => ['xStart', 'xEnd', 'yStart', 'yEnd'].some(f => norm(coords?.[k]?.[f]) !== norm(saved?.[k]?.[f])));
+    })();
+
+    useEffect(() => {
+        if (!coordsDirty) return;
+        const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [coordsDirty]);
     const templatesUsingActivePreset = activePreset
         ? reportTemplates.filter(t => String(t.capturePresetId) === String(activePreset.id))
         : [];
@@ -1391,7 +1415,7 @@ export default function ControlPage() {
             fetch('/api/ntbc-capture-coords')
                 .then(res => res.json())
                 .then(data => {
-                    setCoords(data);
+                    if (!presetCoordsAppliedRef.current) setCoords(data);
                 })
                 .catch(e => {
                     console.error('Failed to load global coords:', e);
@@ -2758,6 +2782,19 @@ export default function ControlPage() {
                             </div>
                         )}
 
+                        {/* Which Cloudflare layout the coordinates assume */}
+                        <div className="mb-3 rounded-xl border-2 border-sky-500/60 bg-sky-950/40 px-4 py-3">
+                            <p className="text-lg sm:text-xl font-extrabold text-sky-200 leading-snug">
+                                📐 พิกัดตัดรูปทั้งหมดนี้ ใช้กับหน้าจอ Cloudflare ที่ &quot;เปิด&quot; แถบเมนูซ้าย (Sidebar ขยาย)
+                            </p>
+                            <p className="text-sm text-sky-300/90 mt-1">
+                                ระบบจะเปิดแถบเมนูซ้ายให้อัตโนมัติก่อนแคปทุกครั้ง และหน้าจอแคปกว้าง 1920px เสมอ — ไม่ต้องปิด/เปิดแถบเมนูเอง
+                            </p>
+                            <p className="text-sm text-sky-300/90 mt-1">
+                                ✂️ ระบบตัดรูปอัตโนมัติตามกรอบของแต่ละหัวข้อในหน้า Cloudflare แล้ว — ตัวเลขด้านล่างคือการขยับเพิ่ม/ลดจากกรอบนั้น (0 = ตัดพอดีกรอบ) ถ้าเคยตั้งค่าไว้ก่อนหน้านี้ ให้กด &quot;ตั้งเป็น Auto (0) ทั้งหมด&quot; แล้ว &quot;บันทึกทับ&quot;
+                            </p>
+                        </div>
+
                         {/* Preset & Coordinate Management Toolbar */}
                         <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3 mb-3.5 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 shadow-inner">
                             {/* Preset Selection & Info */}
@@ -2802,6 +2839,12 @@ export default function ControlPage() {
                                     </span>
                                 )}
 
+                                {coordsDirty && (
+                                    <span className="text-[11px] font-bold text-amber-200 bg-amber-900/60 border border-amber-500/70 px-2 py-1 rounded animate-pulse" title="กด 'บันทึกทับ' เพื่อเก็บลง Preset — ถ้าปิดหน้านี้ไปค่าที่แก้จะหาย และรายงานจะยังใช้ค่าเดิมของ Preset">
+                                        ● แก้แล้วยังไม่ได้บันทึกลง Preset
+                                    </span>
+                                )}
+
                                 {/* Which report templates crop with this preset */}
                                 {activePreset && (
                                     templatesUsingActivePreset.length > 0 ? (
@@ -2817,6 +2860,14 @@ export default function ControlPage() {
 
                                 {/* Action Buttons for Active Preset */}
                                 <div className="flex flex-wrap items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCoords(DEFAULT_ZERO_COORDS)}
+                                        className="px-2.5 py-1.5 bg-sky-600/20 hover:bg-sky-600/40 border border-sky-500/50 text-sky-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                        title="ล้างค่าขยับทุกช่องเป็น 0 ให้ระบบตัดพอดีกรอบอัตโนมัติ (ยังไม่บันทึกจนกว่าจะกดบันทึกทับ)"
+                                    >
+                                        🔄 ตั้งเป็น Auto (0) ทั้งหมด
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={handleSaveAsNewPreset}

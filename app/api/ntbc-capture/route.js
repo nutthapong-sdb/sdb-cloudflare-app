@@ -2,6 +2,7 @@ import { connectChrome, findCloudflarePage } from '@/lib/chrome-helper';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
+import { SMART_CROP_SPECS, findSmartCropBox, applyCropAdjustments } from '@/lib/ntbc-smart-crop';
 import { UPLOADED_SLUGS } from '@/app/systems/ntbc_cfreport/utils/uploadedVariables';
 
 export const dynamic = 'force-dynamic';
@@ -449,22 +450,39 @@ export async function GET(request) {
             console.error('Failed to reset zoom via Ctrl+0:', err);
         }
 
-        // Ensure Cloudflare sidebar navigation is EXPANDED (Press 't' + 's' only if currently collapsed)
+        // Ensure Cloudflare's left sidebar is EXPANDED — every crop coordinate assumes it.
+        // "t" then "s" TOGGLES it, so only press when the sidebar is positively found collapsed,
+        // and press again if that made it narrower (a wrong guess would otherwise flip it shut).
         try {
-            const isCollapsed = await page.evaluate(() => {
-                const nav = document.querySelector('nav') || document.querySelector('aside') || document.querySelector('[aria-label*="navigation"]');
-                return nav ? nav.offsetWidth < 150 : false;
+            const sidebarWidth = () => page.evaluate(() => {
+                // The sidebar is the tall navigation column pinned to the left edge — not just the
+                // first <nav> (Cloudflare also has navs in the header and inside pages).
+                const candidates = [...document.querySelectorAll('nav, aside, [role="navigation"], [data-testid*="sidebar" i], [class*="sidebar" i]')];
+                const sidebar = candidates
+                    .map(el => ({ el, r: el.getBoundingClientRect() }))
+                    .filter(({ r }) => r.left <= 5 && r.width > 0 && r.width < 450 && r.height > window.innerHeight * 0.5)
+                    .sort((x, y) => y.r.height - x.r.height)[0];
+                return sidebar ? Math.round(sidebar.r.width) : null;
             });
-
-            if (isCollapsed) {
-                console.log('Sidebar is currently collapsed. Expanding via keyboard shortcut "t" then "s"...');
+            const before = await sidebarWidth();
+            if (before !== null && before < 150) {
+                console.log(`Sidebar collapsed (${before}px). Expanding via "t" then "s"...`);
                 await page.keyboard.press('KeyT');
                 await new Promise(r => setTimeout(r, 100));
                 await page.keyboard.press('KeyS');
-                await new Promise(r => setTimeout(r, 400));
-                console.log('Sidebar expansion triggered.');
+                await new Promise(r => setTimeout(r, 500));
+                const after = await sidebarWidth();
+                if (after !== null && after < before) {
+                    console.warn(`Sidebar got narrower (${before}px → ${after}px); toggling back.`);
+                    await page.keyboard.press('KeyT');
+                    await new Promise(r => setTimeout(r, 100));
+                    await page.keyboard.press('KeyS');
+                    await new Promise(r => setTimeout(r, 500));
+                } else {
+                    console.log(`Sidebar now ${after ?? 'unknown'}px wide.`);
+                }
             } else {
-                console.log('Sidebar is already expanded. No action needed.');
+                console.log(before === null ? 'Sidebar not found on this page; leaving it as is.' : `Sidebar already expanded (${before}px).`);
             }
         } catch (err) {
             console.warn('Could not check/ensure sidebar expanded state:', err.message);
@@ -1554,6 +1572,61 @@ export async function GET(request) {
             }, type, qXStart, qXEnd, qYStart, qYEnd);
             }
 
+            // Auto-crop to the section's own box on the page (see lib/ntbc-smart-crop.js); the
+            // preset values become adjustments on that box. Falls back to the crop above when the
+            // section isn't found or the preset uses old absolute pixel positions.
+            const smartCrop = async () => {
+                const spec = SMART_CROP_SPECS[type];
+                if (!spec) return null;
+                const measure = () => page.evaluate(findSmartCropBox, spec).catch(err => {
+                    console.warn(`[smart-crop] ${type}: ${err.message}`);
+                    return null;
+                });
+                const box = await measure();
+                const adjusted = box && applyCropAdjustments(box, { xStart: qXStart, xEnd: qXEnd, yStart: qYStart, yEnd: qYEnd });
+                console.log(`[smart-crop] ${type}: box=${JSON.stringify(box)} → ${adjusted ? JSON.stringify(adjusted) : 'fallback to legacy crop'}`);
+                return adjusted;
+            };
+
+            // Security rules opens filtered to one rule type, hiding the other sections. Show all rule
+            // types when this section isn't on the page yet (before the viewport is grown).
+            const revealAllRuleTypes = async () => {
+                if (!['ip-access-rules', 'ip-access', 'zone-lockdown', 'rate-limiting', 'managed-rules'].includes(type)) return;
+                const found = await page.evaluate(findSmartCropBox, SMART_CROP_SPECS[type]).catch(() => null);
+                if (found) return;
+                const clicked = await page.evaluate(() => {
+                    const el = Array.from(document.querySelectorAll('button, a, span')).find(e => (e.textContent || '').trim().toLowerCase() === 'show all rule types');
+                    if (el) { (el.closest('button, a') || el).click(); return true; }
+                    return false;
+                }).catch(() => false);
+                if (clicked) {
+                    console.log(`[smart-crop] ${type}: clicked "Show all rule types"`);
+                    await new Promise(r => setTimeout(r, 2500));
+                }
+            };
+
+            // A screenshot that reaches past the viewport makes Chrome lay the page out again at a
+            // different size, which can shift content sideways — so a box measured before the shot
+            // no longer matches the image. Grow the viewport to the whole page first and keep it
+            // there while measuring and capturing; restore() puts the window size back.
+            const growViewportToPage = async () => {
+                const session = await page.target().createCDPSession();
+                const width = await page.evaluate(() => window.innerWidth);
+                for (let i = 0; i < 2; i++) {
+                    const { cssContentSize } = await session.send('Page.getLayoutMetrics');
+                    await session.send('Emulation.setDeviceMetricsOverride', {
+                        width, height: Math.min(16000, Math.ceil(cssContentSize.height)), deviceScaleFactor: 1, mobile: false
+                    });
+                    await new Promise(r => setTimeout(r, 700));
+                }
+                return async () => {
+                    try {
+                        await session.send('Emulation.clearDeviceMetricsOverride');
+                        await session.detach();
+                    } catch (e) { /* page may be gone */ }
+                };
+            };
+
             let pageBuffer = null;
 
             const exactCardTypes = ['bot-management', 'security-level', 'min-tls-version', 'ssl-edge', 'tls-1-3', 'browser-integrity-check', 'browser-integrity', 'load-balancing-spectrum', 'load-balancing'];
@@ -1895,6 +1968,18 @@ export async function GET(request) {
                     }
                 }
 
+                let restoreViewport = null;
+                if (!clipBox?.isDisabled && SMART_CROP_SPECS[type]) {
+                    restoreViewport = await growViewportToPage();
+                    const smartBox = await smartCrop();
+                    if (smartBox) {
+                        clipBox = smartBox;
+                    } else {
+                        await restoreViewport();
+                        restoreViewport = null;
+                    }
+                }
+
                 if (clipBox && clipBox.isDisabled) {
                     console.log(`ℹ️ [${type}] is Disabled / Not Active:`, clipBox.reason);
                     const target = SECTION_TARGETS[type] || { title: type, description: clipBox.reason };
@@ -1929,7 +2014,8 @@ export async function GET(request) {
                         `;
                     });
                     await new Promise(r => setTimeout(r, 300));
-                    const cardScreenshotBase64 = await page.screenshot({ clip: clipBox, encoding: 'base64', type: 'png' });
+                    const cardScreenshotBase64 = await page.screenshot({ clip: clipBox, encoding: 'base64', type: 'png', captureBeyondViewport: !restoreViewport });
+                    if (restoreViewport) { await restoreViewport(); restoreViewport = null; }
                     pageBuffer = Buffer.from(cardScreenshotBase64, 'base64');
                     console.log(`✅ Captured [${type}] via Exact Card Box Clip! Box:`, clipBox, `Size: ${pageBuffer.length} bytes`);
                 } else {
@@ -1938,6 +2024,19 @@ export async function GET(request) {
                     pageBuffer = await generateUnavailableImage(target.title, target.description);
                 }
             } else {
+                let restoreViewport = null;
+                if (SMART_CROP_SPECS[type]) {
+                    await revealAllRuleTypes();
+                    restoreViewport = await growViewportToPage();
+                    const smartBox = await smartCrop();
+                    if (smartBox) {
+                        cropCoords = smartBox;
+                    } else {
+                        await restoreViewport();
+                        restoreViewport = null;
+                    }
+                }
+
                 // Retrieve document height to expand the viewport temporarily and prevent visual flickering from fullPage: true
                 const originalViewportSize = await page.evaluate(() => {
                     return {
@@ -1954,16 +2053,23 @@ export async function GET(request) {
                 });
 
                 console.log('Capturing page screenshot (full page, flicker-free)...');
+                // With the viewport already grown to the whole page, a plain screenshot is the full
+                // page in exactly the layout the crop box was measured in.
                 const fullScreenshotBase64 = await page.screenshot({
                     encoding: 'base64',
                     type: 'png',
-                    fullPage: true
+                    fullPage: !restoreViewport
                 });
 
-                try {
-                    const client = await page.target().createCDPSession();
-                    await client.send('Emulation.clearDeviceMetricsOverride');
-                } catch (e) {}
+                if (restoreViewport) {
+                    await restoreViewport();
+                    restoreViewport = null;
+                } else {
+                    try {
+                        const client = await page.target().createCDPSession();
+                        await client.send('Emulation.clearDeviceMetricsOverride');
+                    } catch (e) {}
+                }
 
                 pageBuffer = Buffer.from(fullScreenshotBase64, 'base64');
 
@@ -2042,16 +2148,13 @@ export async function GET(request) {
                                         });
 
                                         console.log(`Capturing ${tabInfo.text} page screenshot...`);
+                                        // Same grown-viewport capture as the main shot, so the crop box lines up.
+                                        const restoreSubViewport = await growViewportToPage();
                                         const subScreenshotBase64 = await page.screenshot({
                                             encoding: 'base64',
-                                            type: 'png',
-                                            fullPage: true
+                                            type: 'png'
                                         });
-
-                                        try {
-                                            const client = await page.target().createCDPSession();
-                                            await client.send('Emulation.clearDeviceMetricsOverride');
-                                        } catch (e) {}
+                                        await restoreSubViewport();
 
                                         const subFullBuffer = Buffer.from(subScreenshotBase64, 'base64');
                                         const subImage = sharp(subFullBuffer);

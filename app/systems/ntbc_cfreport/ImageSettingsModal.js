@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Settings, RotateCcw, Download, Sliders, Shield, Lock, Activity, Globe, Check } from 'lucide-react';
+import { X, Settings, RotateCcw, Sliders, Shield, Lock, Activity, Globe, Check } from 'lucide-react';
 import Swal from './utils/alert';
 
 const CAPTURED_IMAGE_ITEMS = [
@@ -55,35 +55,34 @@ export const IMAGE_CONFIG_ITEMS = [
 ];
 
 const DEFAULT_WIDTHS = Object.fromEntries(IMAGE_CONFIG_ITEMS.map(i => [i.key, i.defaultWidth]));
-const DEFAULT_COORDS = Object.fromEntries(IMAGE_CONFIG_ITEMS.filter(i => i.defaultCoords).map(i => [i.key, { ...i.defaultCoords }]));
 
 export default function ImageSettingsModal({ isOpen, onClose, theme }) {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [selectedType, setSelectedType] = useState('all');
     const [widths, setWidths] = useState(DEFAULT_WIDTHS);
-    const [coords, setCoords] = useState(DEFAULT_COORDS);
 
     useEffect(() => {
         if (!isOpen) return;
-        if (typeof window !== 'undefined') {
+        let cancelled = false;
+        (async () => {
+            // Server copy first (what reports — including background jobs — actually use),
+            // then this browser's older localStorage copy.
+            let loaded = null;
             try {
-                // Load independent Image Size Settings
-                const storedSettings = localStorage.getItem('ntbc:image-size-settings');
-                if (storedSettings) {
-                    const parsed = JSON.parse(storedSettings);
-                    if (parsed.widths) setWidths(prev => ({ ...prev, ...parsed.widths }));
-                    if (parsed.coords) setCoords(prev => ({ ...prev, ...parsed.coords }));
-                } else {
-                    // Fallback to legacy widths if available
-                    const legacyWidths = localStorage.getItem('ntbc:cropped-image-widths');
-                    if (legacyWidths) {
-                        setWidths(prev => ({ ...prev, ...JSON.parse(legacyWidths) }));
-                    }
-                }
+                const data = await fetch('/api/ntbc-image-widths').then(r => r.json());
+                if (data?.widths) loaded = data.widths;
             } catch (e) {
-                console.error('Failed to load image settings:', e);
+                console.error('Failed to load image widths from server:', e);
             }
-        }
+            if (!loaded && typeof window !== 'undefined') {
+                try {
+                    const stored = localStorage.getItem('ntbc:image-size-settings');
+                    loaded = stored ? JSON.parse(stored).widths : JSON.parse(localStorage.getItem('ntbc:cropped-image-widths') || 'null');
+                } catch (e) { /* ignore */ }
+            }
+            if (!cancelled && loaded) setWidths({ ...DEFAULT_WIDTHS, ...loaded });
+        })();
+        return () => { cancelled = true; };
     }, [isOpen]);
 
     const handleWidthChange = (key, val) => {
@@ -94,63 +93,7 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
         }));
     };
 
-    const handleCoordChange = (key, coordKey, val) => {
-        setCoords(prev => ({
-            ...prev,
-            [key]: {
-                ...(prev[key] || {}),
-                [coordKey]: val
-            }
-        }));
-    };
-
-    // Pull settings from Debug Setting (independent pull)
-    const handlePullFromDebugSettings = async () => {
-        try {
-            let debugCoords = null;
-            // 1. Try fetching from server API first
-            const res = await fetch('/api/ntbc-capture-coords');
-            if (res.ok) {
-                debugCoords = await res.json();
-            }
-            // 2. Fallback to localStorage control_coords
-            if (!debugCoords && typeof window !== 'undefined') {
-                const stored = localStorage.getItem('control_coords');
-                if (stored) debugCoords = JSON.parse(stored);
-            }
-
-            if (debugCoords) {
-                setCoords(prev => {
-                    const updated = { ...prev };
-                    for (const [k, v] of Object.entries(debugCoords)) {
-                        if (updated[k]) {
-                            updated[k] = { ...updated[k], ...v };
-                        } else {
-                            updated[k] = { ...v };
-                        }
-                    }
-                    return updated;
-                });
-
-                Swal.fire({
-                    title: 'ดึงค่าสำเร็จ!',
-                    text: 'คัดลอกพิกัด Crop จาก Debug Setting เรียบร้อยแล้ว (อย่าลืมกด Save Settings)',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false,
-                    background: '#111827',
-                    color: '#fff'
-                });
-            } else {
-                Swal.fire('Info', 'ไม่พบข้อมูลพิกัดใน Debug Setting', 'info');
-            }
-        } catch (e) {
-            console.error('Failed to pull debug coordinates:', e);
-            Swal.fire('Error', 'เกิดข้อผิดพลาดในการดึงค่าจาก Debug Setting', 'error');
-        }
-    };
-
-    const handleSave = () => {
+    const handleSave = async () => {
         const finalWidths = {};
         for (const [key, val] of Object.entries(widths)) {
             const intVal = parseInt(val, 10);
@@ -161,36 +104,33 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
             finalWidths[key] = intVal;
         }
 
-        if (typeof window !== 'undefined') {
-            try {
-                // Save to independent storage
-                const payload = {
-                    widths: finalWidths,
-                    coords: coords,
-                    updatedAt: new Date().toISOString()
-                };
-                localStorage.setItem('ntbc:image-size-settings', JSON.stringify(payload));
+        try {
+            const res = await fetch('/api/ntbc-image-widths', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ widths: finalWidths })
+            }).then(r => r.json());
+            if (!res?.success) throw new Error(res?.error || 'Save failed');
+            if (typeof window !== 'undefined') {
                 localStorage.setItem('ntbc:cropped-image-widths', JSON.stringify(finalWidths));
-
-                Swal.fire({
-                    title: 'Saved!',
-                    text: 'บันทึกการตั้งค่าขนาดภาพและพิกัด Crop สำหรับ Image Size Setting เรียบร้อยแล้ว',
-                    icon: 'success',
-                    timer: 1500,
-                    showConfirmButton: false,
-                    background: '#111827',
-                    color: '#fff'
-                });
-                onClose();
-            } catch (e) {
-                Swal.fire('Error', 'Failed to save settings', 'error');
             }
+            Swal.fire({
+                title: 'Saved!',
+                text: 'บันทึกขนาดภาพเรียบร้อยแล้ว (ใช้กับทุกรายงาน รวมถึงงานเบื้องหลัง)',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                background: '#111827',
+                color: '#fff'
+            });
+            onClose();
+        } catch (e) {
+            Swal.fire('Error', `Failed to save settings: ${e.message}`, 'error');
         }
     };
 
     const handleReset = () => {
         setWidths(DEFAULT_WIDTHS);
-        setCoords(DEFAULT_COORDS);
     };
 
     if (!isOpen) return null;
@@ -230,13 +170,13 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
                         </div>
                         <div>
                             <div className="flex items-center gap-2.5">
-                                <h2 className={`text-base font-bold ${t.modalTitle}`}>Image Size & Crop Settings</h2>
+                                <h2 className={`text-base font-bold ${t.modalTitle}`}>Image Size Settings</h2>
                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono">
                                     Independent Config
                                 </span>
                             </div>
                             <p className={`text-xs ${t.subText} mt-0.5`}>
-                                กำหนดขนาดความกว้าง (Width px) สำหรับทั้ง 📸 ภาพแคปจริง, 🧩 inapp และ 🖼️ อัปโหลดเอง — และพิกัด Crop หน้าจอสำหรับภาพแคปจริง (ไม่เชื่อมโยงค่าอัตโนมัติกับ Debug Setting)
+                                กำหนดขนาดความกว้าง (Width px) ของภาพในรายงาน สำหรับ 📸 ภาพแคปจริง, 🧩 inapp และ 🖼️ อัปโหลดเอง
                             </p>
                         </div>
                     </div>
@@ -273,15 +213,10 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
                         })}
                     </div>
 
-                    {/* Pull from Debug Settings Button */}
-                    <button
-                        onClick={handlePullFromDebugSettings}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
-                        title="คัดลอกค่าพิกัด Crop ล่าสุดมาจาก Debug Setting"
-                    >
-                        <Download className="w-3.5 h-3.5 text-indigo-400" />
-                        📥 ดึงค่าจาก Debug Setting
-                    </button>
+                    {/* Crop coordinates no longer live here — they are per preset on the debug page */}
+                    <span className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/50 px-3 py-1.5 rounded-lg">
+                        ✂️ พิกัดตัดรูป (Crop) ตั้งที่หน้า Debug → บันทึกลง Preset → เลือก Preset ให้ Template
+                    </span>
                 </div>
 
                 {/* Variable-type filter: captured / inapp / uploaded each have their own width setting now */}
@@ -313,7 +248,6 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
                     <div className="grid grid-cols-1 gap-3.5">
                         {filteredItems.map((item) => {
-                            const itemCoords = coords[item.key] || { xStart: '', xEnd: '', yStart: '', yEnd: '' };
                             return (
                                 <div key={item.key} className={`p-4 border ${t.card || 'border-gray-800 bg-gray-900/50'} rounded-xl transition-all hover:border-gray-700/80`}>
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -348,51 +282,6 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
                                         </div>
                                     </div>
 
-                                    {/* Crop Coordinates Grid — only meaningful for real screenshots (Puppeteer crop area) */}
-                                    {item.type === 'captured' && (
-                                        <div className="mt-3 pt-3 border-t border-gray-800/60 grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-gray-950/40 p-2.5 rounded-lg">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] text-gray-400 font-mono">X-Start (px)</span>
-                                                <input
-                                                    type="number"
-                                                    value={itemCoords.xStart || ''}
-                                                    onChange={(e) => handleCoordChange(item.key, 'xStart', e.target.value)}
-                                                    placeholder="Auto"
-                                                    className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] text-gray-400 font-mono">X-End (px)</span>
-                                                <input
-                                                    type="number"
-                                                    value={itemCoords.xEnd || ''}
-                                                    onChange={(e) => handleCoordChange(item.key, 'xEnd', e.target.value)}
-                                                    placeholder="Auto"
-                                                    className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] text-gray-400 font-mono">Y-Start (px)</span>
-                                                <input
-                                                    type="number"
-                                                    value={itemCoords.yStart || ''}
-                                                    onChange={(e) => handleCoordChange(item.key, 'yStart', e.target.value)}
-                                                    placeholder="Auto"
-                                                    className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] text-gray-400 font-mono">Y-End (px)</span>
-                                                <input
-                                                    type="text"
-                                                    value={itemCoords.yEnd || ''}
-                                                    onChange={(e) => handleCoordChange(item.key, 'yEnd', e.target.value)}
-                                                    placeholder="Auto"
-                                                    className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })}
