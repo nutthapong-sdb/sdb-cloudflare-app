@@ -17,9 +17,14 @@ const TITLE_Y = 0.3;
 const TITLE_H = 0.8;
 const BODY_TOP = 1.2;
 const BODY_BOTTOM = SLIDE_H - 0.4;
-const FONT = 'Tahoma'; // ships with Windows/macOS Office and covers Thai
-const TEXT_PT = 14;
-const TABLE_PT = 10;
+// Same font as the Word report (TH Sarabun New). Sarabun draws small, so sizes are larger
+// than usual slide sizes to read about like the Word report's 16pt body text.
+const FONT = 'TH Sarabun New';
+const TEXT_PT = 20;
+const TABLE_PT = 14;
+const TITLE_PT = 32;
+const SUBHEAD_PT = 22;
+const COVER_PT = 26;
 
 const collapse = (s) => String(s || '').replace(/ /g, ' ').replace(/[ \t\r\f\v]+/g, ' ').replace(/ *\n */g, '\n').trim();
 const isPageBreak = (el) => /page-break-before\s*:\s*always/i.test(el.getAttribute?.('style') || '');
@@ -136,7 +141,7 @@ function toBlocks(root) {
 
 // Rough height (inches) of wrapped text; Thai/Latin average glyph width ≈ 0.5em.
 const textHeight = (text, pt, width) => {
-    const charsPerLine = Math.max(10, Math.floor((width * 72) / (pt * 0.5)));
+    const charsPerLine = Math.max(10, Math.floor((width * 72) / (pt * 0.45)));
     const lines = text.split('\n').reduce((n, line) => n + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
     return (lines * pt * 1.35) / 72 + 0.1;
 };
@@ -180,17 +185,17 @@ export async function buildPptxFromHtml(html, { title = 'Cloudflare Report' } = 
         slideCount++;
         slide.background = { color: 'FFFFFF' };
         hasContent = false;
-        y = slideTitle ? BODY_TOP : (slideCount === 1 ? 1.4 : TITLE_Y); // cover content sits lower
+        y = slideTitle ? BODY_TOP : (slideCount === 1 ? 0.8 : TITLE_Y); // cover content sits lower
         if (sectionLabel) {
             slide.addText(sectionLabel, {
                 x: MARGIN_X, y: 0.05, w: CONTENT_W, h: 0.3,
-                fontFace: FONT, fontSize: 12, color: 'F38020', bold: true, valign: 'middle', fit: 'shrink',
+                fontFace: FONT, fontSize: 16, color: 'F38020', bold: true, valign: 'middle', fit: 'shrink',
             });
         }
         if (slideTitle) {
             slide.addText(continued ? `${slideTitle} (ต่อ)` : slideTitle, {
                 x: MARGIN_X, y: TITLE_Y, w: CONTENT_W, h: TITLE_H,
-                fontFace: FONT, fontSize: 24, bold: true, color: '1F3864', valign: 'middle', fit: 'shrink',
+                fontFace: FONT, fontSize: TITLE_PT, bold: true, color: '1F3864', valign: 'middle', fit: 'shrink',
             });
             slide.addShape(pptx.ShapeType.line, { x: MARGIN_X, y: TITLE_Y + TITLE_H, w: CONTENT_W, h: 0, line: { color: 'F38020', width: 2 } });
         }
@@ -223,7 +228,7 @@ export async function buildPptxFromHtml(html, { title = 'Cloudflare Report' } = 
         }
         if (block.type === 'heading' || block.type === 'text') {
             const cover = !slide ? (slideCount === 0 && !slideTitle) : onCover();
-            const pt = cover ? 22 : block.type === 'heading' ? 16 : TEXT_PT;
+            const pt = cover ? COVER_PT : block.type === 'heading' ? SUBHEAD_PT : TEXT_PT;
             const h = Math.min(textHeight(block.text, pt, CONTENT_W), BODY_BOTTOM - BODY_TOP);
             ensure(h);
             slide.addText(block.text, {
