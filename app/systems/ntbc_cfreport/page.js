@@ -3128,7 +3128,17 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 // Moved to '@/app/utils/themes'
 
 // Batch Report Modal Component
-const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, theme, selectedZone: initialZoneId, selectedAccount: initialAccountId, accounts = [], currentUser, loading }) => {
+// Main-page workspace tabs (replaced the old row of cards that each opened a popup).
+const WORKSPACE_TABS = [
+    { id: 'generate', label: 'Generate Report', Icon: Camera },
+    { id: 'jobs', label: 'Background Jobs', Icon: Clock },
+    { id: 'templates', label: 'Manage Templates', Icon: FileText },
+    { id: 'image', label: 'Image Size Settings', Icon: Sliders },
+    { id: 'control', label: 'System Control', Icon: Terminal },
+];
+
+// inline: render as a page panel (workspace tab) instead of a popup.
+const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, theme, selectedZone: initialZoneId, selectedAccount: initialAccountId, accounts = [], currentUser, loading, inline = false }) => {
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [templates, setTemplates] = useState([]);
@@ -3289,14 +3299,14 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
     const t = theme || THEMES.dark;
 
     return (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in ${t.modalOverlay}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl`}>
+        <div className={inline ? 'w-full' : `fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in ${t.modalOverlay}`} onClick={(e) => { if (!inline && e.target === e.currentTarget) onClose(); }}>
+            <div className={`${t.modalBg} ${t.modalBorder} border rounded-xl w-full overflow-hidden flex flex-col ${inline ? '' : 'max-w-4xl max-h-[90vh] shadow-2xl'}`}>
                 <div className={`p-4 border-b ${t.modalBorder} ${t.modalHeaderBg} flex justify-between items-center`}>
                     <h3 className={`text-lg font-bold ${t.modalTitle} flex items-center gap-2`}>
                         <List className={`w-5 h-5 ${t.iconAccent || 'text-purple-400'}`} />
                         Batch Generate Reports (Zone Level)
                     </h3>
-                    <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}><X className="w-5 h-5" /></button>
+                    {!inline && <button onClick={onClose} className={`${t.modalCloseIcon} transition-colors`}><X className="w-5 h-5" /></button>}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3439,7 +3449,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                 </div>
 
                 <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
-                    <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>
+                    {!inline && <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>}
                     <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId, [], null, false, [], exportThaiDigits, timeoutMinutes); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
                         <FileText className="w-3 h-3" /> Start Processing Queue
                     </button>
@@ -4533,6 +4543,17 @@ export default function NTBCCFReportPage() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState(null);
     const [isBackgroundJobsModalOpen, setIsBackgroundJobsModalOpen] = useState(false);
+    const [workspaceTab, setWorkspaceTab] = useState('generate');
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('ntbc:workspace-tab');
+            if (saved && WORKSPACE_TABS.some(tab => tab.id === saved)) setWorkspaceTab(saved);
+        } catch (e) { /* storage unavailable */ }
+    }, []);
+    const selectWorkspaceTab = (id) => {
+        setWorkspaceTab(id);
+        try { localStorage.setItem('ntbc:workspace-tab', id); } catch (e) { /* storage unavailable */ }
+    };
     const [isNtbcJobActive, setIsNtbcJobActive] = useState(false);
 
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -7452,94 +7473,67 @@ export default function NTBCCFReportPage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-6xl mx-auto w-full">
-                    {/* WORKSPACE CARD 1: IMAGE SIZE & CROP SETTINGS */}
-                    <div 
-                        onClick={() => setIsImageSettingsModalOpen(true)}
-                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-blue-900/30 hover:to-indigo-900/30 border border-gray-700/60 hover:border-blue-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
-                            <Sliders className="w-40 h-40 text-white" />
-                        </div>
-                        <div className="bg-blue-500/10 w-fit p-4 rounded-xl mb-6 border border-blue-500/20 group-hover:scale-110 transition-transform duration-300">
-                            <Sliders className="w-8 h-8 text-blue-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-blue-300 transition-colors">Image Size Settings</h3>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                            Configure screenshot crop coordinates, aspect ratio, and custom image display dimensions for report exports.
-                        </p>
-                        <span className="text-blue-400 text-xs font-semibold uppercase tracking-wider group-hover:text-blue-300">Configure Size &rarr;</span>
+                {/* Workspace tabs — each tab shows its settings right here instead of a popup */}
+                <div className="max-w-6xl mx-auto w-full">
+                    <div className="flex flex-wrap items-center gap-x-2 border-b border-gray-800 mb-6">
+                        {WORKSPACE_TABS.map(({ id, label, Icon }) => (
+                            <button
+                                key={id}
+                                type="button"
+                                onClick={() => selectWorkspaceTab(id)}
+                                className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors cursor-pointer ${
+                                    workspaceTab === id
+                                        ? 'border-blue-500 text-white'
+                                        : 'border-transparent text-gray-400 hover:text-gray-200'
+                                }`}
+                            >
+                                <Icon className="w-4 h-4" />
+                                {label}
+                                {id === 'jobs' && isNtbcJobActive && (
+                                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" title="A job is currently processing" />
+                                )}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* WORKSPACE CARD 2: TEMPLATE CREATION & MANAGEMENT */}
-                    <div 
-                        onClick={() => setIsManageTemplateModalOpen(true)}
-                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-purple-900/30 hover:to-indigo-900/30 border border-gray-700/60 hover:border-purple-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
-                            <FileText className="w-40 h-40 text-white" />
-                        </div>
-                        <div className="bg-purple-500/10 w-fit p-4 rounded-xl mb-6 border border-purple-500/20 group-hover:scale-110 transition-transform duration-300">
-                            <FileText className="w-8 h-8 text-purple-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">Manage Templates</h3>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                            Create new report structures, edit subdomain templates, customize domain metrics layouts, and export or import templates.
-                        </p>
-                        <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider group-hover:text-purple-300">Open Workspace &rarr;</span>
+                    {workspaceTab === 'image' && (
+                        <ImageSettingsModal inline isOpen onClose={() => {}} theme={theme} />
+                    )}
+                    {workspaceTab === 'templates' && (
+                        <ManageTemplateModal
+                            inline
+                            isOpen
+                            onClose={() => {}}
+                            onEditSub={onEditSub}
+                            onEditMiddle={onEditMiddle}
+                            onEditDomain={onEditDomain}
+                            theme={theme}
+                            userRole={currentUser?.role}
+                            currentUserId={currentUser?.id}
+                        />
+                    )}
+                    {workspaceTab === 'generate' && (
+                        <BatchReportModal
+                            inline
+                            isOpen
+                            onClose={() => {}}
+                            hosts={getBatchHosts()}
+                            onConfirm={handleCaptureScreenshotConfirm}
+                            theme={theme}
+                            selectedZone={selectedZone}
+                            selectedAccount={selectedAccount}
+                            accounts={accounts}
+                            currentUser={currentUser}
+                            loading={loading}
+                        />
+                    )}
+                    {workspaceTab === 'jobs' && (
+                        <BackgroundJobsModal inline isOpen onClose={() => {}} theme={theme} currentUser={currentUser} />
+                    )}
+                    {/* Kept mounted (only hidden) so the live browser and debug state survive tab switches */}
+                    <div className={workspaceTab === 'control' ? '' : 'hidden'}>
+                        <ControlPage />
                     </div>
-
-                    {/* WORKSPACE CARD 3: CAPTURE SCREENSHOT & GENERATE REPORT */}
-                    <div 
-                        onClick={() => {
-                            setIsScreenshotBatchMode(true);
-                            setIsBatchModalOpen(true);
-                        }}
-                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-purple-900/30 hover:to-indigo-900/30 border border-gray-700/60 hover:border-purple-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
-                            <Camera className="w-40 h-40 text-white" />
-                        </div>
-                        <div className="bg-purple-500/10 w-fit p-4 rounded-xl mb-6 border border-purple-500/20 group-hover:scale-110 transition-transform duration-300">
-                            <Camera className="w-8 h-8 text-purple-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">Generate Report</h3>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                            Select Cloudflare domains/subdomains and capture screenshots directly from the active dashboard session.
-                        </p>
-                        <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider group-hover:text-purple-300">Select & Capture &rarr;</span>
-                    </div>
-
-                    {/* WORKSPACE CARD 4: BACKGROUND JOBS (moved out of the old Live Browser Monitor bar) */}
-                    <div
-                        onClick={() => setIsBackgroundJobsModalOpen(true)}
-                        className="group bg-gray-800/40 hover:bg-gradient-to-br hover:from-purple-900/30 hover:to-indigo-900/30 border border-gray-700/60 hover:border-purple-500/50 rounded-2xl p-8 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-110 duration-500">
-                            <Clock className="w-40 h-40 text-white" />
-                        </div>
-                        <div className="bg-purple-500/10 w-fit p-4 rounded-xl mb-6 border border-purple-500/20 group-hover:scale-110 transition-transform duration-300 relative">
-                            <Clock className="w-8 h-8 text-purple-400" />
-                            {isNtbcJobActive && (
-                                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-blue-400 animate-pulse border-2 border-gray-900" title="A job is currently processing" />
-                            )}
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">Background Jobs</h3>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                            View and track report generation jobs currently running or queued in the background.
-                        </p>
-                        <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider group-hover:text-purple-300">View Jobs &rarr;</span>
-                    </div>
-                </div>
-
-                {/* System Control — embedded inline right after the workspace cards so it's all on one page */}
-                <div className="mt-10 w-full">
-                    <div className="max-w-5xl mx-auto mb-3 flex items-center gap-2 px-1">
-                        <div className="h-px flex-1 bg-gray-800/80" />
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">System Control</span>
-                        <div className="h-px flex-1 bg-gray-800/80" />
-                    </div>
-                    <ControlPage />
                 </div>
             </main>
         </div>

@@ -741,25 +741,6 @@ export default function ControlPage() {
         }
     }, [coords]);
 
-    const saveCoordsToDatabase = async (e) => {
-        if (e) e.stopPropagation();
-        try {
-            const res = await fetch('/api/ntbc-capture-coords', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(coords)
-            });
-            const data = await res.json();
-            if (data.success) {
-                Swal.fire({ icon: 'success', title: 'Saved!', text: 'Coordinates have been updated in the central database.', timer: 1500, showConfirmButton: false, background: '#111827', color: '#fff' });
-            } else {
-                throw new Error(data.error);
-            }
-        } catch (e) {
-            console.error(e);
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save coordinates.', background: '#111827', color: '#fff' });
-        }
-    };
 
      const openImageInNewTab = (base64Data) => {
          if (!base64Data) return;
@@ -849,15 +830,6 @@ export default function ControlPage() {
                               className="bg-gray-950/80 border border-cyan-800/40 rounded px-2 py-1 text-xs text-cyan-200 focus:outline-none focus:border-cyan-500/50 transition-colors w-full font-mono"
                           />
                       </div>
-                  </div>
-                  <div className="ml-6 mt-2 flex items-center justify-end gap-2">
-                      <button 
-                          type="button"
-                          onClick={saveCoordsToDatabase}
-                          className="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-semibold rounded transition-colors cursor-pointer"
-                      >
-                          Save to Database
-                      </button>
                   </div>
                   {key === 'domains' && (
                       <p className="ml-6 text-[10px] text-amber-400/90 font-sans leading-normal mt-1.5">
@@ -3271,14 +3243,6 @@ export default function ControlPage() {
                                                                     <span>📸 Capture This Page Now</span>
                                                                 </>
                                                             )}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={saveCoordsToDatabase}
-                                                            className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
-                                                            title="บันทึกพิกัดลงฐานข้อมูลกลาง (รายงานไม่ได้ใช้ค่านี้แล้ว — รายงานใช้ Capture Preset ที่ผูกกับ Template ให้บันทึกลง Preset แทน)"
-                                                        >
-                                                            💾 Save to DB
                                                         </button>
                                                     </div>
                                                 </div>

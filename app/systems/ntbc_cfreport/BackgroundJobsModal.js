@@ -12,7 +12,8 @@ const parseStepLog = (job) => {
     try { return job.step_log ? JSON.parse(job.step_log) : null; } catch (e) { return null; }
 };
 
-export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUser }) {
+// inline: render as a page panel (workspace tab) instead of a popup.
+export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUser, inline = false }) {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [expandedJobs, setExpandedJobs] = useState({});
@@ -130,10 +131,10 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
 
     return (
         <div
-            className={`fixed inset-0 z-[110] flex items-center justify-center ${theme?.overlay || 'bg-black/50'} p-4 backdrop-blur-sm`}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+            className={inline ? 'w-full' : `fixed inset-0 z-[110] flex items-center justify-center ${theme?.overlay || 'bg-black/50'} p-4 backdrop-blur-sm`}
+            onMouseDown={(e) => { if (!inline && e.target === e.currentTarget) onClose(); }}
         >
-            <div className={`w-full max-w-4xl h-[75vh] flex flex-col rounded-xl shadow-2xl overflow-hidden border ${theme?.content || 'bg-gray-900 border-gray-700'} relative`}>
+            <div className={`w-full h-[75vh] flex flex-col rounded-xl overflow-hidden border ${theme?.content || 'bg-gray-900 border-gray-700'} relative ${inline ? '' : 'max-w-4xl shadow-2xl'}`}>
 
                 <div className={`flex items-center justify-between p-4 sm:p-5 border-b ${theme?.border || 'border-gray-800'} ${theme?.headerBg || 'bg-gray-800/50'}`}>
                     <div className="flex items-center gap-3">
@@ -153,9 +154,11 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                         >
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-400' : ''}`} />
                         </button>
-                        <button onClick={onClose} className={`p-2 rounded-lg ${theme?.buttonHover || 'hover:bg-gray-800'} text-gray-400 hover:text-white transition-colors`}>
-                            <X className="w-5 h-5" />
-                        </button>
+                        {!inline && (
+                            <button onClick={onClose} className={`p-2 rounded-lg ${theme?.buttonHover || 'hover:bg-gray-800'} text-gray-400 hover:text-white transition-colors`}>
+                                <X className="w-5 h-5" />
+                            </button>
+                        )}
                     </div>
                 </div>
 

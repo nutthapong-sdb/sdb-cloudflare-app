@@ -17,7 +17,8 @@ import {
     saveStaticTemplate
 } from '@/app/utils/ntbcTemplateApi';
 
-export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole, currentUserId }) {
+// inline: render as a page panel (workspace tab) instead of a popup.
+export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole, currentUserId, inline = false }) {
     const [templates, setTemplates] = useState([]);
     const [presets, setPresets] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -428,12 +429,12 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
 
     return (
         <div
-            className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${t.modalOverlay}`}
+            className={inline ? 'w-full' : `fixed inset-0 z-50 flex items-center justify-center p-4 ${t.modalOverlay}`}
             onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
+                if (!inline && e.target === e.currentTarget) onClose();
             }}
         >
-            <div className={`${t.modalBg} border ${t.modalBorder} rounded-xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[85vh]`}>
+            <div className={`${t.modalBg} border ${t.modalBorder} rounded-xl w-full flex flex-col ${inline ? 'max-h-[75vh]' : 'max-w-4xl shadow-2xl max-h-[85vh]'}`}>
 
                 {/* Header */}
                 <div className={`flex items-center justify-between p-4 border-b ${t.modalBorder} ${t.modalHeaderBg} rounded-t-xl`}>
@@ -446,9 +447,11 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                             <p className={`text-xs ${t.subText}`}>Create, edit, and organize your reporting templates</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${t.modalCloseIcon}`}>
-                        <X className="w-5 h-5" />
-                    </button>
+                    {!inline && (
+                        <button onClick={onClose} className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${t.modalCloseIcon}`}>
+                            <X className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
 
                 {/* Body */}
@@ -650,9 +653,11 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                 </div>
 
                 {/* Footer */}
-                <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end rounded-b-xl`}>
-                    <button onClick={onClose} className={`px-4 py-2 hover:bg-white/10 ${t.button || 'bg-gray-800 text-gray-300'} rounded-lg text-sm font-medium transition-colors`}>Close</button>
-                </div>
+                {!inline && (
+                    <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end rounded-b-xl`}>
+                        <button onClick={onClose} className={`px-4 py-2 hover:bg-white/10 ${t.button || 'bg-gray-800 text-gray-300'} rounded-lg text-sm font-medium transition-colors`}>Close</button>
+                    </div>
+                )}
 
             </div>
         </div>

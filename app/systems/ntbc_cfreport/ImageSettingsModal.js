@@ -56,7 +56,8 @@ export const IMAGE_CONFIG_ITEMS = [
 
 const DEFAULT_WIDTHS = Object.fromEntries(IMAGE_CONFIG_ITEMS.map(i => [i.key, i.defaultWidth]));
 
-export default function ImageSettingsModal({ isOpen, onClose, theme }) {
+// inline: render as a page panel (workspace tab) instead of a popup.
+export default function ImageSettingsModal({ isOpen, onClose, theme, inline = false }) {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [selectedType, setSelectedType] = useState('all');
     const [widths, setWidths] = useState(DEFAULT_WIDTHS);
@@ -156,12 +157,12 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
 
     return (
         <div
-            className={`fixed inset-0 z-[200] flex items-center justify-center p-4 ${t.modalOverlay}`}
+            className={inline ? 'w-full' : `fixed inset-0 z-[200] flex items-center justify-center p-4 ${t.modalOverlay}`}
             onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
+                if (!inline && e.target === e.currentTarget) onClose();
             }}
         >
-            <div className={`${t.modalBg} border ${t.modalBorder} rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]`}>
+            <div className={`${t.modalBg} border ${t.modalBorder} rounded-2xl w-full flex flex-col ${inline ? 'max-h-[75vh]' : 'max-w-4xl shadow-2xl max-h-[90vh]'}`}>
                 {/* Header */}
                 <div className={`flex items-center justify-between p-5 border-b ${t.modalBorder} ${t.modalHeaderBg} rounded-t-2xl`}>
                     <div className="flex items-center gap-3.5">
@@ -180,9 +181,11 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${t.modalCloseIcon}`}>
-                        <X className="w-5 h-5" />
-                    </button>
+                    {!inline && (
+                        <button onClick={onClose} className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${t.modalCloseIcon}`}>
+                            <X className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
 
                 {/* Categories & Actions Bar */}
@@ -298,12 +301,14 @@ export default function ImageSettingsModal({ isOpen, onClose, theme }) {
                         <RotateCcw className="w-3.5 h-3.5" /> รีเซ็ตเป็นค่าเริ่มต้น
                     </button>
                     <div className="flex items-center gap-2.5">
-                        <button
-                            onClick={onClose}
-                            className={`px-4 py-2 hover:bg-white/10 rounded-lg text-xs font-semibold transition-colors ${t.button || 'bg-gray-800 text-gray-300'}`}
-                        >
-                            Cancel
-                        </button>
+                        {!inline && (
+                            <button
+                                onClick={onClose}
+                                className={`px-4 py-2 hover:bg-white/10 rounded-lg text-xs font-semibold transition-colors ${t.button || 'bg-gray-800 text-gray-300'}`}
+                            >
+                                Cancel
+                            </button>
+                        )}
                         <button
                             onClick={handleSave}
                             className={`px-5 py-2 rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 ${t.buttonPrimary || 'bg-blue-600 hover:bg-blue-500 text-white'}`}
