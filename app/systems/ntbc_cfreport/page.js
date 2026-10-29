@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
-import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates } from '@/app/utils/ntbcTemplateApi';
+import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates, resolveTemplateCapturePreset } from '@/app/utils/ntbcTemplateApi';
 import ManageTemplateModal from './ManageTemplateModal';
 import ControlPage from './control/page';
 import ImageSettingsModal, { IMAGE_CONFIG_ITEMS } from './ImageSettingsModal';
@@ -5674,6 +5674,22 @@ export default function NTBCCFReportPage() {
             // UI anymore — enqueue one background job per zone instead, mirroring GDCC. The
             // worker (headless-attached to the shared debug browser) runs handleCaptureScreenshotConfirm
             // itself later via window.__ntbcHandleBatchReport, in worker mode, where this branch is skipped.
+            // Refuse up front when the template has no capture preset, instead of queuing a job
+            // that would only fail at its first step.
+            const presetLookup = await resolveTemplateCapturePreset(templateId);
+            if (presetLookup.error) {
+                Swal.fire({
+                    title: 'ยังสร้างรายงานไม่ได้',
+                    text: presetLookup.error,
+                    icon: 'warning',
+                    position: 'center',
+                    confirmButtonText: 'รับทราบ',
+                    confirmButtonColor: '#f59e0b',
+                    background: theme?.modalBg || '#111827',
+                    color: theme?.text || '#fff'
+                });
+                return;
+            }
             setIsBatchModalOpen(false);
 
             Swal.fire({
@@ -6075,14 +6091,15 @@ export default function NTBCCFReportPage() {
         };
 
         try {
-            // Fetch global coordinates for cropping
-            let globalCoords = null;
-            try {
-                const resCoords = await fetch('/api/ntbc-capture-coords');
-                globalCoords = await resCoords.json();
-            } catch (err) {
-                console.error('Failed to load global coords:', err);
+            // Crop coordinates come from the capture preset chosen on the template (Manage Templates).
+            const presetLookup = await resolveTemplateCapturePreset(templateId);
+            if (presetLookup.error) {
+                statusMap.launch = 'error';
+                errorMap.launch = presetLookup.error;
+                throw new Error(presetLookup.error);
             }
+            const globalCoords = presetLookup.preset.coords || {};
+            console.log(`[capture preset] template ${templateId} → "${presetLookup.preset.name}"`);
 
             const getCoordParams = (type) => {
                 if (!globalCoords) return '';

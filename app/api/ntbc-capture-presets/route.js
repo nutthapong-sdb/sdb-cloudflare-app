@@ -33,6 +33,16 @@ function writeFallbackPresets(presets) {
     }
 }
 
+// Names of the report templates whose capturePresetId is this preset.
+function templatesUsingPreset(presetId) {
+    try {
+        const registry = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'app', 'data', 'ntbc_templates.json'), 'utf8'));
+        return registry.filter(t => String(t.capturePresetId) === String(presetId)).map(t => t.name);
+    } catch (e) {
+        return [];
+    }
+}
+
 // GET: Retrieve all presets
 export async function GET() {
     try {
@@ -210,6 +220,15 @@ export async function DELETE(req) {
                 success: false, 
                 error: 'คุณไม่มีสิทธิ์ลบ Preset นี้ (เฉพาะผู้สร้างหรือ Admin เท่านั้นที่มีสิทธิ์ดำเนินการ)' 
             }, { status: 403 });
+        }
+
+        // Templates must always point at a preset, so one still in use can't be deleted.
+        const usedBy = templatesUsingPreset(id);
+        if (usedBy.length > 0) {
+            return NextResponse.json({
+                success: false,
+                error: `Preset นี้ยังถูกใช้โดย Template: ${usedBy.join(', ')} — เปลี่ยน Preset ของ Template เหล่านั้นใน Manage Templates ก่อนลบ`
+            }, { status: 409 });
         }
 
         await db.run('DELETE FROM capture_presets WHERE id = ?', [id]);

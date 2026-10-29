@@ -5,6 +5,8 @@ import {
     listTemplates,
     createTemplate,
     setTemplateFormat,
+    setTemplatePreset,
+    listCapturePresets,
     renameTemplate,
     deleteTemplate,
     loadTemplate,
@@ -17,6 +19,7 @@ import {
 
 export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole, currentUserId }) {
     const [templates, setTemplates] = useState([]);
+    const [presets, setPresets] = useState([]);
     const [loading, setLoading] = useState(false);
     const [renamingId, setRenamingId] = useState(null);
     const [newName, setNewName] = useState('');
@@ -62,8 +65,9 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
 
     const fetchTemplates = async () => {
         setLoading(true);
-        const list = await listTemplates();
+        const [list, presetList] = await Promise.all([listTemplates(), listCapturePresets()]);
         setTemplates(Array.isArray(list) ? list : []);
+        setPresets(presetList);
         setLoading(false);
     };
 
@@ -122,39 +126,50 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
     }, [isOpen, onClose]);
 
     const handleCreateWrapper = async () => {
+        if (presets.length === 0) {
+            return Swal.fire('ยังไม่มี Capture Preset', 'สร้าง Preset ที่หน้า Debug (บันทึกเป็น Preset ใหม่) ก่อน แล้วค่อยสร้าง Template', 'warning');
+        }
+        const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const { value: formValues } = await Swal.fire({
             title: 'Create New Template',
             html: `
                 <input id="swal-input1" class="swal2-input" placeholder="Template Name">
                 <select id="swal-input2" class="swal2-input">
                     <option value="empty">Create Empty Template</option>
-                    ${templates.map(t => `<option value="${t.id}" ${t.id === 'default' ? 'selected' : ''}>Duplicate from: ${t.name}</option>`).join('')}
+                    ${templates.map(t => `<option value="${t.id}" ${t.id === 'default' ? 'selected' : ''}>Duplicate from: ${esc(t.name)}</option>`).join('')}
                 </select>
                 <select id="swal-input3" class="swal2-input">
                     <option value="docx">Output: Word (.docx)</option>
                     <option value="pptx">Output: PowerPoint (.pptx)</option>
                 </select>
+                <select id="swal-input4" class="swal2-input">
+                    <option value="">— เลือก Capture Preset (จำเป็น) —</option>
+                    ${presets.map(p => `<option value="${esc(p.id)}">Preset: ${esc(p.name)}</option>`).join('')}
+                </select>
             `,
             focusConfirm: false,
             showCancelButton: true,
             preConfirm: () => {
-                return [
+                const values = [
                     document.getElementById('swal-input1').value,
                     document.getElementById('swal-input2').value,
-                    document.getElementById('swal-input3').value
+                    document.getElementById('swal-input3').value,
+                    document.getElementById('swal-input4').value
                 ];
+                if (!values[0]) { Swal.showValidationMessage('Name is required'); return false; }
+                if (!values[3]) { Swal.showValidationMessage('กรุณาเลือก Capture Preset'); return false; }
+                return values;
             }
         });
 
         if (formValues) {
-            const [name, sourceId, format] = formValues;
-            if (!name) return Swal.fire('Error', 'Name is required', 'error');
+            const [name, sourceId, format, capturePresetId] = formValues;
 
             setLoading(true);
             // Pass sourceId directly (backend handles 'empty')
             const src = sourceId;
 
-            await createTemplate(name, src, format);
+            await createTemplate(name, src, format, capturePresetId);
             await fetchTemplates();
         }
     };
@@ -514,6 +529,9 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                  {tmp.format === 'pptx'
                                                      ? <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-300 text-[10px] font-mono uppercase tracking-wider border border-orange-800">PPTX</span>
                                                      : <span className="px-2 py-0.5 rounded-full bg-sky-900/40 text-sky-300 text-[10px] font-mono uppercase tracking-wider border border-sky-800">DOCX</span>}
+                                                 {!presets.some(p => String(p.id) === String(tmp.capturePresetId)) && (
+                                                     <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] font-bold tracking-wider border border-amber-700 whitespace-nowrap" title="สร้างรายงานจาก Template นี้ไม่ได้จนกว่าจะเลือก Capture Preset">⚠ ยังไม่เลือก Preset</span>
+                                                 )}
                                                   {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') && (
                                                       <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
                                                           <Edit2 className="w-3 h-3" />
@@ -571,6 +589,25 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                              >
                                                  <option value="docx">Word (.docx)</option>
                                                  <option value="pptx">PowerPoint (.pptx)</option>
+                                             </select>
+                                         )}
+
+                                         {/* Capture preset (crop coordinates) — required to generate reports */}
+                                         {(String(tmp.id) !== 'default' || userRole === 'admin' || userRole === 'root') && (
+                                             <select
+                                                 value={presets.some(p => String(p.id) === String(tmp.capturePresetId)) ? String(tmp.capturePresetId) : ''}
+                                                 onChange={async (e) => {
+                                                     const capturePresetId = e.target.value;
+                                                     if (!capturePresetId) return;
+                                                     setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, capturePresetId } : x));
+                                                     const r = await setTemplatePreset(tmp.id, capturePresetId);
+                                                     if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change capture preset', 'error'); fetchTemplates(); }
+                                                 }}
+                                                 className={`px-2 py-1.5 rounded text-xs max-w-[220px] ${t.dropdown?.bg || 'bg-gray-950'} ${t.dropdown?.inputText || 'text-gray-200'} border ${presets.some(p => String(p.id) === String(tmp.capturePresetId)) ? (t.modalBorder || 'border-gray-700') : 'border-amber-500'}`}
+                                                 title="Capture Preset (crop coordinates) used by reports from this template"
+                                             >
+                                                 <option value="" disabled>— เลือก Capture Preset —</option>
+                                                 {presets.map(p => <option key={p.id} value={String(p.id)}>Preset: {p.name}</option>)}
                                              </select>
                                          )}
 

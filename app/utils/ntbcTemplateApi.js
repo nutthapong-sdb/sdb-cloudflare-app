@@ -12,11 +12,11 @@ export const listTemplates = async () => {
     } catch (e) { return []; }
 };
 
-export const createTemplate = async (name, sourceId, format) => {
+export const createTemplate = async (name, sourceId, format, capturePresetId) => {
     try {
         const res = await fetch('/api/ntbc-templates', {
             method: 'POST',
-            body: JSON.stringify({ action: 'create', name, sourceId, format }),
+            body: JSON.stringify({ action: 'create', name, sourceId, format, capturePresetId }),
             headers: { 'Content-Type': 'application/json' }
         });
         return await res.json();
@@ -33,6 +33,43 @@ export const setTemplateFormat = async (id, format) => {
         });
         return await res.json();
     } catch (e) { return { success: false, error: e.message }; }
+};
+
+// The capture preset (crop coordinates saved on the debug/Control page) this template's reports use.
+export const setTemplatePreset = async (id, capturePresetId) => {
+    try {
+        const res = await fetch('/api/ntbc-templates', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'set-preset', id, capturePresetId }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return await res.json();
+    } catch (e) { return { success: false, error: e.message }; }
+};
+
+export const listCapturePresets = async () => {
+    try {
+        const res = await fetch('/api/ntbc-capture-presets');
+        const data = await res.json();
+        return Array.isArray(data?.presets) ? data.presets : [];
+    } catch (e) { return []; }
+};
+
+// The preset a report built from `templateId` must crop its screenshots with.
+// Returns { template, preset } or { error } (Thai, shown to the user / job) when the
+// template has no preset or its preset no longer exists.
+export const resolveTemplateCapturePreset = async (templateId) => {
+    const [templates, presets] = await Promise.all([listTemplates(), listCapturePresets()]);
+    const template = templates.find(t => String(t.id) === String(templateId));
+    const name = template?.name || templateId;
+    if (!template?.capturePresetId) {
+        return { error: `Template "${name}" ยังไม่ได้เลือก Capture Preset — เลือกได้ที่ Manage Templates` };
+    }
+    const preset = presets.find(p => String(p.id) === String(template.capturePresetId));
+    if (!preset) {
+        return { error: `ไม่พบ Capture Preset ของ Template "${name}" (อาจถูกลบไปแล้ว) — เลือกใหม่ที่ Manage Templates` };
+    }
+    return { template, preset };
 };
 
 export const renameTemplate = async (id, newName) => {

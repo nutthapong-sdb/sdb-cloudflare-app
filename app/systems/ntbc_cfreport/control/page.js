@@ -81,6 +81,8 @@ export default function ControlPage() {
      const [presets, setPresets] = useState([]);
      const [activePresetId, setActivePresetId] = useState('default');
      const [isLoadingPresets, setIsLoadingPresets] = useState(false);
+     // Report templates and the capture preset each one is bound to (Manage Templates).
+     const [reportTemplates, setReportTemplates] = useState([]);
      const jsonImportInputRef = useRef(null);
  
      // Environment Selection States
@@ -197,11 +199,16 @@ export default function ControlPage() {
     const fetchPresets = useCallback(async () => {
         try {
             setIsLoadingPresets(true);
-            const res = await fetch('/api/ntbc-capture-presets');
+            const [res, tmplRes] = await Promise.all([
+                fetch('/api/ntbc-capture-presets'),
+                fetch('/api/ntbc-templates').catch(() => null)
+            ]);
             const data = await res.json();
             if (data.success && Array.isArray(data.presets)) {
                 setPresets(data.presets);
             }
+            const tmplData = tmplRes ? await tmplRes.json().catch(() => []) : [];
+            setReportTemplates(Array.isArray(tmplData) ? tmplData : []);
         } catch (e) {
             console.error('Failed to fetch capture presets:', e);
         } finally {
@@ -210,6 +217,9 @@ export default function ControlPage() {
     }, []);
 
     const activePreset = presets.find(p => p.id === activePresetId) || null;
+    const templatesUsingActivePreset = activePreset
+        ? reportTemplates.filter(t => String(t.capturePresetId) === String(activePreset.id))
+        : [];
     const isOwnerOrAdmin = Boolean(
         currentUser && (
             currentUser.role === 'admin' || 
@@ -2792,6 +2802,19 @@ export default function ControlPage() {
                                     </span>
                                 )}
 
+                                {/* Which report templates crop with this preset */}
+                                {activePreset && (
+                                    templatesUsingActivePreset.length > 0 ? (
+                                        <span className="text-[11px] text-sky-300 bg-sky-950/50 border border-sky-800/50 px-2 py-1 rounded max-w-[320px] truncate" title={templatesUsingActivePreset.map(t => t.name).join(', ')}>
+                                            📄 ใช้กับ Template: {templatesUsingActivePreset.map(t => t.name).join(', ')}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[11px] text-gray-400 bg-gray-950/60 border border-gray-800/60 px-2 py-1 rounded" title="ผูก Preset กับ Template ได้ที่ Manage Templates">
+                                            📄 ยังไม่มี Template ใช้
+                                        </span>
+                                    )
+                                )}
+
                                 {/* Action Buttons for Active Preset */}
                                 <div className="flex flex-wrap items-center gap-1.5">
                                     <button
@@ -3202,7 +3225,7 @@ export default function ControlPage() {
                                                             type="button"
                                                             onClick={saveCoordsToDatabase}
                                                             className="px-2.5 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
-                                                            title="บันทึกพิกัดลงฐานข้อมูลกลาง"
+                                                            title="บันทึกพิกัดลงฐานข้อมูลกลาง (รายงานไม่ได้ใช้ค่านี้แล้ว — รายงานใช้ Capture Preset ที่ผูกกับ Template ให้บันทึกลง Preset แทน)"
                                                         >
                                                             💾 Save to DB
                                                         </button>

@@ -70,7 +70,7 @@ export async function GET() {
 export async function POST(req) {
     try {
         await ensureDir();
-        const { action, name, sourceId, id, newName, format } = await req.json();
+        const { action, name, sourceId, id, newName, format, capturePresetId } = await req.json();
         console.log('NTBC Template API Request:', { action, name, sourceId, id });
 
         // Read registry
@@ -86,8 +86,12 @@ export async function POST(req) {
             const newId = Date.now().toString();
             // Output file type of reports built from this template: 'docx' (Word) or 'pptx'
             // (PowerPoint). A duplicate keeps its source's format unless one is given.
-            const sourceFormat = templates.find(t => String(t.id) === String(sourceId))?.format;
-            const newTemplate = { id: newId, name: name || `Copy of ${sourceId}`, format: TEMPLATE_FORMATS.includes(format) ? format : (sourceFormat || 'docx') };
+            const source = templates.find(t => String(t.id) === String(sourceId));
+            const newTemplate = { id: newId, name: name || `Copy of ${sourceId}`, format: TEMPLATE_FORMATS.includes(format) ? format : (source?.format || 'docx') };
+            // Crop-coordinate preset the report captures use (see the debug/Control page). A duplicate
+            // keeps its source's preset unless one is given.
+            const presetId = capturePresetId || source?.capturePresetId;
+            if (presetId) newTemplate.capturePresetId = String(presetId);
 
             // Determine source files
             let subContent = '{}';
@@ -138,6 +142,15 @@ export async function POST(req) {
             const target = templates.find(t => t.id === id);
             if (!target) return Response.json({ success: false, error: 'Template not found' }, { status: 404 });
             target.format = format;
+            await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
+            return Response.json({ success: true });
+        }
+
+        if (action === 'set-preset') {
+            if (!capturePresetId) return Response.json({ success: false, error: 'A capture preset is required' }, { status: 400 });
+            const target = templates.find(t => t.id === id);
+            if (!target) return Response.json({ success: false, error: 'Template not found' }, { status: 404 });
+            target.capturePresetId = String(capturePresetId);
             await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
             return Response.json({ success: true });
         }
