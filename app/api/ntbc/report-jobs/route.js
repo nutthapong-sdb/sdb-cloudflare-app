@@ -34,7 +34,9 @@ export async function GET(request) {
             return new NextResponse(fileBuffer, {
                 headers: {
                     'Content-Disposition': `attachment; filename="${safeFileName}"`,
-                    'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    'Content-Type': safeFileName.toLowerCase().endsWith('.pptx')
+                        ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
                 }
             });
         }

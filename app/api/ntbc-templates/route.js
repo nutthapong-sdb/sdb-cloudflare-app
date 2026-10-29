@@ -4,6 +4,7 @@ import path from 'path';
 const dataDir = path.join(process.cwd(), 'app', 'data');
 const templatesDir = path.join(dataDir, 'templates');
 const registryFile = path.join(dataDir, 'ntbc_templates.json');
+const TEMPLATE_FORMATS = ['docx', 'pptx'];
 
 // Ensure directories exist
 const ensureDir = async () => {
@@ -69,7 +70,7 @@ export async function GET() {
 export async function POST(req) {
     try {
         await ensureDir();
-        const { action, name, sourceId, id, newName } = await req.json();
+        const { action, name, sourceId, id, newName, format } = await req.json();
         console.log('NTBC Template API Request:', { action, name, sourceId, id });
 
         // Read registry
@@ -83,7 +84,10 @@ export async function POST(req) {
 
         if (action === 'create' || action === 'duplicate') {
             const newId = Date.now().toString();
-            const newTemplate = { id: newId, name: name || `Copy of ${sourceId}` };
+            // Output file type of reports built from this template: 'docx' (Word) or 'pptx'
+            // (PowerPoint). A duplicate keeps its source's format unless one is given.
+            const sourceFormat = templates.find(t => String(t.id) === String(sourceId))?.format;
+            const newTemplate = { id: newId, name: name || `Copy of ${sourceId}`, format: TEMPLATE_FORMATS.includes(format) ? format : (sourceFormat || 'docx') };
 
             // Determine source files
             let subContent = '{}';
@@ -127,6 +131,15 @@ export async function POST(req) {
             await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
 
             return Response.json({ success: true, template: newTemplate });
+        }
+
+        if (action === 'set-format') {
+            if (!TEMPLATE_FORMATS.includes(format)) return Response.json({ success: false, error: 'Invalid format' }, { status: 400 });
+            const target = templates.find(t => t.id === id);
+            if (!target) return Response.json({ success: false, error: 'Template not found' }, { status: 404 });
+            target.format = format;
+            await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
+            return Response.json({ success: true });
         }
 
         if (action === 'rename') {

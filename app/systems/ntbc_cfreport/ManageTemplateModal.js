@@ -4,6 +4,7 @@ import Swal from './utils/alert';
 import {
     listTemplates,
     createTemplate,
+    setTemplateFormat,
     renameTemplate,
     deleteTemplate,
     loadTemplate,
@@ -129,26 +130,31 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                     <option value="empty">Create Empty Template</option>
                     ${templates.map(t => `<option value="${t.id}" ${t.id === 'default' ? 'selected' : ''}>Duplicate from: ${t.name}</option>`).join('')}
                 </select>
+                <select id="swal-input3" class="swal2-input">
+                    <option value="docx">Output: Word (.docx)</option>
+                    <option value="pptx">Output: PowerPoint (.pptx)</option>
+                </select>
             `,
             focusConfirm: false,
             showCancelButton: true,
             preConfirm: () => {
                 return [
                     document.getElementById('swal-input1').value,
-                    document.getElementById('swal-input2').value
+                    document.getElementById('swal-input2').value,
+                    document.getElementById('swal-input3').value
                 ];
             }
         });
 
         if (formValues) {
-            const [name, sourceId] = formValues;
+            const [name, sourceId, format] = formValues;
             if (!name) return Swal.fire('Error', 'Name is required', 'error');
 
             setLoading(true);
             // Pass sourceId directly (backend handles 'empty')
             const src = sourceId;
 
-            await createTemplate(name, src);
+            await createTemplate(name, src, format);
             await fetchTemplates();
         }
     };
@@ -505,6 +511,9 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                   <h3 className={`font-semibold ${t.text || 'text-gray-200'}`}>{tmp.name}</h3>
                                                  {String(tmp.id) === String(defaultTemplateId) && <span className="px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 text-[10px] font-mono uppercase tracking-wider border border-blue-800">Default</span>}
                                                  {isHidden(tmp.id) && <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 text-[10px] font-mono uppercase tracking-wider border border-gray-700">Hidden</span>}
+                                                 {tmp.format === 'pptx'
+                                                     ? <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-300 text-[10px] font-mono uppercase tracking-wider border border-orange-800">PPTX</span>
+                                                     : <span className="px-2 py-0.5 rounded-full bg-sky-900/40 text-sky-300 text-[10px] font-mono uppercase tracking-wider border border-sky-800">DOCX</span>}
                                                   {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') && (
                                                       <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
                                                           <Edit2 className="w-3 h-3" />
@@ -547,6 +556,24 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                              </div>
                                          )}
  
+                                         {/* Output file type for reports built from this template */}
+                                         {String(tmp.id) !== 'default' && (
+                                             <select
+                                                 value={tmp.format === 'pptx' ? 'pptx' : 'docx'}
+                                                 onChange={async (e) => {
+                                                     const format = e.target.value;
+                                                     setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, format } : x));
+                                                     const r = await setTemplateFormat(tmp.id, format);
+                                                     if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change output format', 'error'); fetchTemplates(); }
+                                                 }}
+                                                 className={`px-2 py-1.5 rounded text-xs ${t.dropdown?.bg || 'bg-gray-950'} ${t.dropdown?.inputText || 'text-gray-200'} border ${t.modalBorder || 'border-gray-700'}`}
+                                                 title="Output file type of reports built from this template"
+                                             >
+                                                 <option value="docx">Word (.docx)</option>
+                                                 <option value="pptx">PowerPoint (.pptx)</option>
+                                             </select>
+                                         )}
+
                                          {/* Export bundle */}
                                          <button
                                              onClick={() => handleExportBundle(tmp.id, tmp.name)}

@@ -12,11 +12,23 @@ export const listTemplates = async () => {
     } catch (e) { return []; }
 };
 
-export const createTemplate = async (name, sourceId) => {
+export const createTemplate = async (name, sourceId, format) => {
     try {
         const res = await fetch('/api/ntbc-templates', {
             method: 'POST',
-            body: JSON.stringify({ action: 'create', name, sourceId }),
+            body: JSON.stringify({ action: 'create', name, sourceId, format }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return await res.json();
+    } catch (e) { return { success: false, error: e.message }; }
+};
+
+// format: 'docx' (Word) or 'pptx' (PowerPoint) — the file type reports from this template export to.
+export const setTemplateFormat = async (id, format) => {
+    try {
+        const res = await fetch('/api/ntbc-templates', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'set-format', id, format }),
             headers: { 'Content-Type': 'application/json' }
         });
         return await res.json();

@@ -14,6 +14,7 @@ import AutoReportModal from './AutoReportModal';
 import DepartmentModal from './DepartmentModal';
 import BackgroundJobsModal from './BackgroundJobsModal';
 import SearchableDropdown from './SearchableDropdown';
+import { buildPptxFromHtml } from '@/app/utils/ntbcPptxExport';
 import { NTBC_REPORT_STEPS, NTBC_TIMEOUT_DEFAULT_MIN, NTBC_TIMEOUT_MIN_MIN, NTBC_TIMEOUT_MAX_MIN, getNeededCaptureSteps } from '@/lib/ntbc-report-steps';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
@@ -1468,7 +1469,7 @@ async function renderInappImagesForExport(safeData) {
     return images;
 }
 
-const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot, autoDownloadWord = false, onAutoDownloadComplete, useThaiDigits, setUseThaiDigits }) => {
+const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTemplate, onGenerate, mode = 'report', theme, templateName, templateId, currentUserId, capturedDomainImage, onCaptureScreenshot, autoDownloadWord = false, onAutoDownloadComplete, useThaiDigits, setUseThaiDigits, exportFormat = 'docx' }) => {
     // mode: 'report' | 'sub-template' | 'static-template' | 'middle-template'
     console.log('ReportModal Render:', { mode, templateType: typeof template, templateValue: template, isNull: template === null, isEmptyObj: JSON.stringify(template) === '{}' });
 
@@ -2181,6 +2182,38 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
         if (!isEditing) {
             cleanHTML = cleanHTML.replace(/<p[^>]*>\s*(<div[^>]*>)/gi, '$1');
             cleanHTML = cleanHTML.replace(/(<\/div>)\s*<\/p>/gi, '$1');
+        }
+
+        // PowerPoint templates: build slides from the same processed HTML instead of a .docx.
+        if (exportFormat === 'pptx' && !isTemplateMode) {
+            const pptxName = filename.replace(/\.docx$/i, '.pptx');
+            const workerMode = typeof window !== 'undefined' && (localStorage.getItem('ntbc_worker_mode') === 'true' || window.location.search.includes('mode=worker'));
+            try {
+                if (workerMode && window.__ntbcProgress) {
+                    window.__ntbcProgress = { ...window.__ntbcProgress, detail: 'สร้างสไลด์ PowerPoint', updatedAt: Date.now() };
+                }
+                const base64 = await buildPptxFromHtml(cleanHTML, { title: `Cloudflare Report ${safeData.domain || ''}`.trim() });
+                if (workerMode) {
+                    window.__ntbcLastReportBase64 = base64;
+                    window.__ntbcLastReportFileName = pptxName;
+                    window.__ntbcLastBatchReportReady = true;
+                } else {
+                    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }));
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = pptxName;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                console.error('PowerPoint export error:', error);
+                if (workerMode) window.__ntbcLastBatchReportError = `PowerPoint export failed: ${error?.message || error}`;
+                else Swal.fire({ title: 'Export ไม่สำเร็จ', text: error?.message || String(error), icon: 'error' });
+            }
+            return;
         }
 
         let sourceHTML = legacyHeader + cleanHTML + footer;
@@ -3006,7 +3039,7 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
                                 </button>
                             )}
                             <button onClick={handleDownloadWord} className={`px-4 py-2 ${t.buttonPrimary} text-xs font-bold rounded flex items-center gap-2 transition-colors`}>
-                                <FileType className="w-3 h-3" /> Download Word
+                                <FileType className="w-3 h-3" /> {exportFormat === 'pptx' && !isTemplateMode ? 'Download PowerPoint' : 'Download Word'}
                             </button>
                         </>
                     )}
@@ -4520,6 +4553,8 @@ export default function NTBCCFReportPage() {
     const [isAutoReportModalOpen, setIsAutoReportModalOpen] = useState(false);
     const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
     const [autoDownloadWord, setAutoDownloadWord] = useState(false);
+    // Output type of the report being exported: 'docx' or 'pptx' (from the template's format).
+    const [reportExportFormat, setReportExportFormat] = useState('docx');
     const [chromeRunning, setChromeRunning] = useState(false);
     const [checkingChrome, setCheckingChrome] = useState(true);
     const [launchingChrome, setLaunchingChrome] = useState(false);
@@ -6607,6 +6642,8 @@ export default function NTBCCFReportPage() {
             // Load template
             setStepDetail('โหลด template');
             const domainTmpl = await loadStaticTemplate(templateId);
+            const tmplMeta = (await listTemplates()).find(t => String(t.id) === String(templateId));
+            setReportExportFormat(tmplMeta?.format === 'pptx' ? 'pptx' : 'docx');
             checkCancelled();
             
             console.log('DEBUG handleCaptureScreenshotConfirm: loaded template parts:', {
@@ -6623,7 +6660,7 @@ export default function NTBCCFReportPage() {
 
             statusMap.report = 'success';
             updateProgress();
-            setStepDetail('จัดหน้ารายงานและสร้างไฟล์ Word');
+            setStepDetail('จัดหน้ารายงานและสร้างไฟล์ (Word/PowerPoint)');
 
             isFinished = true;
 
@@ -7186,7 +7223,8 @@ export default function NTBCCFReportPage() {
 
             <ReportModal
                 isOpen={isReportModalOpen}
-                onClose={() => setIsReportModalOpen(false)}
+                onClose={() => { setIsReportModalOpen(false); setReportExportFormat('docx'); }}
+                exportFormat={reportExportFormat}
                 useThaiDigits={useThaiDigits}
                 setUseThaiDigits={setUseThaiDigits}
                 data={{

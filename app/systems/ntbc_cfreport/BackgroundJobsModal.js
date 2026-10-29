@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, RefreshCw, Trash2, Download, AlertCircle, CheckCircle, Clock, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { showImportantNotice, escapeHtml } from '@/app/utils/importantNotice';
+import { listTemplates } from '@/app/utils/ntbcTemplateApi';
 
 const STEP_ICON = { success: '✅', warn: '⚠️', error: '❌', skipped: '⏭️', unused: '➖', running: '🔄', pending: '⚪' };
 
@@ -15,6 +16,12 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [expandedJobs, setExpandedJobs] = useState({});
+    const [templateFormats, setTemplateFormats] = useState({}); // template id -> 'docx' | 'pptx'
+
+    useEffect(() => {
+        if (!isOpen) return;
+        listTemplates().then(list => setTemplateFormats(Object.fromEntries(list.map(t => [String(t.id), t.format || 'docx']))));
+    }, [isOpen]);
     const intervalRef = useRef(null);
 
     const fetchJobs = async () => {
@@ -182,7 +189,7 @@ export default function BackgroundJobsModal({ isOpen, onClose, theme, currentUse
                                                     {job.zone_name}
                                                 </span>
                                                 <span className="text-[10px] bg-gray-900/60 border border-gray-700 px-2 py-0.5 rounded text-gray-400 flex items-center gap-1">
-                                                    <FileText className="w-3 h-3 text-blue-400" /> DOCX
+                                                    <FileText className="w-3 h-3 text-blue-400" /> {(job.file_name ? /\.pptx$/i.test(job.file_name) : templateFormats[String(job.template_id)] === 'pptx') ? 'PPTX' : 'DOCX'}
                                                 </span>
 
                                                 {job.status === 'pending' && (
