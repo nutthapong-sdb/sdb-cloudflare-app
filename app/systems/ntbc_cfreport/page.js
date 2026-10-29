@@ -15,7 +15,8 @@ import DepartmentModal from './DepartmentModal';
 import BackgroundJobsModal from './BackgroundJobsModal';
 import SearchableDropdown from './SearchableDropdown';
 import { buildPptxFromHtml } from '@/app/utils/ntbcPptxExport';
-import { NTBC_REPORT_STEPS, NTBC_TIMEOUT_DEFAULT_MIN, NTBC_TIMEOUT_MIN_MIN, NTBC_TIMEOUT_MAX_MIN, getNeededCaptureSteps } from '@/lib/ntbc-report-steps';
+import { UPLOADED_SLOTS } from './utils/uploadedVariables';
+import { NTBC_REPORT_STEPS, NTBC_TIMEOUT_DEFAULT_MIN, NTBC_TIMEOUT_MIN_MIN, NTBC_TIMEOUT_MAX_MIN, getNeededCaptureSteps, applyPresetKind } from '@/lib/ntbc-report-steps';
 import { saveCloudflareTokenAction } from '@/app/actions/authActions';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -4663,9 +4664,47 @@ export default function NTBCCFReportPage() {
     const [uploadedBrowserIntegrityImage, setUploadedBrowserIntegrityImage] = useState(null);
     const [uploadedLoadBalancingSpectrumImage, setUploadedLoadBalancingSpectrumImage] = useState(null);
 
+    // Capture preset whose uploaded images fill this report (an 'uploaded' preset), else null.
+    const [reportUploadPresetId, setReportUploadPresetId] = useState(null);
+
+    // Puts server-side uploaded images (the get-saved `uploaded` map) into the @uploaded_* state.
+    // clearMissing: also empty the slots the map has no image for.
+    const applyUploadedImages = (u, clearMissing) => {
+        if (u.domains || clearMissing) setUploadedDomainImage(u.domains || null);
+        if (u.dns || clearMissing) setUploadedDnsImage(u.dns || null);
+        if (u.traffic || clearMissing) setUploadedTrafficImage(u.traffic || null);
+        if (u.trafficSub1 || clearMissing) setUploadedTrafficImageSub1(u.trafficSub1 || null);
+        if (u.trafficSub2 || clearMissing) setUploadedTrafficImageSub2(u.trafficSub2 || null);
+        if (u.trafficSub3 || clearMissing) setUploadedTrafficImageSub3(u.trafficSub3 || null);
+        if (u.trafficSub4 || clearMissing) setUploadedTrafficImageSub4(u.trafficSub4 || null);
+        if (u.trafficSub5 || clearMissing) setUploadedTrafficImageSub5(u.trafficSub5 || null);
+        if (u.firewall || clearMissing) setUploadedFirewallImage(u.firewall || null);
+        if (u.securityRules || clearMissing) setUploadedSecurityRulesImage(u.securityRules || null);
+        if (u.argo || clearMissing) setUploadedArgoImage(u.argo || null);
+        if (u.speed || clearMissing) setUploadedSpeedImage(u.speed || null);
+        if (u.speedMobile || clearMissing) setUploadedSpeedMobileImage(u.speedMobile || null);
+        if (u.botManagement || clearMissing) setUploadedBotManagementImage(u.botManagement || null);
+        if (u.securityLevel || clearMissing) setUploadedSecurityLevelImage(u.securityLevel || null);
+        if (u.sslOverview || clearMissing) setUploadedSslOverviewImage(u.sslOverview || null);
+        if (u.sslEdge || clearMissing) setUploadedSslEdgeImage(u.sslEdge || null);
+        if (u.rateLimiting || clearMissing) setUploadedRateLimitingImage(u.rateLimiting || null);
+        if (u.managedRules || clearMissing) setUploadedManagedRulesImage(u.managedRules || null);
+        if (u.ipAccess || clearMissing) setUploadedIpAccessImage(u.ipAccess || null);
+        if (u.zoneLockdown || clearMissing) setUploadedZoneLockdownImage(u.zoneLockdown || null);
+        if (u.trafficCountries || clearMissing) setUploadedTrafficCountriesImage(u.trafficCountries || null);
+        if (u.topEventsSource || clearMissing) setUploadedTopEventsSourceImage(u.topEventsSource || null);
+        if (u.minTlsVersion || clearMissing) setUploadedMinTlsVersionImage(u.minTlsVersion || null);
+        if (u.tls13 || clearMissing) setUploadedTls13Image(u.tls13 || null);
+        if (u.browserIntegrity || clearMissing) setUploadedBrowserIntegrityImage(u.browserIntegrity || null);
+        if (u.loadBalancingSpectrum || clearMissing) setUploadedLoadBalancingSpectrumImage(u.loadBalancingSpectrum || null);
+    };
+
     // Load saved screenshots directly from server disk
     useEffect(() => {
-        fetch('/api/ntbc-capture?action=get-saved')
+        // With an 'uploaded' preset, every @uploaded_* slot comes from that preset alone —
+        // clear slots it has no image for instead of keeping an older upload.
+        const clearMissing = !!reportUploadPresetId;
+        fetch(`/api/ntbc-capture?action=get-saved${reportUploadPresetId ? `&uploadPreset=${encodeURIComponent(reportUploadPresetId)}` : ''}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.screenshots) {
@@ -4701,41 +4740,12 @@ export default function NTBCCFReportPage() {
                     if (s.browserIntegrity) setCapturedBrowserIntegrityImage(s.browserIntegrity);
                     if (s.loadBalancingSpectrum) setCapturedLoadBalancingSpectrumImage(s.loadBalancingSpectrum);
                 }
-                if (data.success && data.uploaded) {
-                    const u = data.uploaded;
-                    if (u.domains) setUploadedDomainImage(u.domains);
-                    if (u.dns) setUploadedDnsImage(u.dns);
-                    if (u.traffic) setUploadedTrafficImage(u.traffic);
-                    if (u.trafficSub1) setUploadedTrafficImageSub1(u.trafficSub1);
-                    if (u.trafficSub2) setUploadedTrafficImageSub2(u.trafficSub2);
-                    if (u.trafficSub3) setUploadedTrafficImageSub3(u.trafficSub3);
-                    if (u.trafficSub4) setUploadedTrafficImageSub4(u.trafficSub4);
-                    if (u.trafficSub5) setUploadedTrafficImageSub5(u.trafficSub5);
-                    if (u.firewall) setUploadedFirewallImage(u.firewall);
-                    if (u.securityRules) setUploadedSecurityRulesImage(u.securityRules);
-                    if (u.argo) setUploadedArgoImage(u.argo);
-                    if (u.speed) setUploadedSpeedImage(u.speed);
-                    if (u.speedMobile) setUploadedSpeedMobileImage(u.speedMobile);
-                    if (u.botManagement) setUploadedBotManagementImage(u.botManagement);
-                    if (u.securityLevel) setUploadedSecurityLevelImage(u.securityLevel);
-                    if (u.sslOverview) setUploadedSslOverviewImage(u.sslOverview);
-                    if (u.sslEdge) setUploadedSslEdgeImage(u.sslEdge);
-                    if (u.rateLimiting) setUploadedRateLimitingImage(u.rateLimiting);
-                    if (u.managedRules) setUploadedManagedRulesImage(u.managedRules);
-                    if (u.ipAccess) setUploadedIpAccessImage(u.ipAccess);
-                    if (u.zoneLockdown) setUploadedZoneLockdownImage(u.zoneLockdown);
-                    if (u.trafficCountries) setUploadedTrafficCountriesImage(u.trafficCountries);
-                    if (u.topEventsSource) setUploadedTopEventsSourceImage(u.topEventsSource);
-                    if (u.minTlsVersion) setUploadedMinTlsVersionImage(u.minTlsVersion);
-                    if (u.tls13) setUploadedTls13Image(u.tls13);
-                    if (u.browserIntegrity) setUploadedBrowserIntegrityImage(u.browserIntegrity);
-                    if (u.loadBalancingSpectrum) setUploadedLoadBalancingSpectrumImage(u.loadBalancingSpectrum);
-                }
+                if (data.success && data.uploaded) applyUploadedImages(data.uploaded, clearMissing);
             })
             .catch(e => {
                 console.error('Failed to load saved screenshots from server disk:', e);
             });
-    }, [isReportModalOpen]);
+    }, [isReportModalOpen, reportUploadPresetId]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);
     const [isControlModalOpen, setIsControlModalOpen] = useState(false);
@@ -5771,7 +5781,7 @@ export default function NTBCCFReportPage() {
                     color: '#fff'
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        setIsBackgroundJobsModalOpen(true);
+                        selectWorkspaceTab('jobs');
                     }
                 });
                 setIsNtbcJobActive(true);
@@ -5971,7 +5981,11 @@ export default function NTBCCFReportPage() {
 
         // Only capture the screenshots this template actually uses (its @captured_* variables);
         // the rest are marked "unused" and skipped. If the template can't be read, capture all.
-        const neededSteps = getNeededCaptureSteps(await loadStaticTemplate(templateId).catch(() => null));
+        // The template's capture preset: its crop coordinates, and its type (screenshots, inapp
+        // tables or uploaded images) — see applyPresetKind(). A missing preset fails at step 1 below.
+        const presetLookup = await resolveTemplateCapturePreset(templateId);
+        const presetKind = presetLookup.preset?.kind || 'captured';
+        const neededSteps = getNeededCaptureSteps(applyPresetKind(await loadStaticTemplate(templateId).catch(() => null), presetKind));
         if (neededSteps) {
             NTBC_REPORT_STEPS.forEach(step => {
                 if (!neededSteps.has(step.key)) statusMap[step.key] = 'unused';
@@ -6125,14 +6139,13 @@ export default function NTBCCFReportPage() {
 
         try {
             // Crop coordinates come from the capture preset chosen on the template (Manage Templates).
-            const presetLookup = await resolveTemplateCapturePreset(templateId);
             if (presetLookup.error) {
                 statusMap.launch = 'error';
                 errorMap.launch = presetLookup.error;
                 throw new Error(presetLookup.error);
             }
             const globalCoords = presetLookup.preset.coords || {};
-            console.log(`[capture preset] template ${templateId} → "${presetLookup.preset.name}"`);
+            console.log(`[capture preset] template ${templateId} → "${presetLookup.preset.name}" (${presetKind})`);
 
             const getCoordParams = (type) => {
                 if (!globalCoords) return '';
@@ -6691,7 +6704,7 @@ export default function NTBCCFReportPage() {
 
             // Load template
             setStepDetail('โหลด template');
-            const domainTmpl = await loadStaticTemplate(templateId);
+            const domainTmpl = applyPresetKind(await loadStaticTemplate(templateId), presetKind);
             const tmplMeta = (await listTemplates()).find(t => String(t.id) === String(templateId));
             setReportExportFormat(tmplMeta?.format === 'pptx' ? 'pptx' : 'docx');
             checkCancelled();
@@ -6703,6 +6716,26 @@ export default function NTBCCFReportPage() {
             console.log('DEBUG handleCaptureScreenshotConfirm: combinedTmpl length =', combinedTmpl.length);
             setReportTemplate(combinedTmpl);
             setReportModalMode('report');
+
+            // An 'uploaded' preset fills the report with its own uploaded images: load them before
+            // the report opens, and flag (⚠️, shown again at download) every slot still missing one.
+            if (presetKind === 'uploaded') {
+                setStepDetail('โหลดรูปที่อัปโหลดไว้ใน Preset');
+                const saved = await fetch(`/api/ntbc-capture?action=get-saved&uploadPreset=${encodeURIComponent(presetLookup.preset.id)}`)
+                    .then(r => r.json()).catch(() => ({}));
+                const uploaded = saved?.uploaded || {};
+                applyUploadedImages(uploaded, true);
+                const missing = UPLOADED_SLOTS.filter(slot => domainTmpl.includes(slot.varName) && !uploaded[slot.id]);
+                NTBC_REPORT_STEPS.forEach(step => {
+                    const missingHere = missing.filter(slot => (step.tags || []).includes(slot.varName.replace('@uploaded_', '@captured_')));
+                    if (missingHere.length > 0) {
+                        statusMap[step.key] = 'warn';
+                        errorMap[step.key] = `ยังไม่ได้อัปโหลดรูปใน Preset "${presetLookup.preset.name}": ${missingHere.map(slot => slot.label).join(', ')}`;
+                    }
+                });
+                updateProgress();
+            }
+            setReportUploadPresetId(presetKind === 'uploaded' ? presetLookup.preset.id : null);
 
             // Set autoDownloadReport to true and open modal
             setAutoDownloadWord(true);

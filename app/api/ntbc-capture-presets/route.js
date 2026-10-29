@@ -6,6 +6,13 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 
 const fallbackFilePath = path.join(process.cwd(), 'app', 'data', 'capture_presets.json');
+const PRESET_KINDS = ['captured', 'inapp', 'uploaded'];
+
+// Images uploaded into an 'uploaded' preset (see the ntbc-capture route's per-preset upload dir).
+function presetUploadDir(presetId) {
+    const safeId = String(presetId).replace(/[^a-zA-Z0-9_-]/g, '');
+    return safeId ? path.join(process.cwd(), 'db', 'captured', 'presets', safeId) : null;
+}
 
 // Helper to read fallback JSON file
 function readFallbackPresets() {
@@ -54,6 +61,7 @@ export async function GET() {
                 id: r.id,
                 name: r.name,
                 coords: typeof r.coords === 'string' ? JSON.parse(r.coords) : r.coords,
+                kind: r.kind || 'captured',
                 createdBy: r.created_by,
                 createdById: r.created_by_id,
                 createdByName: r.created_by_name,
@@ -80,6 +88,7 @@ export async function POST(req) {
     try {
         const body = await req.json();
         const { name, coords, user } = body;
+        const kind = PRESET_KINDS.includes(body.kind) ? body.kind : 'captured';
 
         if (!name || !name.trim()) {
             return NextResponse.json({ success: false, error: 'Preset name is required' }, { status: 400 });
@@ -98,6 +107,7 @@ export async function POST(req) {
             id,
             name: name.trim(),
             coords,
+            kind,
             createdBy,
             createdById,
             createdByName,
@@ -108,9 +118,9 @@ export async function POST(req) {
         try {
             const db = await getDb();
             await db.run(
-                `INSERT INTO capture_presets (id, name, coords, created_by, created_by_id, created_by_name, created_at, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [id, newPreset.name, JSON.stringify(coords), createdBy, createdById, createdByName, now, now]
+                `INSERT INTO capture_presets (id, name, coords, kind, created_by, created_by_id, created_by_name, created_at, updated_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [id, newPreset.name, JSON.stringify(coords), kind, createdBy, createdById, createdByName, now, now]
             );
         } catch (dbErr) {
             console.warn('Database write failed for preset, using fallback file:', dbErr.message);
@@ -163,16 +173,18 @@ export async function PUT(req) {
         const now = new Date().toISOString();
         const updatedName = name && name.trim() ? name.trim() : existing.name;
         const updatedCoords = coords && typeof coords === 'object' ? coords : JSON.parse(existing.coords);
+        const updatedKind = PRESET_KINDS.includes(body.kind) ? body.kind : (existing.kind || 'captured');
 
         await db.run(
-            `UPDATE capture_presets SET name = ?, coords = ?, updated_at = ? WHERE id = ?`,
-            [updatedName, JSON.stringify(updatedCoords), now, id]
+            `UPDATE capture_presets SET name = ?, coords = ?, kind = ?, updated_at = ? WHERE id = ?`,
+            [updatedName, JSON.stringify(updatedCoords), updatedKind, now, id]
         );
 
         const updatedPreset = {
             id,
             name: updatedName,
             coords: updatedCoords,
+            kind: updatedKind,
             createdBy: existing.created_by,
             createdById: existing.created_by_id,
             createdByName: existing.created_by_name,
@@ -232,6 +244,10 @@ export async function DELETE(req) {
         }
 
         await db.run('DELETE FROM capture_presets WHERE id = ?', [id]);
+        const uploadDir = presetUploadDir(id);
+        if (uploadDir && fs.existsSync(uploadDir)) {
+            try { fs.rmSync(uploadDir, { recursive: true, force: true }); } catch (e) { console.warn('Could not remove preset uploads:', e.message); }
+        }
 
         // Update fallback file
         const allPresets = readFallbackPresets().filter(p => p.id !== id);

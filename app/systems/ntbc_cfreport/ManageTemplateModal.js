@@ -18,6 +18,9 @@ import {
 } from '@/app/utils/ntbcTemplateApi';
 
 // inline: render as a page panel (workspace tab) instead of a popup.
+const PRESET_KIND_LABEL = { captured: '📸 แคปรูป', inapp: '🧩 inapp', uploaded: '🖼️ อัปโหลดเอง' };
+const presetLabel = (p) => `${p.name} · ${PRESET_KIND_LABEL[p.kind] || PRESET_KIND_LABEL.captured}`;
+
 export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole, currentUserId, inline = false }) {
     const [templates, setTemplates] = useState([]);
     const [presets, setPresets] = useState([]);
@@ -145,7 +148,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                 </select>
                 <select id="swal-input4" class="swal2-input">
                     <option value="">— เลือก Capture Preset (จำเป็น) —</option>
-                    ${presets.map(p => `<option value="${esc(p.id)}">Preset: ${esc(p.name)}</option>`).join('')}
+                    ${presets.map(p => `<option value="${esc(p.id)}">Preset: ${esc(presetLabel(p))}</option>`).join('')}
                 </select>
             `,
             focusConfirm: false,
@@ -610,7 +613,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                  title="Capture Preset (crop coordinates) used by reports from this template"
                                              >
                                                  <option value="" disabled>— เลือก Capture Preset —</option>
-                                                 {presets.map(p => <option key={p.id} value={String(p.id)}>Preset: {p.name}</option>)}
+                                                 {presets.map(p => <option key={p.id} value={String(p.id)}>Preset: {presetLabel(p)}</option>)}
                                              </select>
                                          )}
 

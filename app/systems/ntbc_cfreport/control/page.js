@@ -27,6 +27,8 @@ const safeSetItem = (key, val) => {
     }
 };
 
+const PRESET_KIND_LABEL = { captured: '📸 แคปรูป', inapp: '🧩 inapp', uploaded: '🖼️ อัปโหลดเอง' };
+
 export default function ControlPage() {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
@@ -228,7 +230,7 @@ export default function ControlPage() {
     }, [activePreset]);
 
     // Coordinates edited but not yet saved into the active preset ('' and '0' both mean Auto +0).
-    const coordsDirty = Boolean(activePreset) && (() => {
+    const coordsDirty = Boolean(activePreset) && (activePreset.kind || 'captured') === 'captured' && (() => {
         const norm = (v) => (v === undefined || v === null || String(v).trim() === '' ? '0' : String(v).trim());
         const saved = activePreset.coords || {};
         const keys = new Set([...Object.keys(coords || {}), ...Object.keys(saved)]);
@@ -241,6 +243,21 @@ export default function ControlPage() {
         window.addEventListener('beforeunload', warn);
         return () => window.removeEventListener('beforeunload', warn);
     }, [coordsDirty]);
+    // Preset type decides what this page shows: crop offsets + screenshot preview ('captured'),
+    // the app-built table preview ('inapp'), or this preset's own image uploads ('uploaded').
+    const presetKind = activePreset?.kind || 'captured';
+    const uploadPresetId = presetKind === 'uploaded' ? activePreset.id : null;
+    useEffect(() => {
+        setCapturePreviewMode(presetKind === 'inapp' ? 'inapp' : presetKind === 'uploaded' ? 'upload' : 'screenshot');
+    }, [presetKind]);
+    // Show the uploads of the selected preset (or the shared ones for the other types).
+    useEffect(() => {
+        fetch(`/api/ntbc-capture?action=get-saved${uploadPresetId ? `&uploadPreset=${encodeURIComponent(uploadPresetId)}` : ''}`)
+            .then(res => res.json())
+            .then(data => { if (data.success) setUploadedImages(data.uploaded || {}); })
+            .catch(e => console.error('Failed to load uploaded images:', e));
+    }, [uploadPresetId]);
+
     const templatesUsingActivePreset = activePreset
         ? reportTemplates.filter(t => String(t.capturePresetId) === String(activePreset.id))
         : [];
@@ -291,24 +308,32 @@ export default function ControlPage() {
     };
 
     const handleSaveAsNewPreset = async () => {
-        const { value: presetName } = await Swal.fire({
-            title: '💾 บันทึกเป็น Preset ใหม่',
-            input: 'text',
-            inputLabel: 'ตั้งชื่อ Preset สำหรับพิกัดปัจจุบัน',
-            inputPlaceholder: 'เช่น NTBC Standard 1080p, High DNS Table...',
+        const { value: formValues } = await Swal.fire({
+            title: '💾 สร้าง Preset ใหม่',
+            html: `
+                <input id="preset-name" class="swal2-input" placeholder="ชื่อ Preset เช่น NTBC Standard">
+                <select id="preset-kind" class="swal2-input">
+                    <option value="captured">📸 แคปรูปจาก Cloudflare (ตั้ง offset ได้)</option>
+                    <option value="inapp">🧩 inapp — ใช้ตารางที่ระบบสร้างจากข้อมูล ไม่ต้องแคป</option>
+                    <option value="uploaded">🖼️ อัปโหลดรูปเอง</option>
+                </select>
+            `,
+            focusConfirm: false,
             showCancelButton: true,
-            confirmButtonText: 'บันทึก Preset',
+            confirmButtonText: 'สร้าง Preset',
             cancelButtonText: 'ยกเลิก',
             confirmButtonColor: '#e11d48',
             background: '#111827',
             color: '#fff',
-            inputValidator: (val) => {
-                if (!val || !val.trim()) {
-                    return 'กรุณากรอกชื่อ Preset';
-                }
+            preConfirm: () => {
+                const name = document.getElementById('preset-name').value.trim();
+                if (!name) { Swal.showValidationMessage('กรุณากรอกชื่อ Preset'); return false; }
+                return { name, kind: document.getElementById('preset-kind').value };
             }
         });
 
+        const presetName = formValues?.name;
+        const presetKindChoice = formValues?.kind || 'captured';
         if (!presetName) return;
 
         try {
@@ -318,7 +343,8 @@ export default function ControlPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: presetName.trim(),
-                    coords,
+                    coords: presetKindChoice === 'captured' ? coords : DEFAULT_ZERO_COORDS,
+                    kind: presetKindChoice,
                     user
                 })
             });
@@ -326,6 +352,7 @@ export default function ControlPage() {
             if (data.success && data.preset) {
                 await fetchPresets();
                 setActivePresetId(data.preset.id);
+                setCoords(data.preset.coords);
                 if (typeof window !== 'undefined') {
                     localStorage.setItem('control_activePresetId', data.preset.id);
                 }
@@ -1143,7 +1170,7 @@ export default function ControlPage() {
                 const response = await fetch('/api/ntbc-capture', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'save-uploaded', id, imageBase64 }),
+                    body: JSON.stringify({ action: 'save-uploaded', id, imageBase64, presetId: uploadPresetId }),
                 });
                 const data = await response.json();
                 if (data && data.success) {
@@ -1172,7 +1199,7 @@ export default function ControlPage() {
             const response = await fetch('/api/ntbc-capture', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'delete-uploaded', id }),
+                body: JSON.stringify({ action: 'delete-uploaded', id, presetId: uploadPresetId }),
             });
             const data = await response.json();
             if (data && data.success) {
@@ -1375,9 +1402,7 @@ export default function ControlPage() {
                             }));
                         }
                     }
-                    if (data.success && data.uploaded) {
-                        setUploadedImages(data.uploaded);
-                    }
+                    // Uploaded images are loaded per selected preset (see the uploadPresetId effect).
                 })
                 .catch(e => {
                     console.error('Failed to load saved screenshots from server disk:', e);
@@ -2606,16 +2631,19 @@ export default function ControlPage() {
                     )}
                 </div>
             </div>
-            <p className="text-[10px] text-gray-500 mt-2 font-mono">
-                Connecting VNC display at: {vncUrl}
-            </p>
-            <p className="text-[10px] text-gray-500 mt-1.5 flex items-start gap-1.5">
-                <Sliders className="w-3 h-3 text-gray-600 shrink-0 mt-0.5" />
-                <span>
-                    ก่อนแคปภาพทุกครั้ง ระบบจะ<strong className="text-gray-400">ขยาย (ไม่พับ)</strong> เมนูด้านข้างของหน้าเว็บ Cloudflare ให้เปิดเต็มเสมอ
-                    (ถ้าตรวจพบว่าเมนูถูกพับอยู่ จะกดคีย์ลัด t แล้ว s เพื่อขยายให้อัตโนมัติ) เพื่อให้ภาพที่แคปออกมาหน้าตาสม่ำเสมอทุกครั้ง
-                </span>
-            </p>
+            <details className="mt-2 text-[10px] text-gray-500">
+                <summary className="cursor-pointer select-none hover:text-gray-300">⋯ ข้อมูลการเชื่อมต่อ</summary>
+                <p className="text-[10px] text-gray-500 mt-2 font-mono">
+                    Connecting VNC display at: {vncUrl}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1.5 flex items-start gap-1.5">
+                    <Sliders className="w-3 h-3 text-gray-600 shrink-0 mt-0.5" />
+                    <span>
+                        ก่อนแคปภาพทุกครั้ง ระบบจะ<strong className="text-gray-400">ขยาย (ไม่พับ)</strong> เมนูด้านข้างของหน้าเว็บ Cloudflare ให้เปิดเต็มเสมอ
+                        (ถ้าตรวจพบว่าเมนูถูกพับอยู่ จะกดคีย์ลัด t แล้ว s เพื่อขยายให้อัตโนมัติ) เพื่อให้ภาพที่แคปออกมาหน้าตาสม่ำเสมอทุกครั้ง
+                    </span>
+                </p>
+            </details>
         </div>
     );
 
@@ -2718,7 +2746,7 @@ export default function ControlPage() {
                                             หยุด
                                         </button>
                                     </div>
-                                ) : (
+                                ) : presetKind === 'captured' && (
                                     <button
                                         type="button"
                                         disabled={isCapturingDirect || isCapturingAll}
@@ -2754,84 +2782,49 @@ export default function ControlPage() {
                             </div>
                         )}
 
-                        {/* Which Cloudflare layout the coordinates assume */}
-                        <div className="mb-3 rounded-xl border-2 border-sky-500/60 bg-sky-950/40 px-4 py-3">
-                            <p className="text-lg sm:text-xl font-extrabold text-sky-200 leading-snug">
-                                📐 พิกัดตัดรูปทั้งหมดนี้ ใช้กับหน้าจอ Cloudflare ที่ &quot;เปิด&quot; แถบเมนูซ้าย (Sidebar ขยาย)
-                            </p>
-                            <p className="text-sm text-sky-300/90 mt-1">
-                                ระบบจะเปิดแถบเมนูซ้ายให้อัตโนมัติก่อนแคปทุกครั้ง และหน้าจอแคปกว้าง 1920px เสมอ — ไม่ต้องปิด/เปิดแถบเมนูเอง
-                            </p>
-                            <p className="text-sm text-sky-300/90 mt-1">
-                                ✂️ ระบบตัดรูปอัตโนมัติตามกรอบของแต่ละหัวข้อในหน้า Cloudflare แล้ว — ตัวเลขด้านล่างคือการขยับเพิ่ม/ลดจากกรอบนั้น (0 = ตัดพอดีกรอบ) ถ้าเคยตั้งค่าไว้ก่อนหน้านี้ ให้กด &quot;ตั้งเป็น Auto (0) ทั้งหมด&quot; แล้ว &quot;บันทึกทับ&quot;
-                            </p>
-                        </div>
-
-                        {/* Preset & Coordinate Management Toolbar */}
-                        <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3 mb-3.5 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 shadow-inner">
-                            {/* Preset Selection & Info */}
-                            <div className="flex flex-wrap items-center gap-2.5">
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
+                        {/* Preset bar: pick the preset, save it; rarely used actions sit in the ⋯ menu */}
+                        <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3 mb-3 flex flex-col gap-2 shadow-inner">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
                                     <Sliders className="w-4 h-4 text-rose-400" />
-                                    <span>Preset พิกัด:</span>
-                                </div>
+                                    Preset:
+                                </span>
                                 <select
                                     value={activePresetId}
                                     onChange={(e) => handleSelectPreset(e.target.value)}
-                                    className="bg-gray-950 border border-gray-700/80 rounded-lg px-3 py-1.5 text-xs text-rose-200 font-medium focus:outline-none focus:border-rose-500/60 transition-colors cursor-pointer min-w-[180px] max-w-[260px] truncate"
+                                    className="bg-gray-950 border border-gray-700/80 rounded-lg px-3 py-1.5 text-xs text-rose-200 font-medium focus:outline-none focus:border-rose-500/60 transition-colors cursor-pointer min-w-[200px] max-w-[320px] truncate"
                                 >
                                     <option value="default">Standard Default (Auto +0)</option>
                                     {presets.map(p => (
                                         <option key={p.id} value={p.id}>
-                                            {p.name} {p.createdByName ? `(@${p.createdBy})` : ''}
+                                            {p.name} · {PRESET_KIND_LABEL[p.kind] || PRESET_KIND_LABEL.captured}
                                         </option>
                                     ))}
                                 </select>
 
-                                {/* Creator & Permission Badge */}
-                                {activePreset ? (
-                                    <div className="flex items-center gap-1 px-2 py-1 bg-gray-950/80 border border-gray-800 rounded text-[11px] font-mono">
-                                        <span className="text-gray-400">👤 โดย:</span>
-                                        <span className="text-rose-300 font-semibold truncate max-w-[100px]" title={activePreset.createdByName || activePreset.createdBy}>
-                                            @{activePreset.createdBy}
-                                        </span>
-                                        {isOwnerOrAdmin ? (
-                                            <span className="ml-1 text-[10px] text-emerald-400 font-bold bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-800/40" title="คุณมีสิทธิ์แก้ไข/ลบ Preset นี้">
-                                                ✓ แก้ไขได้
-                                            </span>
-                                        ) : (
-                                            <span className="ml-1 text-[10px] text-amber-400 font-bold bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-800/40" title="เฉพาะผู้สร้างหรือ Admin เท่านั้นที่แก้ไขได้">
-                                                🔒 อ่านอย่างเดียว
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <span className="text-[11px] text-gray-400 font-mono bg-gray-950/60 border border-gray-800/60 px-2 py-1 rounded">
-                                        ⚙️ ค่าเริ่มต้นระบบ
-                                    </span>
-                                )}
-
                                 {coordsDirty && (
                                     <span className="text-[11px] font-bold text-amber-200 bg-amber-900/60 border border-amber-500/70 px-2 py-1 rounded animate-pulse" title="กด 'บันทึกทับ' เพื่อเก็บลง Preset — ถ้าปิดหน้านี้ไปค่าที่แก้จะหาย และรายงานจะยังใช้ค่าเดิมของ Preset">
-                                        ● แก้แล้วยังไม่ได้บันทึกลง Preset
+                                        ● ยังไม่ได้บันทึก
                                     </span>
                                 )}
 
-                                {/* Which report templates crop with this preset */}
-                                {activePreset && (
-                                    templatesUsingActivePreset.length > 0 ? (
-                                        <span className="text-[11px] text-sky-300 bg-sky-950/50 border border-sky-800/50 px-2 py-1 rounded max-w-[320px] truncate" title={templatesUsingActivePreset.map(t => t.name).join(', ')}>
-                                            📄 ใช้กับ Template: {templatesUsingActivePreset.map(t => t.name).join(', ')}
-                                        </span>
-                                    ) : (
-                                        <span className="text-[11px] text-gray-400 bg-gray-950/60 border border-gray-800/60 px-2 py-1 rounded" title="ผูก Preset กับ Template ได้ที่ Manage Templates">
-                                            📄 ยังไม่มี Template ใช้
-                                        </span>
-                                    )
+                                {presetKind === 'captured' && activePreset && (
+                                    <button
+                                        type="button"
+                                        disabled={!isOwnerOrAdmin}
+                                        onClick={handleUpdatePreset}
+                                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border cursor-pointer ${
+                                            isOwnerOrAdmin
+                                                ? 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-300'
+                                                : 'bg-gray-800/50 border-gray-700/40 text-gray-500 opacity-50 cursor-not-allowed'
+                                        }`}
+                                        title={isOwnerOrAdmin ? 'บันทึกค่า offset ปัจจุบันทับ Preset นี้' : 'เฉพาะผู้สร้างหรือ Admin เท่านั้นที่แก้ไขได้'}
+                                    >
+                                        <Save className="w-3.5 h-3.5" />
+                                        บันทึกทับ
+                                    </button>
                                 )}
-
-                                {/* Action Buttons for Active Preset */}
-                                <div className="flex flex-wrap items-center gap-1.5">
+                                {presetKind === 'captured' && (
                                     <button
                                         type="button"
                                         onClick={() => setCoords(DEFAULT_ZERO_COORDS)}
@@ -2840,95 +2833,77 @@ export default function ControlPage() {
                                     >
                                         🔄 ตั้งเป็น Auto (0) ทั้งหมด
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveAsNewPreset}
-                                        className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-                                        title="บันทึกพิกัดปัจจุบันเป็น Preset ใหม่"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        <span>บันทึกเป็น Preset ใหม่</span>
-                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleSaveAsNewPreset}
+                                    className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                                    title="สร้าง Preset ใหม่ (เลือกประเภท: แคปรูป / inapp / อัปโหลดเอง)"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Preset ใหม่
+                                </button>
 
-                                    {activePreset && activePresetId !== 'default' && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                disabled={!isOwnerOrAdmin}
-                                                onClick={handleUpdatePreset}
-                                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border cursor-pointer ${
-                                                    isOwnerOrAdmin
-                                                        ? 'bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/50 text-blue-300'
-                                                        : 'bg-gray-800/50 border-gray-700/40 text-gray-500 opacity-50 cursor-not-allowed'
-                                                }`}
-                                                title={isOwnerOrAdmin ? "บันทึกพิกัดปัจจุบันทับ Preset นี้" : "เฉพาะผู้สร้างหรือ Admin เท่านั้นที่แก้ไขได้"}
-                                            >
-                                                <Save className="w-3.5 h-3.5" />
-                                                <span>บันทึกทับ</span>
-                                            </button>
+                                {/* ⋯ More: details, rename/delete, JSON import/export */}
+                                <details className="relative">
+                                    <summary className="list-none px-2.5 py-1.5 rounded-lg text-xs font-bold border border-gray-700 bg-gray-800 hover:bg-gray-700 text-gray-300 cursor-pointer select-none" title="ตัวเลือกเพิ่มเติม">⋯</summary>
+                                    <div className="absolute right-0 z-30 mt-1 w-72 rounded-xl border border-gray-700 bg-gray-950 p-3 shadow-2xl flex flex-col gap-2 text-xs">
+                                        {activePreset ? (
+                                            <div className="text-[11px] text-gray-400 flex flex-col gap-1">
+                                                <span>👤 สร้างโดย <strong className="text-gray-200">@{activePreset.createdBy}</strong> · {isOwnerOrAdmin ? '✓ แก้ไขได้' : '🔒 อ่านอย่างเดียว'}</span>
+                                                <span>📄 {templatesUsingActivePreset.length > 0 ? `ใช้กับ Template: ${templatesUsingActivePreset.map(t => t.name).join(', ')}` : 'ยังไม่มี Template ใช้ (ผูกได้ที่ Template Settings)'}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-[11px] text-gray-400">⚙️ ค่าเริ่มต้นระบบ (ยังไม่ใช่ Preset — กด &quot;Preset ใหม่&quot; เพื่อบันทึก)</span>
+                                        )}
+                                        {activePreset && (
+                                            <div className="flex gap-1.5">
+                                                <button type="button" disabled={!isOwnerOrAdmin} onClick={handleRenamePreset} className="flex-1 px-2 py-1.5 rounded-lg font-bold border border-amber-500/50 bg-amber-600/20 text-amber-300 hover:bg-amber-600/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1">
+                                                    <Edit3 className="w-3.5 h-3.5" /> เปลี่ยนชื่อ
+                                                </button>
+                                                <button type="button" disabled={!isOwnerOrAdmin} onClick={handleDeletePreset} className="flex-1 px-2 py-1.5 rounded-lg font-bold border border-rose-600/50 bg-rose-950/60 text-rose-300 hover:bg-rose-900 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1">
+                                                    <Trash2 className="w-3.5 h-3.5" /> ลบ
+                                                </button>
+                                            </div>
+                                        )}
+                                        {presetKind === 'captured' && (
+                                            <div className="flex gap-1.5">
+                                                <input type="file" ref={jsonImportInputRef} onChange={handleImportJson} accept=".json,application/json" className="hidden" />
+                                                <button type="button" onClick={() => jsonImportInputRef.current?.click()} className="flex-1 px-2 py-1.5 rounded-lg font-bold border border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 cursor-pointer flex items-center justify-center gap-1" title="นำเข้าค่า offset จากไฟล์ JSON">
+                                                    <Upload className="w-3.5 h-3.5 text-cyan-400" /> Import JSON
+                                                </button>
+                                                <button type="button" onClick={handleExportJson} className="flex-1 px-2 py-1.5 rounded-lg font-bold border border-emerald-500/50 bg-emerald-950/60 text-emerald-300 hover:bg-emerald-900/80 cursor-pointer flex items-center justify-center gap-1" title="ส่งออกค่า offset เป็นไฟล์ JSON">
+                                                    <Download className="w-3.5 h-3.5 text-emerald-400" /> Export JSON
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </details>
+                            </div>
 
-                                            <button
-                                                type="button"
-                                                disabled={!isOwnerOrAdmin}
-                                                onClick={handleRenamePreset}
-                                                className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border cursor-pointer ${
-                                                    isOwnerOrAdmin
-                                                        ? 'bg-amber-600/20 hover:bg-amber-600/40 border-amber-500/50 text-amber-300'
-                                                        : 'bg-gray-800/50 border-gray-700/40 text-gray-500 opacity-50 cursor-not-allowed'
-                                                }`}
-                                                title={isOwnerOrAdmin ? "เปลี่ยนชื่อ Preset" : "เฉพาะผู้สร้างหรือ Admin เท่านั้นที่แก้ไขได้"}
-                                            >
-                                                <Edit3 className="w-3.5 h-3.5" />
-                                                <span>เปลี่ยนชื่อ</span>
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                disabled={!isOwnerOrAdmin}
-                                                onClick={handleDeletePreset}
-                                                className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 border cursor-pointer ${
-                                                    isOwnerOrAdmin
-                                                        ? 'bg-rose-950/60 hover:bg-rose-900 border-rose-600/50 text-rose-300'
-                                                        : 'bg-gray-800/50 border-gray-700/40 text-gray-500 opacity-50 cursor-not-allowed'
-                                                }`}
-                                                title={isOwnerOrAdmin ? "ลบ Preset นี้" : "เฉพาะผู้สร้างหรือ Admin เท่านั้นที่ลบได้"}
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                                <span>ลบ</span>
-                                            </button>
-                                        </>
-                                    )}
+                            {/* What this preset type means — one line, details on demand */}
+                            {presetKind === 'captured' && (
+                                <div className="rounded-lg border-2 border-sky-500/60 bg-sky-950/40 px-3 py-2">
+                                    <p className="text-base sm:text-lg font-extrabold text-sky-200 leading-snug">
+                                        📐 ใช้กับหน้าจอ Cloudflare ที่ &quot;เปิด&quot; แถบเมนูซ้าย · ระบบตัดพอดีกรอบเอง (offset 0 = พอดีกรอบ)
+                                    </p>
+                                    <details className="mt-1 text-xs text-sky-300/90">
+                                        <summary className="cursor-pointer select-none text-sky-400 hover:text-sky-200">⋯ รายละเอียด</summary>
+                                        <p className="mt-1">ระบบเปิดแถบเมนูซ้ายให้อัตโนมัติก่อนแคปทุกครั้ง และหน้าจอแคปกว้าง 1920px เสมอ — ไม่ต้องปิด/เปิดแถบเมนูเอง</p>
+                                        <p className="mt-1">ตัวเลข offset คือการขยับเพิ่ม/ลดจากกรอบของหัวข้อ: Xstart/Ystart เลื่อนขอบซ้าย/บน, Xend/Yend เพิ่ม/ลดความกว้าง/สูง ค่าเกิน 500 จะถือเป็นตำแหน่งตายตัวแบบเก่า</p>
+                                    </details>
                                 </div>
-                            </div>
-
-                            {/* Export / Import JSON Section */}
-                            <div className="flex items-center gap-2 border-t xl:border-t-0 pt-2 xl:pt-0 border-gray-800 shrink-0">
-                                <input
-                                    type="file"
-                                    ref={jsonImportInputRef}
-                                    onChange={handleImportJson}
-                                    accept=".json,application/json"
-                                    className="hidden"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => jsonImportInputRef.current?.click()}
-                                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:text-white"
-                                    title="นำเข้าการตั้งค่าพิกัดจากไฟล์ JSON"
-                                >
-                                    <Upload className="w-3.5 h-3.5 text-cyan-400" />
-                                    <span>Import JSON</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleExportJson}
-                                    className="px-3 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/50 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                                    title="ส่งออกการตั้งค่าพิกัดทั้งหมดออกเป็นไฟล์ JSON"
-                                >
-                                    <Download className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>Export JSON</span>
-                                </button>
-                            </div>
+                            )}
+                            {presetKind === 'inapp' && (
+                                <p className="rounded-lg border border-indigo-700/60 bg-indigo-950/40 px-3 py-2 text-sm text-indigo-200">
+                                    🧩 Preset แบบ inapp: รายงานใช้ตารางที่ระบบสร้างจากข้อมูล Cloudflare API แทนรูปแคป — ไม่ต้องแคปหน้าเว็บและไม่ต้องตั้งค่าอะไร (ดูตัวอย่างแต่ละหัวข้อด้านล่างได้)
+                                </p>
+                            )}
+                            {presetKind === 'uploaded' && (
+                                <p className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
+                                    🖼️ Preset แบบอัปโหลดเอง: เลือกหัวข้อด้านล่างแล้วอัปโหลดรูป — รูปเก็บไว้ใน Preset นี้ หัวข้อที่ยังไม่มีรูปจะขึ้น ⚠️ ตอนดาวน์โหลดรายงาน
+                                </p>
+                            )}
                         </div>
 
                         {/* Tab Sidebar layout */}
@@ -2956,14 +2931,6 @@ export default function ControlPage() {
 
                             {/* Tab contents (Right) */}
                             <div className="flex-1 flex flex-col min-w-0">
-                                {/* Current Crop Coordinates display */}
-                                {coords[activeCaptureTab] && (
-                                    <div className="text-[9px] font-mono text-gray-400 bg-gray-900/60 px-2.5 py-1.5 rounded-lg border border-gray-800/80 mb-3 flex items-center justify-between">
-                                        <span className="text-gray-500">Crop Coordinates:</span>
-                                        <span>X: {coords[activeCaptureTab].xStart || 'Auto'} → {coords[activeCaptureTab].xEnd || 'Auto'} | Y: {coords[activeCaptureTab].yStart || 'Auto'} → {coords[activeCaptureTab].yEnd || 'Auto'}</span>
-                                    </div>
-                                )}
-
                                 {/* Generic function to render preview with capture button */}
                                 {(() => {
                                     const tabMap = {
@@ -3022,59 +2989,25 @@ export default function ControlPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* Preview mode switcher: real screenshot vs. app-generated "inapp" table preview */}
-                                                <div className="flex items-center gap-1 bg-gray-900/60 border border-gray-800 rounded-lg p-0.5 shrink-0">
+                                                {/* Which source fills this section comes from the preset type */}
+                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border shrink-0 ${
+                                                    presetKind === 'inapp' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                                                    : presetKind === 'uploaded' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                                    : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                                }`}>
+                                                    {PRESET_KIND_LABEL[presetKind]}
+                                                </span>
+                                                {presetKind === 'inapp' && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => setCapturePreviewMode('screenshot')}
-                                                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                                                            capturePreviewMode === 'screenshot'
-                                                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                                                                : 'text-gray-500 hover:text-gray-300 border border-transparent'
-                                                        }`}
-                                                        title="แสดงภาพแคปหน้าจอจริง"
+                                                        onClick={() => loadInappPreviewData(activeCaptureTab, true)}
+                                                        disabled={isLoadingInappPreview}
+                                                        className="px-1.5 py-1 rounded-md text-[10px] font-bold cursor-pointer text-gray-500 hover:text-indigo-300 disabled:opacity-40"
+                                                        title="ดึงข้อมูล inapp ใหม่ (ไม่ใช้ cache)"
                                                     >
-                                                        📸 ภาพแคปจริง
+                                                        <RefreshCw className={`w-3 h-3 ${isLoadingInappPreview ? 'animate-spin' : ''}`} />
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setCapturePreviewMode('inapp');
-                                                            loadInappPreviewData(activeCaptureTab);
-                                                        }}
-                                                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                                                            capturePreviewMode === 'inapp'
-                                                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                                                                : 'text-gray-500 hover:text-gray-300 border border-transparent'
-                                                        }`}
-                                                        title="แสดงตัวแปร inapp (ตารางที่แอปสร้างเอง)"
-                                                    >
-                                                        🧩 inapp
-                                                    </button>
-                                                    {capturePreviewMode === 'inapp' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => loadInappPreviewData(activeCaptureTab, true)}
-                                                            disabled={isLoadingInappPreview}
-                                                            className="px-1.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer text-gray-500 hover:text-indigo-300 border border-transparent disabled:opacity-40 disabled:cursor-not-allowed"
-                                                            title="ดึงข้อมูล inapp ใหม่ (บังคับรีเฟรช ไม่ใช้ cache)"
-                                                        >
-                                                            <RefreshCw className={`w-3 h-3 ${isLoadingInappPreview ? 'animate-spin' : ''}`} />
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCapturePreviewMode('upload')}
-                                                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                                                            capturePreviewMode === 'upload'
-                                                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                                                : 'text-gray-500 hover:text-gray-300 border border-transparent'
-                                                        }`}
-                                                        title="อัปโหลดรูปภาพเอง (ใช้แทนภาพแคปอัตโนมัติ)"
-                                                    >
-                                                        🖼️ อัปโหลดเอง
-                                                    </button>
-                                                </div>
+                                                )}
                                             </div>
 
                                             {capturePreviewMode === 'upload' ? (
@@ -3216,7 +3149,8 @@ export default function ControlPage() {
                                             </>
                                             )}
 
-                                            {/* Crop Coordinates Controls directly under the screenshot image */}
+                                            {/* Crop Coordinates Controls directly under the screenshot image (captured presets only) */}
+                                            {presetKind === 'captured' && (
                                             <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2.5">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
@@ -3349,6 +3283,7 @@ export default function ControlPage() {
                                                     );
                                                 })()}
                                             </div>
+                                            )}
                                         </div>
                                     );
                                 })()}

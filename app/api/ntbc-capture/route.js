@@ -311,11 +311,15 @@ export async function GET(request) {
             // naming convention as the captured screenshots above, just with an "uploaded-"
             // prefix instead of "captured-" — see app/systems/ntbc_cfreport/utils/uploadedVariables.js
             // for the canonical id list this must stay in sync with.
+            // Uploads of an 'uploaded' capture preset live in their own folder; without a preset
+            // id these are the shared uploads the debug page has always used.
+            const uploadPresetId = String(searchParams.get('uploadPreset') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+            const uploadDir = uploadPresetId ? path.join(dbCapturedDir, 'presets', uploadPresetId) : dbCapturedDir;
             const uploaded = {};
             const uploadedMetadata = {};
             const uploadedTabs = tabs.map(item => ({ id: item.id, file: item.file.replace('captured-', 'uploaded-') }));
             for (const item of uploadedTabs) {
-                const p1 = path.join(dbCapturedDir, item.file);
+                const p1 = path.join(uploadDir, item.file);
                 if (fs.existsSync(p1)) {
                     try {
                         const buf = fs.readFileSync(p1);
@@ -329,7 +333,7 @@ export async function GET(request) {
             // "traffic" is already covered by uploadedTabs above (it's in the base `tabs` list).
             // DNS is not in `tabs` (captured DNS is handled separately, multi-page) — uploads
             // only support a single override image for DNS, so read it directly here.
-            const uploadedDnsPath = path.join(dbCapturedDir, 'uploaded-dns.png');
+            const uploadedDnsPath = path.join(uploadDir, 'uploaded-dns.png');
             if (fs.existsSync(uploadedDnsPath)) {
                 try {
                     uploaded['dns'] = `data:image/png;base64,${fs.readFileSync(uploadedDnsPath).toString('base64')}`;
@@ -338,7 +342,7 @@ export async function GET(request) {
             }
             for (let i = 1; i <= 5; i++) {
                 const subFile = `uploaded-traffic-sub${i}.png`;
-                const p1 = path.join(dbCapturedDir, subFile);
+                const p1 = path.join(uploadDir, subFile);
                 if (fs.existsSync(p1)) {
                     try {
                         uploaded[`trafficSub${i}`] = `data:image/png;base64,${fs.readFileSync(p1).toString('base64')}`;
@@ -2436,7 +2440,13 @@ export async function POST(request) {
         if (!fs.existsSync(dbCapturedDir)) {
             try { fs.mkdirSync(dbCapturedDir, { recursive: true }); } catch (e) {}
         }
-        const filePath = path.join(dbCapturedDir, `uploaded-${UPLOADED_SLUGS[id]}.png`);
+        // presetId: save into that capture preset's own upload folder (an 'uploaded' preset).
+        const presetId = String(body.presetId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const uploadDir = presetId ? path.join(dbCapturedDir, 'presets', presetId) : dbCapturedDir;
+        if (!fs.existsSync(uploadDir)) {
+            try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
+        }
+        const filePath = path.join(uploadDir, `uploaded-${UPLOADED_SLUGS[id]}.png`);
 
         if (action === 'save-uploaded') {
             const { imageBase64 } = body;
