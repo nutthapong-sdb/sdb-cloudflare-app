@@ -3129,12 +3129,13 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 // Batch Report Modal Component
 // Main-page workspace tabs (replaced the old row of cards that each opened a popup).
+// Ordered as the workflow: set up capture → image sizes → templates → generate → track jobs.
 const WORKSPACE_TABS = [
-    { id: 'generate', label: 'Generate Report', Icon: Camera },
-    { id: 'jobs', label: 'Background Jobs', Icon: Clock },
-    { id: 'templates', label: 'Manage Templates', Icon: FileText },
-    { id: 'image', label: 'Image Size Settings', Icon: Sliders },
-    { id: 'control', label: 'System Control', Icon: Terminal },
+    { id: 'control', label: '1. ตั้งค่าการแคปรูปภาพ', Icon: Terminal },
+    { id: 'image', label: '2. Image Size Settings', Icon: Sliders },
+    { id: 'templates', label: '3. Template Settings', Icon: FileText },
+    { id: 'generate', label: '4. Generate Report', Icon: Camera },
+    { id: 'jobs', label: '5. Background Jobs', Icon: Clock },
 ];
 
 // inline: render as a page panel (workspace tab) instead of a popup.
