@@ -6,7 +6,7 @@ import {
     CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
     Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome,
     Camera, Image as ImageIcon, Sparkles, Download, Upload, Sliders,
-    Plus, Trash2, Edit3, Save, UserCheck, ShieldCheck, FileJson, FolderPlus
+    Plus, Trash2, Edit3, Save, UserCheck, ShieldCheck, FileJson, FolderPlus, ChevronDown
 } from 'lucide-react';
 import Swal from '../utils/alert';
 import { Editor } from '@tinymce/tinymce-react';
@@ -56,7 +56,18 @@ export default function ControlPage() {
         try { localStorage.setItem(MAIN_TAB_STORAGE_KEY, tabId); } catch (e) { /* ignore */ }
     };
     const vncIframeRef = useRef(null);
-    const [isVncMaximized, setIsVncMaximized] = useState(false);
+    // Live Browser Monitor starts folded; opening it is remembered per browser.
+    const [isVncCollapsed, setIsVncCollapsed] = useState(true);
+    useEffect(() => {
+        try { setIsVncCollapsed(localStorage.getItem('ntbc:vnc-collapsed') !== '0'); } catch (e) { /* ignore */ }
+    }, []);
+    const toggleVncCollapsed = () => {
+        setIsVncCollapsed(prev => {
+            const next = !prev;
+            try { localStorage.setItem('ntbc:vnc-collapsed', next ? '1' : '0'); } catch (e) { /* ignore */ }
+            return next;
+        });
+    };
 
     const requestVncFullscreen = () => {
         if (vncIframeRef.current) {
@@ -2592,19 +2603,20 @@ export default function ControlPage() {
     };
 
     const renderVncCard = () => (
-        <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 shadow-xl flex flex-col mb-6">
-            <div className="flex items-center justify-between mb-4 border-b border-gray-800/40 pb-3">
-                <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+        <div className={`bg-gray-900/40 border border-gray-800/80 rounded-2xl shadow-xl flex flex-col mb-6 ${isVncCollapsed ? 'px-6 py-4' : 'p-6'}`}>
+            <div className={`flex items-center justify-between ${isVncCollapsed ? '' : 'mb-4 border-b border-gray-800/40 pb-3'}`}>
+                <button
+                    type="button"
+                    onClick={toggleVncCollapsed}
+                    aria-expanded={!isVncCollapsed}
+                    title={isVncCollapsed ? 'แสดง Live Browser Monitor' : 'ซ่อน Live Browser Monitor'}
+                    className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2 cursor-pointer hover:text-white"
+                >
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isVncCollapsed ? '-rotate-90' : ''}`} />
                     <Activity className="w-4 h-4 text-rose-500 animate-pulse" />
                     Live Browser Monitor (noVNC)
-                </h2>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setIsVncMaximized(!isVncMaximized)}
-                        className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border border-gray-700/50 cursor-pointer"
-                    >
-                        {isVncMaximized ? '🗗 Minimize Layout' : '🗖 Maximize Layout'}
-                    </button>
+                </button>
+                <div className={`flex items-center gap-2 ${isVncCollapsed ? 'hidden' : ''}`}>
                     <button
                         onClick={requestVncFullscreen}
                         className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
@@ -2613,6 +2625,8 @@ export default function ControlPage() {
                     </button>
                 </div>
             </div>
+            {/* Collapsed = hidden, not unmounted, so the VNC connection stays alive. */}
+            <div className={isVncCollapsed ? 'hidden' : ''}>
             <div className="grid grid-cols-1 gap-3">
                 {/* Live Browser Monitor */}
                 <div className="rounded-xl overflow-hidden bg-black aspect-video relative border border-gray-800 shadow-inner">
@@ -2644,6 +2658,7 @@ export default function ControlPage() {
                     </span>
                 </p>
             </details>
+            </div>
         </div>
     );
 
@@ -2674,10 +2689,6 @@ export default function ControlPage() {
                     </button>
                 </div>
             </div>
-
-            {/* VNC Card rendering when maximized */}
-            {isVncMaximized && renderStep1Card()}
-            {isVncMaximized && renderVncCard()}
 
             {/* Main section tabs — keeps the page from being one long scroll: pick one view
                 instead of scrolling past Environment Settings, the monitor, capture/preview and
@@ -2711,8 +2722,8 @@ export default function ControlPage() {
                 {/* Steps and Environment Section (Left) */}
                 <div className={`${activeMainTab === 'capture' ? 'lg:col-span-12' : 'hidden'} space-y-6 flex flex-col`}>
                     {/* Live Browser Monitor Card */}
-                    {!isVncMaximized && renderStep1Card()}
-                    {!isVncMaximized && renderVncCard()}
+                    {renderStep1Card()}
+                    {renderVncCard()}
 
                     {/* Consolidated Captured Screenshots (Step 2) */}
                     <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl relative animate-scale-up">
