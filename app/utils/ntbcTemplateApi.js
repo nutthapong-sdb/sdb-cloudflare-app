@@ -47,12 +47,16 @@ export const setTemplatePreset = async (id, capturePresetId) => {
     } catch (e) { return { success: false, error: e.message }; }
 };
 
+// Built-in preset: every offset 0, i.e. each section cut exactly to its auto box. Not stored
+// in the DB (can't be edited or deleted); templates without a preset of their own use it.
+export const STANDARD_DEFAULT_PRESET = { id: 'default', name: 'Standard Default (Auto +0)', coords: {}, kind: 'captured', builtIn: true };
+
 export const listCapturePresets = async () => {
     try {
         const res = await fetch('/api/ntbc-capture-presets');
         const data = await res.json();
-        return Array.isArray(data?.presets) ? data.presets : [];
-    } catch (e) { return []; }
+        return [STANDARD_DEFAULT_PRESET, ...(Array.isArray(data?.presets) ? data.presets.filter(p => p.id !== 'default') : [])];
+    } catch (e) { return [STANDARD_DEFAULT_PRESET]; }
 };
 
 // Where this template's report images come from: 'captured' | 'inapp' | 'uploaded'.
@@ -98,16 +102,14 @@ export const resolveReportCaptureSetup = async (templateId) => {
     return { mode, ...lookup };
 };
 
-// The preset a report built from `templateId` must crop its screenshots with.
-// Returns { template, preset } or { error } (Thai, shown to the user / job) when the
-// template has no preset or its preset no longer exists.
+// The preset a report built from `templateId` must crop its screenshots with: its own, or
+// Standard Default when it has none. { error } (Thai, shown to the user / job) when its
+// preset no longer exists.
 export const resolveTemplateCapturePreset = async (templateId) => {
     const [templates, presets] = await Promise.all([listTemplates(), listCapturePresets()]);
     const template = templates.find(t => String(t.id) === String(templateId));
     const name = template?.name || templateId;
-    if (!template?.capturePresetId) {
-        return { error: `Template "${name}" ยังไม่ได้เลือก Capture Preset — เลือกได้ที่ Manage Templates` };
-    }
+    if (!template?.capturePresetId) return { template, preset: STANDARD_DEFAULT_PRESET };
     const preset = presets.find(p => String(p.id) === String(template.capturePresetId));
     if (!preset) {
         return { error: `ไม่พบ Capture Preset ของ Template "${name}" (อาจถูกลบไปแล้ว) — เลือกใหม่ที่ Manage Templates` };

@@ -3200,9 +3200,8 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                 if (filtered.length === 0 && list.length > 0) filtered = list;
                 setTemplates(filtered);
 
-                // A screenshot-mode template without a capture preset can't make a report,
-                // so it can't be picked (inapp / uploaded templates need no preset).
-                const usable = filtered.filter(t => templateCaptureMode(t) !== 'captured' || t.capturePresetId);
+                // Templates without a preset use Standard Default (offset 0), so all can be picked.
+                const usable = filtered;
                 const storedDefault = localStorage.getItem('ntbc:default:templateId') || localStorage.getItem(keyDefault) || 'default';
                 if (usable.find(t => String(t.id) === String(storedDefault))) {
                     setSelectedTemplateId(String(storedDefault));
@@ -3411,17 +3410,12 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                         <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
                             <label className={`block text-xs font-bold ${t.subText} uppercase tracking-wide mb-2`}>Template</label>
                             <select value={selectedTemplateId} onChange={e => setSelectedTemplateId(e.target.value)} className={`mb-3 ${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none`}>
-                                {!selectedTemplateId && <option value="" disabled>— ยังไม่มี Template ที่เลือก Preset แล้ว —</option>}
-                                {templates.map(tp => {
-                                    const mode = templateCaptureMode(tp);
-                                    const blocked = mode === 'captured' && !tp.capturePresetId;
-                                    const modeLabel = { captured: '📸', inapp: '🧩', uploaded: '🖼️' }[mode];
-                                    return (
-                                        <option key={tp.id} value={tp.id} disabled={blocked} style={blocked ? { color: '#6b7280' } : undefined}>
-                                            {blocked ? `${tp.name} (ยังไม่เลือก Preset)` : `${modeLabel} ${tp.name}`}
-                                        </option>
-                                    );
-                                })}
+                                {!selectedTemplateId && <option value="" disabled>— ยังไม่มี Template —</option>}
+                                {templates.map(tp => (
+                                    <option key={tp.id} value={tp.id}>
+                                        {{ captured: '📸', inapp: '🧩', uploaded: '🖼️' }[templateCaptureMode(tp)]} {tp.name}
+                                    </option>
+                                ))}
                             </select>
                             {!env && (<>
                             <div className="flex items-center gap-2 mb-2">

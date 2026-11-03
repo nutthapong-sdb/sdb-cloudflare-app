@@ -156,7 +156,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                     <option value="">— รูปในรายงาน (จำเป็น) —</option>
                     <option value="inapp">🧩 inapp — ตารางจากข้อมูล ไม่ต้องแคป</option>
                     <option value="uploaded">🖼️ อัปโหลดรูปเอง</option>
-                    ${presets.map(p => `<option value="preset:${esc(p.id)}">📸 แคปรูป · Preset: ${esc(p.name)}</option>`).join('')}
+                    ${presets.map(p => `<option value="preset:${esc(p.id)}" ${p.id === 'default' ? 'selected' : ''}>📸 แคปรูป · Preset: ${esc(p.name)}</option>`).join('')}
                 </select>
             `,
             focusConfirm: false,
@@ -547,8 +547,8 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                  {tmp.format === 'pptx'
                                                      ? <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-300 text-[10px] font-mono uppercase tracking-wider border border-orange-800">PPTX</span>
                                                      : <span className="px-2 py-0.5 rounded-full bg-sky-900/40 text-sky-300 text-[10px] font-mono uppercase tracking-wider border border-sky-800">DOCX</span>}
-                                                 {templateCaptureMode(tmp) === 'captured' && !presets.some(p => String(p.id) === String(tmp.capturePresetId)) && (
-                                                     <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] font-bold tracking-wider border border-amber-700 whitespace-nowrap" title="ในโหมด 📸 แคปรูป สร้างรายงานจาก Template นี้ไม่ได้จนกว่าจะเลือก Preset (โหมด inapp / อัปโหลดเอง ไม่ต้องใช้)">⚠ ยังไม่เลือก Preset แคปรูป</span>
+                                                 {templateCaptureMode(tmp) === 'captured' && tmp.capturePresetId && !presets.some(p => String(p.id) === String(tmp.capturePresetId)) && (
+                                                     <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] font-bold tracking-wider border border-amber-700 whitespace-nowrap" title="Preset ที่เลือกไว้ถูกลบไปแล้ว — เลือกใหม่ (หรือใช้ Standard Default)">⚠ ไม่พบ Preset</span>
                                                  )}
                                                   {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') && (
                                                       <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
@@ -626,7 +626,9 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                     {/* Bottom: report settings, each with its own label */}
                                     {(String(tmp.id) !== 'default' || userRole === 'admin' || userRole === 'root') && (() => {
                                         const mode = templateCaptureMode(tmp);
-                                        const hasPreset = presets.some(p => String(p.id) === String(tmp.capturePresetId));
+                                        // No preset of its own = Standard Default (offset 0)
+                                        const presetValue = String(tmp.capturePresetId || 'default');
+                                        const hasPreset = presets.some(p => String(p.id) === presetValue);
                                         const fieldLabel = `block text-[11px] font-semibold uppercase tracking-wide ${t.subText || 'text-gray-400'} mb-1.5`;
                                         return (
                                             <div className={`flex flex-wrap items-end gap-x-8 gap-y-4 px-4 py-3 border-t ${t.modalBorder || 'border-gray-700'} bg-black/10 rounded-b-xl`}>
@@ -677,7 +679,7 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                     <div>
                                                         <span className={fieldLabel}>Preset ตัดรูป</span>
                                                         <select
-                                                            value={hasPreset ? String(tmp.capturePresetId) : ''}
+                                                            value={hasPreset ? presetValue : ''}
                                                             onChange={async (e) => {
                                                                 const capturePresetId = e.target.value;
                                                                 if (!capturePresetId) return;
