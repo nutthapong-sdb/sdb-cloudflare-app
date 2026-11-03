@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
-import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates, resolveReportCaptureSetup, getCaptureMode } from '@/app/utils/ntbcTemplateApi';
+import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates, resolveReportCaptureSetup, templateCaptureMode } from '@/app/utils/ntbcTemplateApi';
 import ManageTemplateModal from './ManageTemplateModal';
 import ControlPage from './control/page';
 import ImageSettingsModal, { IMAGE_CONFIG_ITEMS } from './ImageSettingsModal';
@@ -3150,7 +3150,6 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
-    const [captureMode, setCaptureMode] = useState('captured');
     const [exportThaiDigits, setExportThaiDigits] = useState(false);
     const [timeoutMinutes, setTimeoutMinutes] = useState(NTBC_TIMEOUT_DEFAULT_MIN);
     
@@ -3201,11 +3200,9 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                 if (filtered.length === 0 && list.length > 0) filtered = list;
                 setTemplates(filtered);
 
-                // In screenshot mode a template without a capture preset can't make a report,
-                // so it can't be picked (inapp / uploaded modes need no preset).
-                const mode = await getCaptureMode();
-                setCaptureMode(mode);
-                const usable = mode === 'captured' ? filtered.filter(t => t.capturePresetId) : filtered;
+                // A screenshot-mode template without a capture preset can't make a report,
+                // so it can't be picked (inapp / uploaded templates need no preset).
+                const usable = filtered.filter(t => templateCaptureMode(t) !== 'captured' || t.capturePresetId);
                 const storedDefault = localStorage.getItem('ntbc:default:templateId') || localStorage.getItem(keyDefault) || 'default';
                 if (usable.find(t => String(t.id) === String(storedDefault))) {
                     setSelectedTemplateId(String(storedDefault));
@@ -3416,10 +3413,12 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                             <select value={selectedTemplateId} onChange={e => setSelectedTemplateId(e.target.value)} className={`mb-3 ${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none`}>
                                 {!selectedTemplateId && <option value="" disabled>— ยังไม่มี Template ที่เลือก Preset แล้ว —</option>}
                                 {templates.map(tp => {
-                                    const blocked = captureMode === 'captured' && !tp.capturePresetId;
+                                    const mode = templateCaptureMode(tp);
+                                    const blocked = mode === 'captured' && !tp.capturePresetId;
+                                    const modeLabel = { captured: '📸', inapp: '🧩', uploaded: '🖼️' }[mode];
                                     return (
                                         <option key={tp.id} value={tp.id} disabled={blocked} style={blocked ? { color: '#6b7280' } : undefined}>
-                                            {blocked ? `${tp.name} (ยังไม่เลือก Preset)` : tp.name}
+                                            {blocked ? `${tp.name} (ยังไม่เลือก Preset)` : `${modeLabel} ${tp.name}`}
                                         </option>
                                     );
                                 })}

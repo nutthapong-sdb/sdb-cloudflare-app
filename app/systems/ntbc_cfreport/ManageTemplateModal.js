@@ -6,6 +6,8 @@ import {
     createTemplate,
     setTemplateFormat,
     setTemplatePreset,
+    setTemplateCaptureMode,
+    templateCaptureMode,
     listCapturePresets,
     renameTemplate,
     deleteTemplate,
@@ -18,12 +20,19 @@ import {
 } from '@/app/utils/ntbcTemplateApi';
 
 // inline: render as a page panel (workspace tab) instead of a popup.
-const PRESET_KIND_LABEL = { captured: '📸 แคปรูป', inapp: '🧩 inapp', uploaded: '🖼️ อัปโหลดเอง' };
-const presetLabel = (p) => `${p.name} · ${PRESET_KIND_LABEL[p.kind] || PRESET_KIND_LABEL.captured}`;
+// Presets belong to screenshot mode only (inapp / uploaded are picked in tab 2 and need none),
+// so older inapp / uploaded presets are not offered here.
+const isScreenshotPreset = (p) => (p.kind || 'captured') === 'captured';
+const CAPTURE_MODE_OPTIONS = [
+    { id: 'captured', label: '📸 แคปรูป', active: 'bg-rose-600 text-white' },
+    { id: 'inapp', label: '🧩 inapp', active: 'bg-indigo-600 text-white' },
+    { id: 'uploaded', label: '🖼️ อัปโหลดเอง', active: 'bg-emerald-600 text-white' },
+];
 
 export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEditMiddle, onEditDomain, theme, userRole, currentUserId, inline = false }) {
     const [templates, setTemplates] = useState([]);
-    const [presets, setPresets] = useState([]);
+    const [allPresets, setPresets] = useState([]);
+    const presets = useMemo(() => allPresets.filter(isScreenshotPreset), [allPresets]);
     const [loading, setLoading] = useState(false);
     const [renamingId, setRenamingId] = useState(null);
     const [newName, setNewName] = useState('');
@@ -130,9 +139,6 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
     }, [isOpen, onClose]);
 
     const handleCreateWrapper = async () => {
-        if (presets.length === 0) {
-            return Swal.fire('ยังไม่มี Capture Preset', 'สร้าง Preset ที่หน้า Debug (บันทึกเป็น Preset ใหม่) ก่อน แล้วค่อยสร้าง Template', 'warning');
-        }
         const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const { value: formValues } = await Swal.fire({
             title: 'Create New Template',
@@ -147,8 +153,10 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                     <option value="pptx">Output: PowerPoint (.pptx)</option>
                 </select>
                 <select id="swal-input4" class="swal2-input">
-                    <option value="">— เลือก Capture Preset (จำเป็น) —</option>
-                    ${presets.map(p => `<option value="${esc(p.id)}">Preset: ${esc(presetLabel(p))}</option>`).join('')}
+                    <option value="">— รูปในรายงาน (จำเป็น) —</option>
+                    <option value="inapp">🧩 inapp — ตารางจากข้อมูล ไม่ต้องแคป</option>
+                    <option value="uploaded">🖼️ อัปโหลดรูปเอง</option>
+                    ${presets.map(p => `<option value="preset:${esc(p.id)}">📸 แคปรูป · Preset: ${esc(p.name)}</option>`).join('')}
                 </select>
             `,
             focusConfirm: false,
@@ -161,19 +169,22 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                     document.getElementById('swal-input4').value
                 ];
                 if (!values[0]) { Swal.showValidationMessage('Name is required'); return false; }
-                if (!values[3]) { Swal.showValidationMessage('กรุณาเลือก Capture Preset'); return false; }
+                if (!values[3]) { Swal.showValidationMessage('กรุณาเลือกรูปในรายงาน'); return false; }
                 return values;
             }
         });
 
         if (formValues) {
-            const [name, sourceId, format, capturePresetId] = formValues;
+            const [name, sourceId, format, imageChoice] = formValues;
+            // 'preset:<id>' = screenshots cropped with that preset; otherwise the mode itself.
+            const captureMode = imageChoice.startsWith('preset:') ? 'captured' : imageChoice;
+            const capturePresetId = imageChoice.startsWith('preset:') ? imageChoice.slice('preset:'.length) : undefined;
 
             setLoading(true);
             // Pass sourceId directly (backend handles 'empty')
             const src = sourceId;
 
-            await createTemplate(name, src, format, capturePresetId);
+            await createTemplate(name, src, format, capturePresetId, captureMode);
             await fetchTemplates();
         }
     };
@@ -511,10 +522,11 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                             {templates
                                 .filter(tmp => showHidden || !isHidden(tmp.id))
                                 .map(tmp => (
-                                <div key={tmp.id} className={`group ${t.card || 'bg-gray-800/40 border-gray-700/50'} border rounded-xl p-4 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-blue-500/30 hover:shadow-md`}>
-
+                                <div key={tmp.id} className={`group ${t.card || 'bg-gray-800/40 border-gray-700/50'} border rounded-xl transition-all hover:border-blue-500/30 hover:shadow-md`}>
+                                    {/* Top: name + badges, then the template actions */}
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-4">
                                     {/* Info */}
-                                    <div className="flex-1 min-w-[200px]">
+                                    <div className="flex-1 min-w-0">
                                         {renamingId === tmp.id ? (
                                             <div className="flex items-center gap-2">
                                                 <input
@@ -528,15 +540,15 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                                 <button onClick={() => setRenamingId(null)} className="p-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"><X className="w-4 h-4" /></button>
                                             </div>
                                         ) : (
-                                              <div className="flex items-center gap-2 group/name">
+                                              <div className="flex flex-wrap items-center gap-2 group/name">
                                                   <h3 className={`font-semibold ${t.text || 'text-gray-200'}`}>{tmp.name}</h3>
                                                  {String(tmp.id) === String(defaultTemplateId) && <span className="px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-400 text-[10px] font-mono uppercase tracking-wider border border-blue-800">Default</span>}
                                                  {isHidden(tmp.id) && <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 text-[10px] font-mono uppercase tracking-wider border border-gray-700">Hidden</span>}
                                                  {tmp.format === 'pptx'
                                                      ? <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-300 text-[10px] font-mono uppercase tracking-wider border border-orange-800">PPTX</span>
                                                      : <span className="px-2 py-0.5 rounded-full bg-sky-900/40 text-sky-300 text-[10px] font-mono uppercase tracking-wider border border-sky-800">DOCX</span>}
-                                                 {!presets.some(p => String(p.id) === String(tmp.capturePresetId)) && (
-                                                     <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] font-bold tracking-wider border border-amber-700 whitespace-nowrap" title="สร้างรายงานจาก Template นี้ไม่ได้จนกว่าจะเลือก Capture Preset">⚠ ยังไม่เลือก Preset</span>
+                                                 {templateCaptureMode(tmp) === 'captured' && !presets.some(p => String(p.id) === String(tmp.capturePresetId)) && (
+                                                     <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] font-bold tracking-wider border border-amber-700 whitespace-nowrap" title="ในโหมด 📸 แคปรูป สร้างรายงานจาก Template นี้ไม่ได้จนกว่าจะเลือก Preset (โหมด inapp / อัปโหลดเอง ไม่ต้องใช้)">⚠ ยังไม่เลือก Preset แคปรูป</span>
                                                  )}
                                                   {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') && (
                                                       <button onClick={() => startRename(tmp)} className={`opacity-0 group-hover/name:opacity-100 p-1 ${t.subText} ${t.iconAccent ? `hover:${t.iconAccent}` : 'hover:text-blue-400'} transition-opacity`}>
@@ -548,108 +560,143 @@ export default function ManageTemplateModal({ isOpen, onClose, onEditSub, onEdit
                                           <p className={`text-xs ${t.subText} mt-1 font-mono`}>ID: {tmp.id}</p>
                                       </div>
 
-                                      {/* Actions */}
-                                      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
 
-                                        {/* Set as default */}
-                                        <button
-                                            onClick={() => handleSetAsDefault(tmp.id)}
-                                            className={`${buttonBase} border ${String(tmp.id) === String(defaultTemplateId)
-                                                ? `${t.buttonPrimary || 'bg-blue-600 hover:bg-blue-500 text-white'} border-blue-500/70`
-                                                : `${t.button || 'bg-gray-800 hover:bg-gray-700 text-gray-200'} ${t.modalBorder || 'border-gray-700'}`
-                                            }`}
-                                            title="Set as default (per-user)"
-                                        >
-                                            Set as default
-                                        </button>
-
-                                         {/* Edit Content Button */}
-                                         {(! (String(tmp.id) === 'default') || userRole === 'admin' || userRole === 'root') ? (
-                                             <button
-                                                 onClick={() => onEditDomain(tmp.id, tmp.name)}
-                                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-white/10 text-xs ${t.text} border ${t.modalBorder} ${t.sectionHeader || 'bg-gray-900 border-gray-700'} transition-colors`}
-                                                 title="Edit Domain Summary Report Structure"
-                                             >
-                                                 <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
-                                                 Edit Template
-                                             </button>
-                                         ) : (
-                                             <div className={`px-3 py-1.5 text-xs text-gray-500 border border-gray-800 bg-gray-900/50 rounded flex items-center gap-1.5 cursor-not-allowed`} title="Default template can only be edited by Admins">
-                                                 <LayoutTemplate className="w-3.5 h-3.5 text-gray-600" />
-                                                 View-Only (Admin Edit Only)
-                                             </div>
-                                         )}
- 
-                                         {/* Output file type for reports built from this template */}
-                                         {String(tmp.id) !== 'default' && (
-                                             <select
-                                                 value={tmp.format === 'pptx' ? 'pptx' : 'docx'}
-                                                 onChange={async (e) => {
-                                                     const format = e.target.value;
-                                                     setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, format } : x));
-                                                     const r = await setTemplateFormat(tmp.id, format);
-                                                     if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change output format', 'error'); fetchTemplates(); }
-                                                 }}
-                                                 className={`px-2 py-1.5 rounded text-xs ${t.dropdown?.bg || 'bg-gray-950'} ${t.dropdown?.inputText || 'text-gray-200'} border ${t.modalBorder || 'border-gray-700'}`}
-                                                 title="Output file type of reports built from this template"
-                                             >
-                                                 <option value="docx">Word (.docx)</option>
-                                                 <option value="pptx">PowerPoint (.pptx)</option>
-                                             </select>
-                                         )}
-
-                                         {/* Capture preset (crop coordinates) — required to generate reports */}
-                                         {(String(tmp.id) !== 'default' || userRole === 'admin' || userRole === 'root') && (
-                                             <select
-                                                 value={presets.some(p => String(p.id) === String(tmp.capturePresetId)) ? String(tmp.capturePresetId) : ''}
-                                                 onChange={async (e) => {
-                                                     const capturePresetId = e.target.value;
-                                                     if (!capturePresetId) return;
-                                                     setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, capturePresetId } : x));
-                                                     const r = await setTemplatePreset(tmp.id, capturePresetId);
-                                                     if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change capture preset', 'error'); fetchTemplates(); }
-                                                 }}
-                                                 className={`px-2 py-1.5 rounded text-xs max-w-[220px] ${t.dropdown?.bg || 'bg-gray-950'} ${t.dropdown?.inputText || 'text-gray-200'} border ${presets.some(p => String(p.id) === String(tmp.capturePresetId)) ? (t.modalBorder || 'border-gray-700') : 'border-amber-500'}`}
-                                                 title="Capture Preset (crop coordinates) used by reports from this template"
-                                             >
-                                                 <option value="" disabled>— เลือก Capture Preset —</option>
-                                                 {presets.map(p => <option key={p.id} value={String(p.id)}>Preset: {presetLabel(p)}</option>)}
-                                             </select>
-                                         )}
-
-                                         {/* Export bundle */}
-                                         <button
-                                             onClick={() => handleExportBundle(tmp.id, tmp.name)}
-                                             className={`p-2 ${t.subText} hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors`}
-                                             title="Export template bundle"
-                                             aria-label="Export template bundle"
-                                         >
-                                             <Download className="w-4 h-4" />
-                                         </button>
-
-                                         {/* Delete (soft hide / restore) */}
-                                         {String(tmp.id) !== 'default' && (
-                                             <button
-                                                 onClick={() => handleSoftDelete(tmp.id, tmp.name)}
-                                                 className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
-                                                 title={isHidden(tmp.id) ? 'Restore Template' : 'Delete Template (Hide)'}
-                                             >
-                                                 <Trash2 className="w-4 h-4" />
-                                             </button>
-                                         )}
-
-                                        {/* Hard delete */}
-                                        {userRole === 'root' && String(tmp.id) !== 'default' && (
+                                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                                             <button
-                                                onClick={() => handleHardDelete(tmp.id, tmp.name)}
-                                                className={`${buttonBase} border ${t.buttonDanger || 'bg-red-600 hover:bg-red-700 text-white'} border-red-500/70`}
-                                                title="Hard delete (permanent)"
+                                                onClick={() => handleSetAsDefault(tmp.id)}
+                                                className={`${buttonBase} border ${String(tmp.id) === String(defaultTemplateId)
+                                                    ? `${t.buttonPrimary || 'bg-blue-600 hover:bg-blue-500 text-white'} border-blue-500/70`
+                                                    : `${t.button || 'bg-gray-800 hover:bg-gray-700 text-gray-200'} ${t.modalBorder || 'border-gray-700'}`
+                                                }`}
+                                                title="Set as default (per-user)"
                                             >
-                                                Hard delete
+                                                Set as default
                                             </button>
-                                        )}
-                                     </div>
-                                 </div>
+
+                                            {(String(tmp.id) !== 'default' || userRole === 'admin' || userRole === 'root') ? (
+                                                <button
+                                                    onClick={() => onEditDomain(tmp.id, tmp.name)}
+                                                    className={`${buttonBase} flex items-center gap-1.5 border ${t.modalBorder || 'border-gray-700'} ${t.sectionHeader || 'bg-gray-900'} ${t.text || 'text-gray-200'} hover:bg-white/10`}
+                                                    title="Edit Domain Summary Report Structure"
+                                                >
+                                                    <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
+                                                    Edit Template
+                                                </button>
+                                            ) : (
+                                                <div className={`${buttonBase} text-gray-500 border border-gray-800 bg-gray-900/50 flex items-center gap-1.5 cursor-not-allowed`} title="Default template can only be edited by Admins">
+                                                    <LayoutTemplate className="w-3.5 h-3.5 text-gray-600" />
+                                                    View-Only (Admin Edit Only)
+                                                </div>
+                                            )}
+
+                                            {/* Icon actions sit together, apart from the text buttons */}
+                                            <div className={`flex items-center gap-1 pl-2 ml-1 border-l ${t.modalBorder || 'border-gray-700'}`}>
+                                                <button
+                                                    onClick={() => handleExportBundle(tmp.id, tmp.name)}
+                                                    className={`p-2 ${t.subText} hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors`}
+                                                    title="Export template bundle"
+                                                    aria-label="Export template bundle"
+                                                >
+                                                    <Download className="w-4 h-4" />
+                                                </button>
+                                                {String(tmp.id) !== 'default' && (
+                                                    <button
+                                                        onClick={() => handleSoftDelete(tmp.id, tmp.name)}
+                                                        className={`p-2 ${t.subText} hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors`}
+                                                        title={isHidden(tmp.id) ? 'Restore Template' : 'Delete Template (Hide)'}
+                                                        aria-label={isHidden(tmp.id) ? 'Restore Template' : 'Delete Template (Hide)'}
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {userRole === 'root' && String(tmp.id) !== 'default' && (
+                                                <button
+                                                    onClick={() => handleHardDelete(tmp.id, tmp.name)}
+                                                    className={`${buttonBase} border ${t.buttonDanger || 'bg-red-600 hover:bg-red-700 text-white'} border-red-500/70`}
+                                                    title="Hard delete (permanent)"
+                                                >
+                                                    Hard delete
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom: report settings, each with its own label */}
+                                    {(String(tmp.id) !== 'default' || userRole === 'admin' || userRole === 'root') && (() => {
+                                        const mode = templateCaptureMode(tmp);
+                                        const hasPreset = presets.some(p => String(p.id) === String(tmp.capturePresetId));
+                                        const fieldLabel = `block text-[11px] font-semibold uppercase tracking-wide ${t.subText || 'text-gray-400'} mb-1.5`;
+                                        return (
+                                            <div className={`flex flex-wrap items-end gap-x-8 gap-y-4 px-4 py-3 border-t ${t.modalBorder || 'border-gray-700'} bg-black/10 rounded-b-xl`}>
+                                                {String(tmp.id) !== 'default' && (
+                                                    <div>
+                                                        <span className={fieldLabel}>ไฟล์รายงาน</span>
+                                                        <select
+                                                            value={tmp.format === 'pptx' ? 'pptx' : 'docx'}
+                                                            onChange={async (e) => {
+                                                                const format = e.target.value;
+                                                                setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, format } : x));
+                                                                const r = await setTemplateFormat(tmp.id, format);
+                                                                if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change output format', 'error'); fetchTemplates(); }
+                                                            }}
+                                                            className={`h-9 px-3 rounded-lg text-sm ${t.dropdown?.bg || 'bg-gray-950'} ${t.dropdown?.inputText || 'text-gray-200'} border ${t.modalBorder || 'border-gray-700'}`}
+                                                            title="Output file type of reports built from this template"
+                                                        >
+                                                            <option value="docx">Word (.docx)</option>
+                                                            <option value="pptx">PowerPoint (.pptx)</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+
+                                                <div>
+                                                    <span className={fieldLabel}>รูปในรายงาน</span>
+                                                    <div className={`inline-flex h-9 rounded-lg border ${t.modalBorder || 'border-gray-700'} overflow-hidden`} role="radiogroup" aria-label="รูปในรายงาน">
+                                                        {CAPTURE_MODE_OPTIONS.map((opt, i) => (
+                                                            <button
+                                                                key={opt.id}
+                                                                type="button"
+                                                                role="radio"
+                                                                aria-checked={mode === opt.id}
+                                                                onClick={async () => {
+                                                                    if (mode === opt.id) return;
+                                                                    setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, captureMode: opt.id } : x));
+                                                                    const r = await setTemplateCaptureMode(tmp.id, opt.id);
+                                                                    if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change image mode', 'error'); fetchTemplates(); }
+                                                                }}
+                                                                className={`px-4 text-sm font-semibold transition-colors cursor-pointer ${i > 0 ? `border-l ${t.modalBorder || 'border-gray-700'}` : ''} ${mode === opt.id ? opt.active : 'bg-transparent text-gray-400 hover:text-gray-100 hover:bg-gray-800'}`}
+                                                            >
+                                                                {opt.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {mode === 'captured' && (
+                                                    <div>
+                                                        <span className={fieldLabel}>Preset ตัดรูป</span>
+                                                        <select
+                                                            value={hasPreset ? String(tmp.capturePresetId) : ''}
+                                                            onChange={async (e) => {
+                                                                const capturePresetId = e.target.value;
+                                                                if (!capturePresetId) return;
+                                                                setTemplates(prev => prev.map(x => x.id === tmp.id ? { ...x, capturePresetId } : x));
+                                                                const r = await setTemplatePreset(tmp.id, capturePresetId);
+                                                                if (!r?.success) { Swal.fire('Error', r?.error || 'Failed to change capture preset', 'error'); fetchTemplates(); }
+                                                            }}
+                                                            className={`h-9 px-3 rounded-lg text-sm min-w-[200px] max-w-[260px] ${t.dropdown?.bg || 'bg-gray-950'} ${t.dropdown?.inputText || 'text-gray-200'} border ${hasPreset ? (t.modalBorder || 'border-gray-700') : 'border-amber-500 text-amber-200'}`}
+                                                            title="Preset ตัดรูป (crop) ที่รายงานจาก Template นี้ใช้"
+                                                        >
+                                                            <option value="" disabled>เลือก Preset…</option>
+                                                            {presets.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                             ))}
                         </div>
                     )}

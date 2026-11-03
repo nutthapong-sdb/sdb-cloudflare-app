@@ -1,10 +1,13 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getDb } from '@/lib/db';
 
 const dataDir = path.join(process.cwd(), 'app', 'data');
 const templatesDir = path.join(dataDir, 'templates');
 const registryFile = path.join(dataDir, 'ntbc_templates.json');
 const TEMPLATE_FORMATS = ['docx', 'pptx'];
+// Where a template's report images come from; only 'captured' crops with capturePresetId.
+const CAPTURE_MODES = ['captured', 'inapp', 'uploaded'];
 
 // Ensure directories exist
 const ensureDir = async () => {
@@ -18,11 +21,39 @@ const defaultSubPath = path.join(dataDir, 'ntbc_reportTemplate.json');
 const defaultDomainPath = path.join(dataDir, 'ntbc_staticReportTemplate.json');
 const defaultMiddlePath = path.join(dataDir, 'ntbc_middleReportTemplate.json');
 
+// Before templates had their own image mode, it came from the kind of their preset.
+// Carry that over once: a template bound to an 'inapp' / 'uploaded' preset gets that mode.
+const migrateCaptureModes = async (templates) => {
+    if (!templates.some(t => !t.captureMode && t.capturePresetId)) return false;
+    let kinds = {};
+    try {
+        const db = await getDb();
+        const rows = await db.all('SELECT id, kind FROM capture_presets');
+        kinds = Object.fromEntries(rows.map(r => [String(r.id), r.kind || 'captured']));
+    } catch (e) {
+        return false;
+    }
+    let changed = false;
+    for (const t of templates) {
+        if (t.captureMode || !t.capturePresetId) continue;
+        const kind = kinds[String(t.capturePresetId)];
+        if (kind === 'inapp' || kind === 'uploaded') {
+            t.captureMode = kind;
+            delete t.capturePresetId;
+            changed = true;
+        }
+    }
+    return changed;
+};
+
 export async function GET() {
     try {
         await ensureDir();
         const content = await fs.readFile(registryFile, 'utf8');
         const templates = JSON.parse(content);
+        if (await migrateCaptureModes(templates)) {
+            await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
+        }
 
         // Filter out templates where the content files don't actually exist
         const validTemplates = [];
@@ -70,7 +101,7 @@ export async function GET() {
 export async function POST(req) {
     try {
         await ensureDir();
-        const { action, name, sourceId, id, newName, format, capturePresetId } = await req.json();
+        const { action, name, sourceId, id, newName, format, capturePresetId, captureMode } = await req.json();
         console.log('NTBC Template API Request:', { action, name, sourceId, id });
 
         // Read registry
@@ -92,6 +123,8 @@ export async function POST(req) {
             // keeps its source's preset unless one is given.
             const presetId = capturePresetId || source?.capturePresetId;
             if (presetId) newTemplate.capturePresetId = String(presetId);
+            const mode = CAPTURE_MODES.includes(captureMode) ? captureMode : source?.captureMode;
+            if (mode) newTemplate.captureMode = mode;
 
             // Determine source files
             let subContent = '{}';
@@ -151,6 +184,15 @@ export async function POST(req) {
             const target = templates.find(t => t.id === id);
             if (!target) return Response.json({ success: false, error: 'Template not found' }, { status: 404 });
             target.capturePresetId = String(capturePresetId);
+            await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
+            return Response.json({ success: true });
+        }
+
+        if (action === 'set-capture-mode') {
+            if (!CAPTURE_MODES.includes(captureMode)) return Response.json({ success: false, error: `captureMode must be one of ${CAPTURE_MODES.join(', ')}` }, { status: 400 });
+            const target = templates.find(t => t.id === id);
+            if (!target) return Response.json({ success: false, error: 'Template not found' }, { status: 404 });
+            target.captureMode = captureMode;
             await fs.writeFile(registryFile, JSON.stringify(templates, null, 2), 'utf8');
             return Response.json({ success: true });
         }

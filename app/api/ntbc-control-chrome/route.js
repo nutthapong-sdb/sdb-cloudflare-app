@@ -1,4 +1,5 @@
 import { connectChrome, findCloudflarePage } from '@/lib/chrome-helper';
+import { pageLooksUnauthenticated, CF_UNAUTH_MESSAGE } from '@/lib/cf-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,6 +101,11 @@ export async function GET(request) {
         const isSameUrl = isSameCloudflarePage(currentUrl, targetUrl);
         if (isSameUrl) {
             console.log(`⚡ [SKIP REDIRECT] Browser is already on target URL/page: ${currentUrl}. Skipping reload & redirect to prevent Cloudflare bot challenges.`);
+            // Same page, but the session may have expired since: still check the login.
+            if (await page.evaluate(pageLooksUnauthenticated).catch(() => false)) {
+                await browser.disconnect();
+                return Response.json({ success: false, error: CF_UNAUTH_MESSAGE, errorType: 'unauthenticated' }, { status: 401 });
+            }
             await browser.disconnect();
             return Response.json({ 
                 success: true, 
@@ -127,19 +133,13 @@ export async function GET(request) {
             console.log('Timeout waiting for page load state, checking current state...');
         }
 
-        const isUnauthenticated = await page.evaluate(() => {
-            const url = window.location.href;
-            const text = document.body ? document.body.innerText.toLowerCase() : '';
-            const hasLoginText = text.includes('sign in to cloudflare') || text.includes('log in to cloudflare');
-            const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
-            return url.includes('/login') || url.includes('/sign-in') || hasLoginText || hasLoginElement;
-        });
+        const isUnauthenticated = await page.evaluate(pageLooksUnauthenticated).catch(() => false);
 
         if (isUnauthenticated) {
             await browser.disconnect();
             return Response.json({ 
                 success: false, 
-                error: 'Cloudflare session is not authenticated. Please open the "Live Browser Monitor" (noVNC) from the Actions menu and log in to Cloudflare first.',
+                error: CF_UNAUTH_MESSAGE,
                 errorType: 'unauthenticated'
             }, { status: 401 });
         }

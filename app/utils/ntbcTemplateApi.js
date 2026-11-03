@@ -12,11 +12,11 @@ export const listTemplates = async () => {
     } catch (e) { return []; }
 };
 
-export const createTemplate = async (name, sourceId, format, capturePresetId) => {
+export const createTemplate = async (name, sourceId, format, capturePresetId, captureMode) => {
     try {
         const res = await fetch('/api/ntbc-templates', {
             method: 'POST',
-            body: JSON.stringify({ action: 'create', name, sourceId, format, capturePresetId }),
+            body: JSON.stringify({ action: 'create', name, sourceId, format, capturePresetId, captureMode }),
             headers: { 'Content-Type': 'application/json' }
         });
         return await res.json();
@@ -55,7 +55,22 @@ export const listCapturePresets = async () => {
     } catch (e) { return []; }
 };
 
-// Report image mode set in tab 2: 'captured' | 'inapp' | 'uploaded' (server-wide).
+// Where this template's report images come from: 'captured' | 'inapp' | 'uploaded'.
+export const setTemplateCaptureMode = async (id, captureMode) => {
+    try {
+        const res = await fetch('/api/ntbc-templates', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'set-capture-mode', id, captureMode }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return await res.json();
+    } catch (e) { return { success: false, error: e.message }; }
+};
+
+// The mode a template's reports use; templates from before modes existed are screenshots.
+export const templateCaptureMode = (template) => template?.captureMode || 'captured';
+
+// Mode being set up on tab 2 (which settings / previews it shows): 'captured' | 'inapp' | 'uploaded'.
 export const getCaptureMode = async () => {
     try {
         const res = await fetch('/api/ntbc-capture-mode', { cache: 'no-store' });
@@ -73,10 +88,11 @@ export const setCaptureMode = async (mode) => {
     return res.json();
 };
 
-// What a report from `templateId` needs: { mode, preset? } or { mode, error }.
-// Only screenshot mode crops with the template's preset; inapp / uploaded need none.
+// What a report from `templateId` needs: { mode, preset? } or { mode, error }. The mode is the
+// template's own; only screenshot mode crops with the template's preset.
 export const resolveReportCaptureSetup = async (templateId) => {
-    const mode = await getCaptureMode();
+    const template = (await listTemplates()).find(t => String(t.id) === String(templateId));
+    const mode = templateCaptureMode(template);
     if (mode !== 'captured') return { mode, preset: null };
     const lookup = await resolveTemplateCapturePreset(templateId);
     return { mode, ...lookup };

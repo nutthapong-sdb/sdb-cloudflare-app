@@ -1,8 +1,9 @@
 import { connectChrome, findCloudflarePage } from '@/lib/chrome-helper';
+import { pageLooksUnauthenticated, CF_UNAUTH_MESSAGE } from '@/lib/cf-auth';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
-import { SMART_CROP_SPECS, findSmartCropBox, applyCropAdjustments } from '@/lib/ntbc-smart-crop';
+import { SMART_CROP_SPECS, findSmartCropBox, applyCropAdjustments, applyCropOffsets } from '@/lib/ntbc-smart-crop';
 import { UPLOADED_SLUGS } from '@/app/systems/ntbc_cfreport/utils/uploadedVariables';
 
 export const dynamic = 'force-dynamic';
@@ -195,6 +196,65 @@ async function generateUnavailableImage(title, subtitle = 'ไม่พบข้
     return await sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+// File name of each capture type's saved screenshot (public/ and db/captured/).
+const CAPTURE_FILE_NAMES = {
+    dns: 'captured-dns.png',
+    traffic: 'captured-traffic.png',
+    firewall: 'captured-firewall.png',
+    'security-rules': 'captured-security-rules.png',
+    argo: 'captured-argo.png',
+    speed: 'captured-speed.png',
+    'speed-mobile': 'captured-speed-mobile.png',
+    domains: 'captured-domains.png',
+    'bot-management': 'captured-bot-management.png',
+    'security-level': 'captured-security-level.png',
+    'ssl-overview': 'captured-ssl-overview.png',
+    'ssl-edge': 'captured-ssl-edge.png',
+    'min-tls-version': 'captured-min-tls-version.png',
+    'tls-1-3': 'captured-tls-1-3.png',
+    'browser-integrity-check': 'captured-browser-integrity.png',
+    'load-balancing-spectrum': 'captured-load-balancing-spectrum.png',
+    'rate-limiting': 'captured-rate-limiting.png',
+    'managed-rules': 'captured-managed-rules.png',
+    'ip-access-rules': 'captured-ip-access.png',
+    'zone-lockdown': 'captured-zone-lockdown.png',
+    'traffic-countries': 'captured-traffic-countries.png',
+    'top-events-source': 'captured-top-events-source.png'
+};
+
+// Crop editor sources: the full-page screenshot each capture was cut from, plus the section's
+// auto box on it, so the crop can be redrawn by dragging (debug page) without capturing again.
+// Saved as db/captured/crop-src/<type>-<page>.png and <type>.json { boxes: [...] } (one box per
+// page; DNS has several pages). Traffic is left out: its image is several sub-tab shots.
+const CROP_SOURCE_DIR = path.join(process.cwd(), 'db', 'captured', 'crop-src');
+const safeType = (t) => String(t || '').replace(/[^a-z0-9-]/gi, '');
+const readCropSource = (type) => {
+    const metaPath = path.join(CROP_SOURCE_DIR, `${safeType(type)}.json`);
+    if (!fs.existsSync(metaPath)) return null;
+    try { return JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) { return null; }
+};
+const saveCropSources = (type, sources) => {
+    const metaPath = path.join(CROP_SOURCE_DIR, `${safeType(type)}.json`);
+    try {
+        if (!sources.length || sources.some(src => !src)) {
+            if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+            return;
+        }
+        fs.mkdirSync(CROP_SOURCE_DIR, { recursive: true });
+        sources.forEach((src, i) => fs.writeFileSync(path.join(CROP_SOURCE_DIR, `${safeType(type)}-${i}.png`), src.buffer));
+        fs.writeFileSync(metaPath, JSON.stringify({
+            boxes: sources.map(src => src.box),
+            files: sources.map(src => src.files || [CAPTURE_FILE_NAMES[type]]),
+            keys: sources.map(src => src.key || null),
+            semantics: sources[0].semantics || 'box',
+            scale: sources[0].scale || 1,
+            capturedAt: new Date().toISOString(),
+        }));
+    } catch (e) {
+        console.error(`[crop-src] ${type}: failed to save`, e);
+    }
+};
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -209,6 +269,19 @@ export async function GET(request) {
         const dbCapturedDir = path.join(process.cwd(), 'db', 'captured');
         if (!fs.existsSync(dbCapturedDir)) {
             try { fs.mkdirSync(dbCapturedDir, { recursive: true }); } catch (e) {}
+        }
+
+        // Crop editor: the auto boxes of the last capture of `type` (null when it can't be edited)
+        if (action === 'crop-source') {
+            const meta = readCropSource(type);
+            return Response.json({ success: true, source: meta ? { boxes: meta.boxes, semantics: meta.semantics || 'box', scale: meta.scale || 1, capturedAt: meta.capturedAt } : null });
+        }
+        // Crop editor: one page of the full-page screenshot the crop is cut from
+        if (action === 'crop-source-image') {
+            const pageNo = Math.max(0, parseInt(searchParams.get('page') || '0', 10) || 0);
+            const imgPath = path.join(CROP_SOURCE_DIR, `${safeType(type)}-${pageNo}.png`);
+            if (!fs.existsSync(imgPath)) return new Response('Not found', { status: 404 });
+            return new Response(fs.readFileSync(imgPath), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' } });
         }
 
         // Action to get all saved screenshots directly from disk
@@ -507,19 +580,13 @@ export async function GET(request) {
             console.log('Timeout waiting for page load state, checking current state...');
         }
 
-        const isUnauthenticated = await page.evaluate(() => {
-            const url = window.location.href;
-            const text = document.body ? document.body.innerText.toLowerCase() : '';
-            const hasLoginText = text.includes('sign in to cloudflare') || text.includes('log in to cloudflare');
-            const hasLoginElement = !!(document.querySelector('input[type="email"]') || document.querySelector('input[name="email"]') || document.querySelector('a[href*="/login"]'));
-            return url.includes('/login') || url.includes('/sign-in') || hasLoginText || hasLoginElement;
-        });
+        const isUnauthenticated = await page.evaluate(pageLooksUnauthenticated).catch(() => false);
 
         if (isUnauthenticated) {
             await browser.disconnect();
             return Response.json({ 
                 success: false, 
-                error: 'Cloudflare session is not authenticated. Please open the "Live Browser Monitor" (noVNC) from the Actions menu and log in to Cloudflare first.',
+                error: CF_UNAUTH_MESSAGE,
                 errorType: 'unauthenticated'
             }, { status: 401 });
         }
@@ -801,6 +868,8 @@ export async function GET(request) {
         let pageIndex = 1;
         let hasNextPage = true;
         const pageBuffers = [];
+        const cropSources = [];
+        let trafficSubSources = null; // traffic: { sub: { buffer, box? } } full shot per sub image; no box = the main shot's box
         let sub1Buffer = null;
         let sub2Buffer = null;
         let sub3Buffer = null;
@@ -1052,8 +1121,9 @@ export async function GET(request) {
                 }
             }
 
-            if (!cropCoords) {
-                cropCoords = await page.evaluate((captureType, qXS, qXE, qYS, qYE) => {
+            // Older per-type crop (heading / footer based). Measured again with zero offsets as the
+            // crop editor's base box for sections without a smart-crop box (e.g. speed test).
+            const measureLegacyCrop = (xs, xe, ys, ye) => page.evaluate((captureType, qXS, qXE, qYS, qYE) => {
                     if (captureType === 'domains') {
                         const h = Array.from(document.querySelectorAll('h1, h2, h3, div, span')).find(el => (el.innerText || '').trim().startsWith('Domains') && el.getBoundingClientRect().left > 200);
                         const footer = Array.from(document.querySelectorAll('*')).find(el => (el.innerText || '').trim().startsWith('Showing 1'));
@@ -1573,12 +1643,53 @@ export async function GET(request) {
                     width: Math.max(100, endX - startX),
                     height: targetHeight
                 };
-            }, type, qXStart, qXEnd, qYStart, qYEnd);
-            }
+            }, type, xs, xe, ys, ye);
+            if (!cropCoords) cropCoords = await measureLegacyCrop(qXStart, qXEnd, qYStart, qYEnd);
+            const legacyBase = cropCoords ? await measureLegacyCrop('0', '0', '0', '0').catch(() => null) : null;
 
             // Auto-crop to the section's own box on the page (see lib/ntbc-smart-crop.js); the
             // preset values become adjustments on that box. Falls back to the crop above when the
             // section isn't found or the preset uses old absolute pixel positions.
+            // New HTTP Traffic page (/analytics/requests): the "Requests over time" and "Data transfer"
+            // charts each have a Group by combobox — set both to "Cache status" (like the old page's
+            // cached/uncached split). The combobox only opens on a real click. false = old page.
+            const setTrafficGroupBy = async () => {
+                const selector = '[data-sentry-component="GroupBySelector"] input[role="combobox"]';
+                const count = (await page.$$(selector)).length;
+                if (!count) return false;
+                for (let i = 0; i < count; i++) {
+                    const input = (await page.$$(selector))[i];
+                    if (!input) continue;
+                    const current = await input.evaluate(e => (e.value || e.title || '').trim().toLowerCase());
+                    if (current === 'cache status') continue;
+                    await input.evaluate(e => e.scrollIntoView({ block: 'center' }));
+                    await input.click();
+                    await new Promise(r => setTimeout(r, 900));
+                    let picked = false;
+                    for (const option of await page.$$('[role="option"]')) {
+                        const text = await option.evaluate(e => (e.textContent || '').trim().toLowerCase());
+                        if (text === 'cache status') {
+                            await option.evaluate(e => e.scrollIntoView({ block: 'center' }));
+                            await option.click();
+                            picked = true;
+                            break;
+                        }
+                    }
+                    if (!picked) await page.keyboard.press('Escape');
+                    console.log(`[traffic] Group by #${i + 1} → ${picked ? 'Cache status' : 'option not found'}`);
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+                // Drop the focus (text caret + focus ring) the last combobox keeps, or it shows in the shot.
+                await page.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
+                await page.mouse.move(5, 5);
+                await new Promise(r => setTimeout(r, 1500)); // charts redraw
+                return true;
+            };
+            const trafficNewUi = type === 'traffic' ? await setTrafficGroupBy().catch(err => { console.warn('[traffic] group by failed:', err.message); return false; }) : false;
+
+            // Full page + auto box of this page, kept for the crop editor (see saveCropSources)
+            let lastSmartBox = null;
+            let cropSource = null;
             const smartCrop = async () => {
                 const spec = SMART_CROP_SPECS[type];
                 if (!spec) return null;
@@ -1587,6 +1698,7 @@ export async function GET(request) {
                     return null;
                 });
                 const box = await measure();
+                lastSmartBox = box;
                 const adjusted = box && applyCropAdjustments(box, { xStart: qXStart, xEnd: qXEnd, yStart: qYStart, yEnd: qYEnd });
                 console.log(`[smart-crop] ${type}: box=${JSON.stringify(box)} → ${adjusted ? JSON.stringify(adjusted) : 'fallback to legacy crop'}`);
                 return adjusted;
@@ -1666,7 +1778,7 @@ export async function GET(request) {
                     console.warn('Error filtering settings search box:', err.message);
                 }
 
-                const findCardClip = async () => {
+                const findCardClip = async (xs = qXStart, xe = qXEnd, ys = qYStart, ye = qYEnd) => {
                     return await page.evaluate((kws, qXS, qXE, qYS, qYE, captureType) => {
                         const isInsideNav = (el) => {
                             let p = el;
@@ -1924,7 +2036,7 @@ export async function GET(request) {
                             };
                         }
                         return null;
-                    }, keywords, qXStart, qXEnd, qYStart, qYEnd, type);
+                    }, keywords, xs, xe, ys, ye, type);
                 };
 
                 let clipBox = await findCardClip();
@@ -1983,6 +2095,20 @@ export async function GET(request) {
                         restoreViewport = null;
                     }
                 }
+                // No smart box (e.g. load balancing): measure the card clip again in the grown
+                // viewport, plus its zero-offset base, so the crop editor gets a full page to cut.
+                let cardBase = null;
+                if (!restoreViewport && clipBox && !clipBox.isDisabled && clipBox.width) {
+                    restoreViewport = await growViewportToPage();
+                    const grown = await findCardClip();
+                    if (grown && grown.width && !grown.isDisabled) {
+                        clipBox = grown;
+                        cardBase = await findCardClip('0', '0', '0', '0').catch(() => null);
+                    } else {
+                        await restoreViewport();
+                        restoreViewport = null;
+                    }
+                }
 
                 if (clipBox && clipBox.isDisabled) {
                     console.log(`ℹ️ [${type}] is Disabled / Not Active:`, clipBox.reason);
@@ -2018,6 +2144,10 @@ export async function GET(request) {
                         `;
                     });
                     await new Promise(r => setTimeout(r, 300));
+                    const sourceBox = lastSmartBox || cardBase;
+                    if (restoreViewport && sourceBox && !sourceBox.isDisabled) {
+                        cropSource = { buffer: Buffer.from(await page.screenshot({ encoding: 'base64', type: 'png' }), 'base64'), box: sourceBox, semantics: 'box' };
+                    }
                     const cardScreenshotBase64 = await page.screenshot({ clip: clipBox, encoding: 'base64', type: 'png', captureBeyondViewport: !restoreViewport });
                     if (restoreViewport) { await restoreViewport(); restoreViewport = null; }
                     pageBuffer = Buffer.from(cardScreenshotBase64, 'base64');
@@ -2065,6 +2195,13 @@ export async function GET(request) {
                     fullPage: !restoreViewport
                 });
 
+                if (restoreViewport && lastSmartBox) {
+                    cropSource = { buffer: Buffer.from(fullScreenshotBase64, 'base64'), box: lastSmartBox, semantics: 'box' };
+                } else if (!restoreViewport && legacyBase) {
+                    // Older crop: its offsets move the edges (see applyCropOffsets 'edges').
+                    const dpr = await page.evaluate(() => window.devicePixelRatio || 1).catch(() => 1);
+                    cropSource = { buffer: Buffer.from(fullScreenshotBase64, 'base64'), box: legacyBase, semantics: 'edges', scale: dpr };
+                }
                 if (restoreViewport) {
                     await restoreViewport();
                     restoreViewport = null;
@@ -2110,8 +2247,10 @@ export async function GET(request) {
                                 })
                                 .toBuffer();
 
-                            // 2. Click subsequent tabs and capture
-                            const additionalTabs = [
+                            // New page: sub1 = "Requests over time", sub2 = "Data transfer" cards
+                            // (grouped by cache status above), each cut from one full-page shot.
+                            // Page views / visits / API requests have no chart there any more.
+                            const additionalTabs = trafficNewUi ? [] : [
                                 { text: 'data transfer', key: 'sub2' },
                                 { text: 'page views', key: 'sub3' },
                                 { text: 'visits', key: 'sub4' },
@@ -2119,6 +2258,32 @@ export async function GET(request) {
                             ];
 
                             const tabBuffers = {};
+                            trafficSubSources = {};
+                            if (trafficNewUi) {
+                                const restoreCards = await growViewportToPage();
+                                try {
+                                    const full = Buffer.from(await page.screenshot({ encoding: 'base64', type: 'png' }), 'base64');
+                                    const fullMeta = await sharp(full).metadata();
+                                    for (const [key, specKey] of [['sub1', 'traffic-requests'], ['sub2', 'traffic-data-transfer']]) {
+                                        const box = await page.evaluate(findSmartCropBox, SMART_CROP_SPECS[specKey]).catch(() => null);
+                                        console.log(`[traffic] ${specKey} card: ${JSON.stringify(box)}`);
+                                        if (!box) continue;
+                                        const cut = applyCropAdjustments(box, { xStart: qXStart, xEnd: qXEnd, yStart: qYStart, yEnd: qYEnd }) || box;
+                                        const left = Math.max(0, Math.min(Math.round(cut.x), fullMeta.width - 1));
+                                        const top = Math.max(0, Math.min(Math.round(cut.y), fullMeta.height - 1));
+                                        tabBuffers[key] = await sharp(full).extract({
+                                            left,
+                                            top,
+                                            width: Math.max(10, Math.min(Math.round(cut.width), fullMeta.width - left)),
+                                            height: Math.max(10, Math.min(Math.round(cut.height), fullMeta.height - top)),
+                                        }).toBuffer();
+                                        trafficSubSources[key] = { buffer: full, box };
+                                    }
+                                } finally {
+                                    await restoreCards();
+                                }
+                                if (tabBuffers.sub1) sub1Buffer = tabBuffers.sub1;
+                            }
 
                             for (const tabInfo of additionalTabs) {
                                 console.log(`Searching for "${tabInfo.text}" tab to click...`);
@@ -2176,6 +2341,7 @@ export async function GET(request) {
                                             .toBuffer();
                                         
                                         tabBuffers[tabInfo.key] = croppedBuf;
+                                        trafficSubSources[tabInfo.key] = { buffer: subFullBuffer };
                                         console.log(`${tabInfo.text} cropping completed successfully.`);
                                     } else {
                                         console.warn(`Could not find or click the "${tabInfo.text}" tab.`);
@@ -2208,6 +2374,7 @@ export async function GET(request) {
             }
 
             pageBuffers.push(pageBuffer);
+            cropSources.push(cropSource);
 
             // Handle Pagination for DNS Records
             if (type === 'dns') {
@@ -2312,35 +2479,26 @@ export async function GET(request) {
             }
         }
 
-        const fileMapping = {
-            dns: 'captured-dns.png',
-            traffic: 'captured-traffic.png',
-            firewall: 'captured-firewall.png',
-            'security-rules': 'captured-security-rules.png',
-            argo: 'captured-argo.png',
-            speed: 'captured-speed.png',
-            'speed-mobile': 'captured-speed-mobile.png',
-            domains: 'captured-domains.png',
-            'bot-management': 'captured-bot-management.png',
-            'security-level': 'captured-security-level.png',
-            'ssl-overview': 'captured-ssl-overview.png',
-            'ssl-edge': 'captured-ssl-edge.png',
-            'min-tls-version': 'captured-min-tls-version.png',
-            'tls-1-3': 'captured-tls-1-3.png',
-            'browser-integrity-check': 'captured-browser-integrity.png',
-            'load-balancing-spectrum': 'captured-load-balancing-spectrum.png',
-            'rate-limiting': 'captured-rate-limiting.png',
-            'managed-rules': 'captured-managed-rules.png',
-            'ip-access-rules': 'captured-ip-access.png',
-            'zone-lockdown': 'captured-zone-lockdown.png',
-            'traffic-countries': 'captured-traffic-countries.png',
-            'top-events-source': 'captured-top-events-source.png'
-        };
+        const fileMapping = CAPTURE_FILE_NAMES;
         const fileName = fileMapping[type] || 'captured-domains.png';
         const filePath = path.join(publicDir, fileName);
         fs.writeFileSync(filePath, finalBuffer);
         try { fs.writeFileSync(path.join(dbCapturedDir, fileName), finalBuffer); } catch (e) {}
         console.log(`Screenshot saved to ${filePath} and persistent disk`);
+        if (type === 'traffic') {
+            // One crop box for the main shot (= sub1) and every sub tab shot.
+            const main = cropSources[0];
+            const subs = main ? ['sub1', 'sub2', 'sub3', 'sub4', 'sub5'].filter(k => trafficSubSources?.[k]) : [];
+            const ownSub1 = subs.includes('sub1'); // new page: sub1 is its own card, not the main shot
+            saveCropSources(type, main ? [
+                ownSub1 ? { ...main, files: ['captured-traffic.png'] } : { ...main, files: ['captured-traffic.png', 'captured-traffic-sub1.png'], key: 'sub1' },
+                ...subs.map(k => ({ ...main, buffer: trafficSubSources[k].buffer, box: trafficSubSources[k].box || main.box, files: [`captured-traffic-${k}.png`], key: k })),
+            ] : []);
+        } else {
+            saveCropSources(type, cropSources.map((src, i) => src && type === 'dns'
+                ? { ...src, files: i === 0 ? ['captured-dns.png', 'captured-dns-1.png'] : [`captured-dns-${i + 1}.png`] }
+                : src));
+        }
 
         if (type === 'dns' && pageBuffers.length > 0) {
             for (let i = 0; i < pageBuffers.length; i++) {
@@ -2431,6 +2589,44 @@ export async function POST(request) {
     try {
         const body = await request.json();
         const { action, id } = body;
+
+        // Crop editor: cut `type` again from its saved full-page source with new offsets and
+        // save it as that type's screenshot (same files a capture writes).
+        if (action === 'recrop') {
+            const type = safeType(body.type);
+            const meta = readCropSource(type);
+            if (!meta?.boxes?.length || !CAPTURE_FILE_NAMES[type]) {
+                return Response.json({ success: false, error: 'ยังไม่มีภาพเต็มของหัวข้อนี้ — กด Capture ใหม่หนึ่งครั้งก่อน' }, { status: 404 });
+            }
+            const scale = meta.scale || 1;
+            const publicDir = path.join(process.cwd(), 'public');
+            const dbDir = path.join(process.cwd(), 'db', 'captured');
+            const toDataUrl = (buf) => `data:image/png;base64,${buf.toString('base64')}`;
+            const out = { success: true };
+            for (let i = 0; i < meta.boxes.length; i++) {
+                const img = sharp(fs.readFileSync(path.join(CROP_SOURCE_DIR, `${type}-${i}.png`)));
+                const { width, height } = await img.metadata();
+                const box = applyCropOffsets(meta.boxes[i], body.offsets || {}, meta.semantics);
+                if (!box) return Response.json({ success: false, error: 'ค่า offset เกิน 500 (พิกัดแบบเก่า) ใช้กับตัวลากไม่ได้' }, { status: 400 });
+                const left = Math.max(0, Math.min(Math.round(box.x * scale), width - 1));
+                const top = Math.max(0, Math.min(Math.round(box.y * scale), height - 1));
+                const buf = await img.extract({
+                    left,
+                    top,
+                    width: Math.max(10, Math.min(Math.round(box.width * scale), width - left)),
+                    height: Math.max(10, Math.min(Math.round(box.height * scale), height - top)),
+                }).png().toBuffer();
+                for (const name of meta.files?.[i] || [CAPTURE_FILE_NAMES[type]]) {
+                    try { fs.writeFileSync(path.join(publicDir, name), buf); } catch (e) {}
+                    fs.writeFileSync(path.join(dbDir, name), buf);
+                }
+                if (i === 0) out.image = toDataUrl(buf);
+                if (type === 'dns') (out.dnsPages = out.dnsPages || []).push(toDataUrl(buf));
+                const key = meta.keys?.[i];
+                if (type === 'traffic' && key) out[`image${key[0].toUpperCase()}${key.slice(1)}`] = toDataUrl(buf);
+            }
+            return Response.json(out);
+        }
 
         if (!id || !UPLOADED_SLUGS[id]) {
             return Response.json({ success: false, error: `Unknown uploaded-image id: ${id}` }, { status: 400 });

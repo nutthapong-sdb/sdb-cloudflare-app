@@ -18,6 +18,7 @@ import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
 import SearchableDropdown from '../SearchableDropdown';
 import { getCaptureMode, setCaptureMode as saveCaptureMode } from '@/app/utils/ntbcTemplateApi';
+import CropEditorModal from '../CropEditorModal';
 
 const safeSetItem = (key, val) => {
     if (typeof window === 'undefined') return;
@@ -27,8 +28,6 @@ const safeSetItem = (key, val) => {
         console.warn(`[safeSetItem] Storage quota exceeded or unavailable for key "${key}":`, e.message);
     }
 };
-
-const PRESET_KIND_LABEL = { captured: '📸 แคปรูป', inapp: '🧩 inapp', uploaded: '🖼️ อัปโหลดเอง' };
 
 // section: when the NTBC workspace drives which part to show ('setup' | 'capture' | 'console'),
 // it passes it here and this page's own section tab bar is hidden.
@@ -261,6 +260,8 @@ export default function ControlPage({ section, onEnvChange } = {}) {
     // presets + crop offsets + screenshot preview ('captured'), the app-built table preview
     // ('inapp'), or the image uploads ('uploaded'). Only screenshot mode uses presets.
     const [captureMode, setCaptureModeState] = useState('captured');
+    // Drag-to-crop editor: the crop target being edited (see cropTargetsFor), or null.
+    const [cropEditor, setCropEditor] = useState(null);
     useEffect(() => { getCaptureMode().then(setCaptureModeState); }, []);
     const selectCaptureMode = async (mode) => {
         setCaptureModeState(mode);
@@ -2113,6 +2114,99 @@ export default function ControlPage({ section, onEnvChange } = {}) {
 
     const isEnvReady = Boolean(envAccount && envZone && envStartDate && envEndDate);
 
+    // Crop sections of a capture tab: which capture type, which offsets (coords key), where the
+    // image goes. Speed has a desktop and a mobile shot, each with its own offsets.
+    const cropTargetsFor = (tabId) => {
+        const tab = ALL_CAPTURE_TABS.find(t => t.id === tabId);
+        if (!tab) return [];
+        if (tab.id === 'speed') {
+            return [
+                { coordsKey: 'speed', type: 'speed', label: 'Speed Test (Desktop)', setter: setCapturedSpeedScreenshot, key: 'control_capturedSpeedScreenshot' },
+                { coordsKey: 'speedMobile', type: 'speed-mobile', label: 'Speed Test (Mobile)', setter: setCapturedSpeedMobileScreenshot, key: 'control_capturedSpeedMobileScreenshot' },
+            ];
+        }
+        return [{ coordsKey: tab.id, type: tab.type, label: tab.label, setter: tab.setter, key: tab.key }];
+    };
+    // Puts a recrop result (POST /api/ntbc-capture action 'recrop') into the preview state.
+    const applyRecropResult = (target, data) => {
+        const store = (key, img) => { try { localStorage.setItem(key, Array.isArray(img) ? JSON.stringify(img) : img); } catch (e) { /* quota */ } };
+        const img = target.type === 'dns' ? (data.dnsPages?.length ? data.dnsPages : [data.image]) : data.image;
+        target.setter(img);
+        store(target.key, img);
+        if (target.type === 'traffic') {
+            [setCapturedHttpTrafficScreenshot1, setCapturedHttpTrafficScreenshot2, setCapturedHttpTrafficScreenshot3, setCapturedHttpTrafficScreenshot4, setCapturedHttpTrafficScreenshot5]
+                .forEach((set, i) => {
+                    const sub = data[`imageSub${i + 1}`];
+                    if (sub) { set(sub); store(`control_capturedHttpTrafficScreenshot${i + 1}`, sub); }
+                });
+        }
+    };
+
+    // Keep the preview cut with the offsets on screen: when the open section's offsets change
+    // (typed, preset switched, reset to 0) re-cut it from its saved full-page shot — no capture.
+    // Sections without a saved full page (captured before this) are left as they are.
+    const lastRecropRef = useRef({});
+    const [isRecropping, setIsRecropping] = useState(false);
+    const offsetsKeyOf = (o = {}) => JSON.stringify(['xStart', 'xEnd', 'yStart', 'yEnd'].map(k => o[k] || '0'));
+    const activeOffsetsKey = cropTargetsFor(activeCaptureTab).map(t => offsetsKeyOf(coords?.[t.coordsKey])).join('|');
+    useEffect(() => {
+        if (presetKind !== 'captured') return;
+        const targets = cropTargetsFor(activeCaptureTab).filter(t => lastRecropRef.current[t.coordsKey] !== offsetsKeyOf(coords?.[t.coordsKey]));
+        if (!targets.length) return;
+        const timer = setTimeout(async () => {
+            setIsRecropping(true);
+            try {
+                for (const target of targets) {
+                    const keyNow = offsetsKeyOf(coords?.[target.coordsKey]);
+                    const [xStart, xEnd, yStart, yEnd] = JSON.parse(keyNow);
+                    if ([xStart, xEnd, yStart, yEnd].some(v => !/^-?\d+$/.test(v))) continue; // still typing ("-", "")
+                    const res = await fetch('/api/ntbc-capture', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'recrop', type: target.type, offsets: { xStart, xEnd, yStart, yEnd } }),
+                    });
+                    const data = await res.json();
+                    lastRecropRef.current[target.coordsKey] = keyNow;
+                    if (data.success) applyRecropResult(target, data); // else: no saved full page / old absolute offsets
+                }
+            } catch (e) {
+                console.error('Re-crop failed:', e);
+            } finally {
+                setIsRecropping(false);
+            }
+        }, 700);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeCaptureTab, activeOffsetsKey, presetKind]);
+
+    // The APIs answer 401 / errorType 'unauthenticated' when the shared Chrome isn't logged in to
+    // Cloudflare (lib/cf-auth.js); turn that into an error the capture handlers can recognise.
+    const NOT_LOGGED_IN = 'CF_NOT_LOGGED_IN';
+    const throwIfNotLoggedIn = (res, data) => {
+        if (res.status === 401 || data?.errorType === 'unauthenticated') {
+            const err = new Error(data?.error || 'ยังไม่ได้ล็อกอิน Cloudflare');
+            err.code = NOT_LOGGED_IN;
+            throw err;
+        }
+    };
+    const showNotLoggedIn = async (message) => {
+        const res = await Swal.fire({
+            icon: 'warning',
+            title: 'ยังไม่ได้ล็อกอิน Cloudflare',
+            text: message,
+            showCancelButton: true,
+            confirmButtonText: 'เปิด Live Browser เพื่อล็อกอิน',
+            cancelButtonText: 'ปิด',
+            confirmButtonColor: '#e11d48',
+            background: '#111827',
+            color: '#fff'
+        });
+        if (res.isConfirmed) {
+            setIsVncCollapsed(false);
+            try { localStorage.setItem('ntbc:vnc-collapsed', '0'); } catch (e) { /* ignore */ }
+        }
+    };
+
     const handleDirectCapture = async (tabId, captureType, stateSetter, storageKey, relativePath, isSilent = false) => {
         if (!envAccount) {
             if (!isSilent) {
@@ -2157,6 +2251,7 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                 addLog(`กำลังเชื่อมต่อไปยังหน้า Speed Test: ${targetSpeedUrl}`, 'info');
                 const navRes = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetSpeedUrl)}`);
                 const navData = await navRes.json();
+                throwIfNotLoggedIn(navRes, navData);
                 if (!navData.success) throw new Error(navData.error);
                 
                 addLog('รอหน้าเว็บ Speed Test โหลดข้อมูลและองค์ประกอบให้พร้อม...', 'info');
@@ -2355,6 +2450,7 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                 addLog(`Checking active tab URL...`, 'info');
                 const res = await fetch(`/api/ntbc-control-chrome?url=${encodeURIComponent(targetUrl)}`);
                 const data = await res.json();
+                throwIfNotLoggedIn(res, data);
                 if (!data.success) throw new Error(data.error);
                 if (data.skippedRedirect) {
                     addLog(`⚡ Browser is already on target page (${targetUrl}) - skipped reload for faster capture & anti-bot protection.`, 'success');
@@ -2367,6 +2463,7 @@ export default function ControlPage({ section, onEnvChange } = {}) {
             addLog(`Capturing screenshot with type=${captureType}...`, 'info');
             const captureRes = await fetch(getCaptureUrl(tabId, captureType));
             const captureData = await captureRes.json();
+            throwIfNotLoggedIn(captureRes, captureData);
             if (captureData.success && (captureData.image || captureData.dnsPages)) {
                 let imgResult;
                 if (tabId === 'dns') {
@@ -2378,6 +2475,7 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                     imgResult = captureData.image;
                 }
                 stateSetter(imgResult);
+                lastRecropRef.current[tabId] = JSON.stringify(['xStart', 'xEnd', 'yStart', 'yEnd'].map(k => coords?.[tabId]?.[k] || '0'));
                 if (storageKey && typeof window !== 'undefined') {
                     localStorage.setItem(storageKey, Array.isArray(imgResult) ? JSON.stringify(imgResult) : imgResult);
                 }
@@ -2433,7 +2531,8 @@ export default function ControlPage({ section, onEnvChange } = {}) {
         } catch (err) {
             addLog(`Direct capture failed for [${tabId}]: ${err.message}`, 'error');
             if (!isSilent) {
-                Swal.fire('Capture Error', err.message, 'error');
+                if (err.code === NOT_LOGGED_IN) showNotLoggedIn(err.message);
+                else Swal.fire('Capture Error', err.message, 'error');
             }
             return false;
         } finally {
@@ -2644,7 +2743,7 @@ export default function ControlPage({ section, onEnvChange } = {}) {
     // Embedded in the NTBC workspace: a card with the same header style as the other tabs.
     const SECTION_HEADERS = {
         setup: { title: 'ตั้งค่า & เริ่มต้น', desc: 'เลือก Account, Zone และช่วงวันที่ — ใช้ร่วมกันทุกแท็บ รวมถึง Generate Report', Icon: Settings },
-        capture: { title: 'ตั้งค่าการแคปรูปภาพ', desc: 'เลือกโหมดรูปในรายงาน และตั้ง Preset / ตัดรูปสำหรับโหมดแคปรูป', Icon: Camera },
+        capture: { title: 'ตั้งค่าการแคปรูปภาพ', desc: 'ตั้ง Preset / ตัดรูป (แคปรูป), ดูตัวอย่างตาราง (inapp) หรืออัปโหลดรูป (อัปโหลดเอง)', Icon: Camera },
         console: { title: 'Debug Console', desc: 'Log การทำงานของเบราว์เซอร์และการแคปรูป', Icon: Terminal },
     };
     const header = section ? SECTION_HEADERS[section] : { title: 'System Control Center', desc: 'Full-page interactive debugger & mockup generation workflow controller.', Icon: Settings };
@@ -2667,6 +2766,24 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                 </div>
             </div>
             <div className={section ? 'p-5 flex flex-col flex-1' : 'contents'}>
+            {cropEditor && (
+                <CropEditorModal
+                    type={cropEditor.type}
+                    label={cropEditor.label}
+                    offsets={coords[cropEditor.coordsKey] || {}}
+                    onClose={() => setCropEditor(null)}
+                    onApply={(offsets, data) => {
+                        const { coordsKey } = cropEditor;
+                        // Already cut with these offsets: the auto re-crop needn't do it again.
+                        lastRecropRef.current[coordsKey] = offsetsKeyOf(offsets);
+                        // The new offsets go into the editor like typed ones (save them to the preset after).
+                        setCoords(prev => ({ ...prev, [coordsKey]: { ...prev[coordsKey], ...offsets } }));
+                        applyRecropResult(cropEditor, data);
+                        addLog(`✂️ ตัดรูป [${coordsKey}] ใหม่จากกรอบที่ลาก: ${JSON.stringify(offsets)}`, 'success');
+                        setCropEditor(null);
+                    }}
+                />
+            )}
 
             {/* Main section tabs — keeps the page from being one long scroll: pick one view
                 instead of scrolling past Environment Settings, the monitor, capture/preview and
@@ -2701,7 +2818,8 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                 <div className={`${activeMainTab === 'capture' ? 'lg:col-span-12' : 'hidden'} space-y-6 flex flex-col`}>
                     {/* Report image mode — screenshot mode shows the presets, live browser and crop tools */}
                     <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-4 shadow-xl">
-                        <div className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3">โหมดรูปในรายงาน</div>
+                        <div className="text-xs font-bold text-gray-300 uppercase tracking-wider">ตั้งค่าโหมดไหน</div>
+                        <p className="text-[11px] text-gray-500 mt-0.5 mb-3">แต่ละ Template เลือกโหมดของตัวเองที่แท็บ 4. Template Settings — ตรงนี้แค่เลือกว่าจะตั้งค่า/ดูตัวอย่างของโหมดไหน</p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             {[
                                 { id: 'captured', title: '📸 แคปรูป', desc: 'แคปหน้า Cloudflare แล้วตัดตาม Preset ของ Template' },
@@ -2811,7 +2929,7 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                                     className="bg-gray-950 border border-gray-700/80 rounded-lg px-3 py-1.5 text-xs text-rose-200 font-medium focus:outline-none focus:border-rose-500/60 transition-colors cursor-pointer min-w-[200px] max-w-[320px] truncate"
                                 >
                                     <option value="default">Standard Default (Auto +0)</option>
-                                    {presets.map(p => (
+                                    {presets.filter(p => (p.kind || 'captured') === 'captured').map(p => (
                                         <option key={p.id} value={p.id}>
                                             {p.name}
                                         </option>
@@ -3005,14 +3123,6 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                                                     </div>
                                                 </div>
 
-                                                {/* Which source fills this section comes from the preset type */}
-                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border shrink-0 ${
-                                                    presetKind === 'inapp' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                                                    : presetKind === 'uploaded' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                                    : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                                }`}>
-                                                    {PRESET_KIND_LABEL[presetKind]}
-                                                </span>
                                                 {presetKind === 'inapp' && (
                                                     <button
                                                         type="button"
@@ -3172,8 +3282,21 @@ export default function ControlPage({ section, onEnvChange } = {}) {
                                                     <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
                                                         <span>✂️</span>
                                                         <span>Crop Coordinates ({current.label})</span>
+                                                        {isRecropping && <span className="text-[10px] font-normal text-cyan-300 animate-pulse">กำลังตัดรูปตาม offset…</span>}
                                                     </div>
                                                     <div className="flex items-center gap-2">
+                                                        {cropTargetsFor(activeCaptureTab).map((target, i, all) => (
+                                                            <button
+                                                                key={target.coordsKey}
+                                                                type="button"
+                                                                disabled={isCapturingDirect}
+                                                                onClick={() => setCropEditor(target)}
+                                                                className="px-3 py-1 bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-200 text-[11px] font-bold rounded-lg transition-all cursor-pointer disabled:opacity-60"
+                                                                title="ลากกรอบบนภาพเต็มหน้าเพื่อตั้งค่า offset — ไม่ต้องแคปใหม่"
+                                                            >
+                                                                ✋ ลากปรับกรอบ{all.length > 1 ? (target.type === 'speed-mobile' ? ' (Mobile)' : ' (Desktop)') : ''}
+                                                            </button>
+                                                        ))}
                                                         <button
                                                             type="button"
                                                             disabled={isCapturingDirect}
