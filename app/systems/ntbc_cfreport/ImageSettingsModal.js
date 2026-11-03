@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Settings, RotateCcw, Sliders, Shield, Lock, Activity, Globe, Check } from 'lucide-react';
 import Swal from './utils/alert';
+import { getCaptureMode } from '@/app/utils/ntbcTemplateApi';
 
 const CAPTURED_IMAGE_ITEMS = [
     { key: 'domains', varTag: '@captured_domain_page', label: 'Domain Overview (Sites)', desc: 'ภาพรวมหน้ารวมไซต์โดเมนทั้งหมด', category: 'domains', defaultWidth: 605, defaultCoords: { xStart: '395', xEnd: '1785', yStart: '85', yEnd: '' } },
@@ -59,12 +60,14 @@ const DEFAULT_WIDTHS = Object.fromEntries(IMAGE_CONFIG_ITEMS.map(i => [i.key, i.
 // inline: render as a page panel (workspace tab) instead of a popup.
 export default function ImageSettingsModal({ isOpen, onClose, theme, inline = false }) {
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [selectedType, setSelectedType] = useState('all');
+    // Variable type follows the report image mode picked in tab 2 ("ตั้งค่าการแคปรูปภาพ")
+    const [captureMode, setCaptureMode] = useState('captured');
     const [widths, setWidths] = useState(DEFAULT_WIDTHS);
 
     useEffect(() => {
         if (!isOpen) return;
         let cancelled = false;
+        getCaptureMode().then(mode => { if (!cancelled) setCaptureMode(mode); });
         (async () => {
             // Server copy first (what reports — including background jobs — actually use),
             // then this browser's older localStorage copy.
@@ -153,7 +156,7 @@ export default function ImageSettingsModal({ isOpen, onClose, theme, inline = fa
 
     const filteredItems = IMAGE_CONFIG_ITEMS
         .filter(i => selectedCategory === 'all' || i.category === selectedCategory)
-        .filter(i => selectedType === 'all' || i.type === selectedType);
+        .filter(i => i.type === captureMode || i.type === 'dashboard');
 
     return (
         <div
@@ -216,35 +219,6 @@ export default function ImageSettingsModal({ isOpen, onClose, theme, inline = fa
                         })}
                     </div>
 
-                    {/* Crop coordinates no longer live here — they are per preset on the debug page */}
-                    <span className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/50 px-3 py-1.5 rounded-lg">
-                        ✂️ พิกัดตัดรูป (Crop) ตั้งที่หน้า Debug → บันทึกลง Preset → เลือก Preset ให้ Template
-                    </span>
-                </div>
-
-                {/* Variable-type filter: captured / inapp / uploaded each have their own width setting now */}
-                <div className="px-5 py-2.5 border-b border-gray-800/80 bg-gray-950/20 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-                    <span className="text-[11px] text-gray-500 font-semibold shrink-0">ประเภทตัวแปร:</span>
-                    {[
-                        { id: 'all', label: 'ทั้งหมด' },
-                        { id: 'captured', label: '📸 ภาพแคปจริง' },
-                        { id: 'inapp', label: '🧩 inapp' },
-                        { id: 'uploaded', label: '🖼️ อัปโหลดเอง' },
-                        { id: 'dashboard', label: 'Dashboard' },
-                    ].map((tp) => (
-                        <button
-                            key={tp.id}
-                            type="button"
-                            onClick={() => setSelectedType(tp.id)}
-                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
-                                selectedType === tp.id
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : 'text-gray-500 hover:text-gray-300 border border-transparent'
-                            }`}
-                        >
-                            {tp.label}
-                        </button>
-                    ))}
                 </div>
 
                 {/* Items List */}

@@ -55,6 +55,33 @@ export const listCapturePresets = async () => {
     } catch (e) { return []; }
 };
 
+// Report image mode set in tab 2: 'captured' | 'inapp' | 'uploaded' (server-wide).
+export const getCaptureMode = async () => {
+    try {
+        const res = await fetch('/api/ntbc-capture-mode', { cache: 'no-store' });
+        const data = await res.json();
+        return data?.mode || 'captured';
+    } catch (e) { return 'captured'; }
+};
+
+export const setCaptureMode = async (mode) => {
+    const res = await fetch('/api/ntbc-capture-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+    });
+    return res.json();
+};
+
+// What a report from `templateId` needs: { mode, preset? } or { mode, error }.
+// Only screenshot mode crops with the template's preset; inapp / uploaded need none.
+export const resolveReportCaptureSetup = async (templateId) => {
+    const mode = await getCaptureMode();
+    if (mode !== 'captured') return { mode, preset: null };
+    const lookup = await resolveTemplateCapturePreset(templateId);
+    return { mode, ...lookup };
+};
+
 // The preset a report built from `templateId` must crop its screenshots with.
 // Returns { template, preset } or { error } (Thai, shown to the user / job) when the
 // template has no preset or its preset no longer exists.

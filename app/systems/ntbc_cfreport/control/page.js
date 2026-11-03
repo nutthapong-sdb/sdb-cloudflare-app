@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-    CheckCircle, Play, ArrowLeft, RefreshCw, Terminal, 
+    CheckCircle, Play, RefreshCw, Terminal, 
     Layers, Settings, ShieldAlert, Cpu, Activity, Clock, Check, Chrome,
     Camera, Image as ImageIcon, Sparkles, Download, Upload, Sliders,
     Plus, Trash2, Edit3, Save, UserCheck, ShieldCheck, FileJson, FolderPlus, ChevronDown
@@ -17,6 +17,7 @@ import { DELAY_CONFIG } from '@/lib/delay-config';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
 import SearchableDropdown from '../SearchableDropdown';
+import { getCaptureMode, setCaptureMode as saveCaptureMode } from '@/app/utils/ntbcTemplateApi';
 
 const safeSetItem = (key, val) => {
     if (typeof window === 'undefined') return;
@@ -29,7 +30,10 @@ const safeSetItem = (key, val) => {
 
 const PRESET_KIND_LABEL = { captured: '📸 แคปรูป', inapp: '🧩 inapp', uploaded: '🖼️ อัปโหลดเอง' };
 
-export default function ControlPage() {
+// section: when the NTBC workspace drives which part to show ('setup' | 'capture' | 'console'),
+// it passes it here and this page's own section tab bar is hidden.
+// onEnvChange: gets the account / zone / dates picked in Setup, so Generate Report reuses them.
+export default function ControlPage({ section, onEnvChange } = {}) {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
     const [stepStatus, setStepStatus] = useState(Array(2).fill('pending')); // 'pending' | 'running' | 'completed'
@@ -39,7 +43,8 @@ export default function ControlPage() {
     // Top-level page section: 'setup' (environment + launch debug browser), 'capture'
     // (live monitor + captured/inapp/uploaded preview), 'console' (debug log). Splits what used
     // to be one very long two-column scroll into three focused views.
-    const [activeMainTab, setActiveMainTab] = useState('setup');
+    const [ownMainTab, setActiveMainTab] = useState('setup');
+    const activeMainTab = section || ownMainTab;
     const MAIN_TAB_STORAGE_KEY = 'ntbc_control_activeMainTab';
     const MAIN_TAB_IDS = ['setup', 'capture', 'console'];
     // Remember which section the user last opened. Restored after mount (not in the useState
@@ -88,7 +93,6 @@ export default function ControlPage() {
     const [isRestartingVnc, setIsRestartingVnc] = useState(false);
      const [accounts, setAccounts] = useState([]);
      const [zones, setZones] = useState([]);
-     const [subdomains, setSubdomains] = useState([]);
 
      // Preset & JSON Export/Import States
      const [presets, setPresets] = useState([]);
@@ -101,7 +105,6 @@ export default function ControlPage() {
      // Environment Selection States
      const [envAccount, setEnvAccount] = useState('');
      const [envZone, setEnvZone] = useState('');
-     const [envSubdomain, setEnvSubdomain] = useState('');
      const [envStartDate, setEnvStartDate] = useState('2026-05-30');
      const [envEndDate, setEnvEndDate] = useState('2026-06-04');
      const [capturedScreenshot, setCapturedScreenshot] = useState(null);
@@ -254,10 +257,23 @@ export default function ControlPage() {
         window.addEventListener('beforeunload', warn);
         return () => window.removeEventListener('beforeunload', warn);
     }, [coordsDirty]);
-    // Preset type decides what this page shows: crop offsets + screenshot preview ('captured'),
-    // the app-built table preview ('inapp'), or this preset's own image uploads ('uploaded').
-    const presetKind = activePreset?.kind || 'captured';
-    const uploadPresetId = presetKind === 'uploaded' ? activePreset.id : null;
+    // Report image mode (server-wide, picked at the top of this tab) decides what this page shows:
+    // presets + crop offsets + screenshot preview ('captured'), the app-built table preview
+    // ('inapp'), or the image uploads ('uploaded'). Only screenshot mode uses presets.
+    const [captureMode, setCaptureModeState] = useState('captured');
+    useEffect(() => { getCaptureMode().then(setCaptureModeState); }, []);
+    const selectCaptureMode = async (mode) => {
+        setCaptureModeState(mode);
+        try {
+            const res = await saveCaptureMode(mode);
+            if (!res?.success) throw new Error(res?.error || 'save failed');
+            addLog(`Capture mode set to: ${mode}`, 'success');
+        } catch (e) {
+            addLog(`Failed to save capture mode: ${e.message}`, 'error');
+        }
+    };
+    const presetKind = captureMode;
+    const uploadPresetId = null;
     useEffect(() => {
         setCapturePreviewMode(presetKind === 'inapp' ? 'inapp' : presetKind === 'uploaded' ? 'upload' : 'screenshot');
     }, [presetKind]);
@@ -323,11 +339,6 @@ export default function ControlPage() {
             title: '💾 สร้าง Preset ใหม่',
             html: `
                 <input id="preset-name" class="swal2-input" placeholder="ชื่อ Preset เช่น NTBC Standard">
-                <select id="preset-kind" class="swal2-input">
-                    <option value="captured">📸 แคปรูปจาก Cloudflare (ตั้ง offset ได้)</option>
-                    <option value="inapp">🧩 inapp — ใช้ตารางที่ระบบสร้างจากข้อมูล ไม่ต้องแคป</option>
-                    <option value="uploaded">🖼️ อัปโหลดรูปเอง</option>
-                </select>
             `,
             focusConfirm: false,
             showCancelButton: true,
@@ -339,12 +350,13 @@ export default function ControlPage() {
             preConfirm: () => {
                 const name = document.getElementById('preset-name').value.trim();
                 if (!name) { Swal.showValidationMessage('กรุณากรอกชื่อ Preset'); return false; }
-                return { name, kind: document.getElementById('preset-kind').value };
+                return { name };
             }
         });
 
         const presetName = formValues?.name;
-        const presetKindChoice = formValues?.kind || 'captured';
+        // New presets are always Cloudflare screenshots; inapp / uploaded images don't need one.
+        const presetKindChoice = 'captured';
         if (!presetName) return;
 
         try {
@@ -1053,7 +1065,7 @@ export default function ControlPage() {
                     zoneId: envZone,
                     startDate: envStartDate,
                     endDate: envEndDate,
-                    subdomain: envSubdomain || 'ALL_SUBDOMAINS',
+                    subdomain: 'ALL_SUBDOMAINS',
                 });
                 if (res && res.data) {
                     const filteredData = res.data.httpRequestsAdaptiveGroups || [];
@@ -1163,7 +1175,7 @@ export default function ControlPage() {
             loadInappPreviewData(activeCaptureTab, true);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [envZone, envStartDate, envEndDate, envSubdomain]);
+    }, [envZone, envStartDate, envEndDate]);
 
     // Manual "@uploaded_X" image upload: lets the user supply their own image for a report
     // section, bypassing automated capture entirely (useful when Cloudflare's UI changes, or
@@ -1227,46 +1239,6 @@ export default function ControlPage() {
             setUploadImageError('ลบรูปไม่สำเร็จ: ' + err.message);
         } finally {
             setUploadingImageId(null);
-        }
-    };
-
-    // Load Subdomains (DNS Records)
-    const loadSubdomainsForZone = async (zoneId) => {
-        if (!zoneId) return;
-        setIsLoadingSettings(true);
-        addLog(`Loading DNS records for zone ${zoneId}...`, 'info');
-        try {
-            const res = await callAPI('get-dns-records', { zoneId });
-            if (res && res.data) {
-                // Filter unique proxied subdomains
-                const uniqueSubs = Array.from(new Set(res.data.map(item => item.name)))
-                    .map(name => {
-                        const match = res.data.find(item => item.name === name);
-                        return { name, proxied: match.proxied, type: match.type };
-                    })
-                    .filter(item => item.proxied);
-
-                setSubdomains(uniqueSubs);
-                addLog(`Loaded ${uniqueSubs.length} proxied subdomains.`, 'success');
-
-                // Prioritize saved localStorage default subdomain first
-                const savedSub = localStorage.getItem('control_envSubdomain');
-                if (savedSub && uniqueSubs.some(s => s.name === savedSub)) {
-                    setEnvSubdomain(savedSub);
-                    addLog(`Loaded saved subdomain from defaults: ${savedSub}`, 'info');
-                    return;
-                }
-
-                const matchedSub = uniqueSubs.find(s => s.name.toLowerCase().trim() === 'www.sesalpglnp.go.th');
-                if (matchedSub) {
-                    setEnvSubdomain(matchedSub.name);
-                    addLog(`Auto-selected subdomain: ${matchedSub.name}`, 'info');
-                } else if (uniqueSubs.length > 0) {
-                    setEnvSubdomain(uniqueSubs[0].name);
-                }
-            }
-        } finally {
-            setIsLoadingSettings(false);
         }
     };
 
@@ -1483,17 +1455,24 @@ export default function ControlPage() {
         }
     }, [envAccount]);
 
-    // Trigger subdomain loading when zone changes
     useEffect(() => {
-        if (envZone) {
-            loadSubdomainsForZone(envZone);
-        }
-    }, [envZone]);
+        if (!onEnvChange) return;
+        const account = accounts.find(a => String(a.id) === String(envAccount));
+        const zone = zones.find(z => String(z.id) === String(envZone));
+        onEnvChange({
+            accountId: envAccount,
+            accountName: account?.name || envAccount,
+            zoneId: envZone,
+            zoneName: zone?.name || envZone,
+            startDate: envStartDate,
+            endDate: envEndDate,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [envAccount, envZone, envStartDate, envEndDate, accounts, zones]);
 
     const saveAsDefault = () => {
         localStorage.setItem('control_envAccount', envAccount);
         localStorage.setItem('control_envZone', envZone);
-        localStorage.setItem('control_envSubdomain', envSubdomain);
         localStorage.setItem('control_envStartDate', envStartDate);
         localStorage.setItem('control_envEndDate', envEndDate);
 
@@ -1532,7 +1511,7 @@ export default function ControlPage() {
         if (!isConfigComplete) {
             Swal.fire({
                 title: 'Configuration Incomplete',
-                text: 'Please select Account, Zone, Subdomain, and Date Range before running any execution steps.',
+                text: 'Please select Account, Zone, and Date Range before running any execution steps.',
                 icon: 'warning',
                 background: '#111827',
                 color: '#fff'
@@ -2662,38 +2641,37 @@ export default function ControlPage() {
         </div>
     );
 
+    // Embedded in the NTBC workspace: a card with the same header style as the other tabs.
+    const SECTION_HEADERS = {
+        setup: { title: 'ตั้งค่า & เริ่มต้น', desc: 'เลือก Account, Zone และช่วงวันที่ — ใช้ร่วมกันทุกแท็บ รวมถึง Generate Report', Icon: Settings },
+        capture: { title: 'ตั้งค่าการแคปรูปภาพ', desc: 'เลือกโหมดรูปในรายงาน และตั้ง Preset / ตัดรูปสำหรับโหมดแคปรูป', Icon: Camera },
+        console: { title: 'Debug Console', desc: 'Log การทำงานของเบราว์เซอร์และการแคปรูป', Icon: Terminal },
+    };
+    const header = section ? SECTION_HEADERS[section] : { title: 'System Control Center', desc: 'Full-page interactive debugger & mockup generation workflow controller.', Icon: Settings };
+    const HeaderIcon = header.Icon;
+
     return (
-        <div className="min-h-screen bg-[#030712] text-gray-100 font-sans p-6 md:p-10 flex flex-col">
+        <div className={section
+            ? 'bg-gray-900 border border-gray-700 rounded-2xl w-full flex flex-col text-gray-100 font-sans'
+            : 'min-h-screen bg-[#030712] text-gray-100 font-sans p-6 md:p-10 flex flex-col'}>
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-6 mb-8">
-                <div>
-                    <div className="flex items-center gap-3">
-                        <span className="p-2 bg-rose-500/10 text-rose-500 rounded-lg">
-                            <Settings className="w-6 h-6 animate-spin" style={{ animationDuration: '8s' }} />
-                        </span>
-                        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-400 bg-clip-text text-transparent">
-                            System Control Center
-                        </h1>
+            <div className={`flex items-center justify-between p-5 border-b border-gray-700 bg-gray-950/50 ${section ? 'rounded-t-2xl' : 'rounded-2xl border mb-8'}`}>
+                <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-500/30 text-blue-400">
+                        <HeaderIcon className="w-5 h-5" />
                     </div>
-                    <p className="text-gray-400 text-sm mt-1">
-                        Full-page interactive debugger & mockup generation workflow controller.
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => router.push('/systems/ntbc_cfreport')}
-                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-lg hover:shadow-rose-900/30 cursor-pointer"
-                    >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        Back to Generator
-                    </button>
+                    <div>
+                        <h2 className="text-base font-bold text-white">{header.title}</h2>
+                        <p className="text-xs text-gray-400 mt-0.5">{header.desc}</p>
+                    </div>
                 </div>
             </div>
+            <div className={section ? 'p-5 flex flex-col flex-1' : 'contents'}>
 
             {/* Main section tabs — keeps the page from being one long scroll: pick one view
                 instead of scrolling past Environment Settings, the monitor, capture/preview and
                 the debug console all stacked in one column. */}
-            <div className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-none shrink-0">
+            <div className={`flex items-center gap-2 mb-6 overflow-x-auto scrollbar-none shrink-0 ${section ? 'hidden' : ''}`}>
                 {[
                     { id: 'setup', label: '⚙️ ตั้งค่า & เริ่มต้น' },
                     { id: 'capture', label: '📸 แคปภาพ & พรีวิว' },
@@ -2721,9 +2699,36 @@ export default function ControlPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
                 {/* Steps and Environment Section (Left) */}
                 <div className={`${activeMainTab === 'capture' ? 'lg:col-span-12' : 'hidden'} space-y-6 flex flex-col`}>
+                    {/* Report image mode — screenshot mode shows the presets, live browser and crop tools */}
+                    <div className="bg-gray-900/40 border border-gray-800/80 rounded-2xl p-4 shadow-xl">
+                        <div className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3">โหมดรูปในรายงาน</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {[
+                                { id: 'captured', title: '📸 แคปรูป', desc: 'แคปหน้า Cloudflare แล้วตัดตาม Preset ของ Template' },
+                                { id: 'inapp', title: '🧩 inapp', desc: 'ใช้ตารางที่ระบบสร้างจากข้อมูล ไม่ต้องแคป' },
+                                { id: 'uploaded', title: '🖼️ อัปโหลดเอง', desc: 'อัปโหลดรูปแต่ละหัวข้อเอง' },
+                            ].map((m) => (
+                                <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => selectCaptureMode(m.id)}
+                                    aria-pressed={captureMode === m.id}
+                                    className={`text-left rounded-xl border px-4 py-3 transition-colors cursor-pointer ${
+                                        captureMode === m.id
+                                            ? 'border-rose-500 bg-rose-500/10'
+                                            : 'border-gray-800 bg-gray-950/40 hover:border-gray-700'
+                                    }`}
+                                >
+                                    <div className={`text-sm font-bold ${captureMode === m.id ? 'text-white' : 'text-gray-300'}`}>{m.title}</div>
+                                    <div className="text-[11px] text-gray-500 mt-0.5">{m.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Live Browser Monitor Card */}
-                    {renderStep1Card()}
-                    {renderVncCard()}
+                    {captureMode === 'captured' && renderStep1Card()}
+                    {captureMode === 'captured' && renderVncCard()}
 
                     {/* Consolidated Captured Screenshots (Step 2) */}
                     <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 flex flex-col shadow-2xl relative animate-scale-up">
@@ -2795,7 +2800,7 @@ export default function ControlPage() {
 
                         {/* Preset bar: pick the preset, save it; rarely used actions sit in the ⋯ menu */}
                         <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-3 mb-3 flex flex-col gap-2 shadow-inner">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className={`flex flex-wrap items-center gap-2 ${presetKind === 'captured' ? '' : 'hidden'}`}>
                                 <span className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
                                     <Sliders className="w-4 h-4 text-rose-400" />
                                     Preset:
@@ -2808,7 +2813,7 @@ export default function ControlPage() {
                                     <option value="default">Standard Default (Auto +0)</option>
                                     {presets.map(p => (
                                         <option key={p.id} value={p.id}>
-                                            {p.name} · {PRESET_KIND_LABEL[p.kind] || PRESET_KIND_LABEL.captured}
+                                            {p.name}
                                         </option>
                                     ))}
                                 </select>
@@ -2907,12 +2912,12 @@ export default function ControlPage() {
                             )}
                             {presetKind === 'inapp' && (
                                 <p className="rounded-lg border border-indigo-700/60 bg-indigo-950/40 px-3 py-2 text-sm text-indigo-200">
-                                    🧩 Preset แบบ inapp: รายงานใช้ตารางที่ระบบสร้างจากข้อมูล Cloudflare API แทนรูปแคป — ไม่ต้องแคปหน้าเว็บและไม่ต้องตั้งค่าอะไร (ดูตัวอย่างแต่ละหัวข้อด้านล่างได้)
+                                    🧩 โหมด inapp: รายงานใช้ตารางที่ระบบสร้างจากข้อมูล Cloudflare API แทนรูปแคป — ไม่ต้องแคปหน้าเว็บและไม่ต้องตั้งค่าอะไร (ดูตัวอย่างแต่ละหัวข้อด้านล่างได้)
                                 </p>
                             )}
                             {presetKind === 'uploaded' && (
                                 <p className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
-                                    🖼️ Preset แบบอัปโหลดเอง: เลือกหัวข้อด้านล่างแล้วอัปโหลดรูป — รูปเก็บไว้ใน Preset นี้ หัวข้อที่ยังไม่มีรูปจะขึ้น ⚠️ ตอนดาวน์โหลดรายงาน
+                                    🖼️ โหมดอัปโหลดเอง: เลือกหัวข้อด้านล่างแล้วอัปโหลดรูป หัวข้อที่ยังไม่มีรูปจะขึ้น ⚠️ ตอนดาวน์โหลดรายงาน
                                 </p>
                             )}
                         </div>
@@ -3395,20 +3400,6 @@ export default function ControlPage() {
                                 />
                             </div>
 
-                            {/* Subdomain Dropdown */}
-                            <div className="flex flex-col gap-1 py-1 justify-end">
-                                <SearchableDropdown 
-                                    label="Subdomain"
-                                    placeholder="Select Subdomain"
-                                    options={subdomains.map(sub => ({ value: sub.name, label: sub.name, subtitle: sub.type }))}
-                                    value={envSubdomain}
-                                    onChange={(val) => {
-                                        setEnvSubdomain(val);
-                                        addLog(`Subdomain selected: ${val}`, 'info');
-                                    }}
-                                />
-                            </div>
-
                             {/* Time range date pickers */}
                             <div className="grid grid-cols-2 gap-2 py-1">
                                 <div className="flex flex-col gap-1">
@@ -3436,12 +3427,38 @@ export default function ControlPage() {
                                     />
                                 </div>
                             </div>
+                            {/* Quick ranges ending today (also used by Generate Report) */}
+                            <div className="flex items-center gap-1.5 justify-end">
+                                <span className="text-[10px] text-gray-500 font-bold mr-1 uppercase">Quick:</span>
+                                {[30, 60, 90, 365].map((days) => {
+                                    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                    const end = new Date();
+                                    const start = new Date();
+                                    start.setDate(start.getDate() - days);
+                                    const isActive = envEndDate === fmt(end) && envStartDate === fmt(start);
+                                    return (
+                                        <button
+                                            key={days}
+                                            type="button"
+                                            onClick={() => {
+                                                setEnvStartDate(fmt(start));
+                                                setEnvEndDate(fmt(end));
+                                                addLog(`Date range set to last ${days} days`, 'info');
+                                            }}
+                                            className={`px-2 py-1 rounded border text-[10px] transition-colors cursor-pointer ${isActive ? 'bg-rose-600 text-white border-rose-500' : 'bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800'}`}
+                                        >
+                                            {days} วัน
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 
 
 
                 </div>
+            </div>
             </div>
         </div>
     );

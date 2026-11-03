@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/app/utils/auth';
 import { getUserProfileAction } from '@/app/actions/authActions';
-import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates, resolveTemplateCapturePreset } from '@/app/utils/ntbcTemplateApi';
+import { loadTemplate, saveTemplate, loadStaticTemplate, saveStaticTemplate, loadMiddleTemplate, saveMiddleTemplate, listTemplates, resolveReportCaptureSetup, getCaptureMode } from '@/app/utils/ntbcTemplateApi';
 import ManageTemplateModal from './ManageTemplateModal';
 import ControlPage from './control/page';
 import ImageSettingsModal, { IMAGE_CONFIG_ITEMS } from './ImageSettingsModal';
@@ -3130,21 +3130,27 @@ const ReportModal = ({ isOpen, onClose, data, dashboardImage, template, onSaveTe
 
 // Batch Report Modal Component
 // Main-page workspace tabs (replaced the old row of cards that each opened a popup).
-// Ordered as the workflow: set up capture → image sizes → templates → generate → track jobs.
+// Ordered as the workflow: setup → set up capture → image sizes → templates → generate → track jobs.
+// 'setup' and 'control' are sections of the embedded System Control page; the Debug Console
+// (also part of it) opens from the button at the right end of the tab row.
 const WORKSPACE_TABS = [
-    { id: 'control', label: '1. ตั้งค่าการแคปรูปภาพ', Icon: Terminal },
-    { id: 'image', label: '2. Image Size Settings', Icon: Sliders },
-    { id: 'templates', label: '3. Template Settings', Icon: FileText },
-    { id: 'generate', label: '4. Generate Report', Icon: Camera },
-    { id: 'jobs', label: '5. Background Jobs', Icon: Clock },
+    { id: 'setup', label: '1. ตั้งค่า & เริ่มต้น', Icon: Settings },
+    { id: 'control', label: '2. ตั้งค่าการแคปรูปภาพ', Icon: Camera },
+    { id: 'image', label: '3. Image Size Settings', Icon: Sliders },
+    { id: 'templates', label: '4. Template Settings', Icon: FileText },
+    { id: 'generate', label: '5. Generate Report', Icon: FileType },
+    { id: 'jobs', label: '6. Background Jobs', Icon: Clock },
 ];
+const CONTROL_SECTION_BY_TAB = { setup: 'setup', control: 'capture', console: 'console' };
 
 // inline: render as a page panel (workspace tab) instead of a popup.
-const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, theme, selectedZone: initialZoneId, selectedAccount: initialAccountId, accounts = [], currentUser, loading, inline = false }) => {
+// env: account / zone / dates from the Setup tab. When given, this panel doesn't ask for them again.
+const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, theme, selectedZone: initialZoneId, selectedAccount: initialAccountId, accounts = [], currentUser, loading, inline = false, env = null, onEditEnv = null }) => {
     const [batchStartDate, setBatchStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [batchEndDate, setBatchEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [templates, setTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('default');
+    const [captureMode, setCaptureMode] = useState('captured');
     const [exportThaiDigits, setExportThaiDigits] = useState(false);
     const [timeoutMinutes, setTimeoutMinutes] = useState(NTBC_TIMEOUT_DEFAULT_MIN);
     
@@ -3182,7 +3188,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
             setSelectedAccountId(initialAccountId || savedAccount || '');
 
-            listTemplates().then(list => {
+            listTemplates().then(async list => {
                 if (typeof window === 'undefined') { setTemplates(list); return; }
                 const userKey = currentUser?.id ? String(currentUser.id) : 'anonymous';
                 const keyDefault = `ntbc:templates:${userKey}:defaultTemplateId`;
@@ -3195,11 +3201,18 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                 if (filtered.length === 0 && list.length > 0) filtered = list;
                 setTemplates(filtered);
 
+                // In screenshot mode a template without a capture preset can't make a report,
+                // so it can't be picked (inapp / uploaded modes need no preset).
+                const mode = await getCaptureMode();
+                setCaptureMode(mode);
+                const usable = mode === 'captured' ? filtered.filter(t => t.capturePresetId) : filtered;
                 const storedDefault = localStorage.getItem('ntbc:default:templateId') || localStorage.getItem(keyDefault) || 'default';
-                if (filtered.find(t => String(t.id) === String(storedDefault))) {
+                if (usable.find(t => String(t.id) === String(storedDefault))) {
                     setSelectedTemplateId(String(storedDefault));
-                } else if (filtered.length > 0) {
-                    setSelectedTemplateId(String(filtered[0].id));
+                } else if (usable.length > 0) {
+                    setSelectedTemplateId(String(usable[0].id));
+                } else {
+                    setSelectedTemplateId('');
                 }
             });
         }
@@ -3293,6 +3306,19 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
         setSelectedZones(new Set());
     };
 
+    const envReady = !!(env?.accountId && env?.zoneId);
+    const envQueueItem = envReady ? {
+        accountId: env.accountId,
+        accountName: env.accountName,
+        zoneId: env.zoneId,
+        zoneName: env.zoneName,
+        domain: '__ALL_SUBDOMAINS__'
+    } : null;
+    const addEnvZoneToQueue = () => {
+        if (!envQueueItem) return;
+        setBatchQueue(prev => prev.find(i => i.zoneId === envQueueItem.zoneId) ? prev : [...prev, envQueueItem]);
+    };
+
     const removeFromQueue = (index) => {
         setBatchQueue(prev => prev.filter((_, i) => i !== index));
     };
@@ -3312,7 +3338,45 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Left Column: Selection */}
+                    {/* Left Column: Selection (from the Setup tab when env is given) */}
+                    {env ? (
+                    <div className="space-y-4">
+                        <div className={`p-4 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
+                            <div className="flex items-center justify-between mb-3">
+                                <span className={`text-xs font-bold ${t.subText} uppercase tracking-wide`}>รายงานนี้จะใช้</span>
+                                {onEditEnv && (
+                                    <button type="button" onClick={onEditEnv} className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer">
+                                        แก้ไขที่แท็บ 1 →
+                                    </button>
+                                )}
+                            </div>
+                            {envReady ? (
+                                <dl className="divide-y divide-gray-800/80 rounded-md border border-gray-800/80 bg-gray-950/40">
+                                    {[
+                                        { label: 'Account', value: env.accountName, Icon: Key },
+                                        { label: 'Zone', value: env.zoneName, Icon: Globe },
+                                        { label: 'ช่วงวันที่', value: `${env.startDate}  ถึง  ${env.endDate}`, Icon: Calendar },
+                                    ].map(({ label, value, Icon }) => (
+                                        <div key={label} className="flex items-center gap-3 px-3 py-2.5">
+                                            <Icon className="w-4 h-4 text-blue-400 shrink-0" />
+                                            <div className="min-w-0">
+                                                <dt className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</dt>
+                                                <dd className="text-sm text-gray-100 font-semibold truncate whitespace-pre">{value}</dd>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </dl>
+                            ) : (
+                                <div className="text-sm text-amber-300 bg-amber-950/30 border border-amber-800/50 rounded-md px-3 py-2.5">
+                                    ยังไม่ได้เลือก Account / Zone ในแท็บ 1
+                                </div>
+                            )}
+                            <button onClick={addEnvZoneToQueue} disabled={!envReady} className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded">
+                                Add to Batch Queue
+                            </button>
+                        </div>
+                    </div>
+                    ) : (
                     <div className="space-y-4">
                         <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder} grid grid-cols-1 gap-4`}>
                             <SearchableDropdown theme={theme} icon={<Key className="w-3.5 h-3.5 text-blue-400" />} label="1. Select Account" placeholder={loading ? "Loading..." : "Choose an account..."} options={accounts.map(acc => ({ value: acc.id, label: acc.name }))} value={selectedAccountId} onChange={setSelectedAccountId} rightAction={<button type="button" onClick={handleSetDefaultAccount} className="text-[10px] text-purple-400 hover:text-purple-300 font-semibold cursor-pointer uppercase transition-colors">Set Default</button>} loading={loading && accounts.length === 0} />
@@ -3343,14 +3407,24 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                             </button>
                         </div>
                     </div>
+                    )}
 
                     {/* Right Column: Queue & Settings */}
                     <div className="space-y-4">
                         <div className={`p-3 ${t.selectorContainer} rounded-lg border ${t.modalBorder}`}>
                             <label className={`block text-xs font-bold ${t.subText} uppercase tracking-wide mb-2`}>Template</label>
                             <select value={selectedTemplateId} onChange={e => setSelectedTemplateId(e.target.value)} className={`mb-3 ${t.dropdown.bg} ${t.dropdown.border} border ${t.dropdown.inputText} rounded p-2.5 w-full text-sm outline-none`}>
-                                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                {!selectedTemplateId && <option value="" disabled>— ยังไม่มี Template ที่เลือก Preset แล้ว —</option>}
+                                {templates.map(tp => {
+                                    const blocked = captureMode === 'captured' && !tp.capturePresetId;
+                                    return (
+                                        <option key={tp.id} value={tp.id} disabled={blocked} style={blocked ? { color: '#6b7280' } : undefined}>
+                                            {blocked ? `${tp.name} (ยังไม่เลือก Preset)` : tp.name}
+                                        </option>
+                                    );
+                                })}
                             </select>
+                            {!env && (<>
                             <div className="flex items-center gap-2 mb-2">
                                 <span className={`text-xs ${t.subText} w-10`}>Start:</span>
                                 <input type="date" value={batchStartDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchStartDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
@@ -3359,6 +3433,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 <span className={`text-xs ${t.subText} w-10`}>End:</span>
                                 <input type="date" value={batchEndDate} max={new Date().toISOString().split('T')[0]} onChange={e => setBatchEndDate(e.target.value)} className={`flex-1 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`} />
                             </div>
+                            </>)}
                             <div className="flex items-center gap-2 mt-3 mb-1">
                                 <label className={`flex items-center gap-2 cursor-pointer text-xs ${t.subText}`}>
                                     <input 
@@ -3372,7 +3447,7 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                 </label>
                             </div>
                             <div className="flex items-center gap-2 mt-2 mb-1" title="ถ้าสร้างรายงานนานเกินเวลานี้ งานจะถูกหยุดและแจ้งว่าค้างอยู่ที่ขั้นไหน">
-                                <label htmlFor="batch-timeout-minutes" className={`text-xs ${t.subText}`}>Time limit per zone (นาที):</label>
+                                <label htmlFor="batch-timeout-minutes" className={`text-xs ${t.subText}`}>ถ้าแต่ละ zone ค้างเกินกี่นาทีถึงจะยกเลิกการทำงาน:</label>
                                 <input
                                     id="batch-timeout-minutes"
                                     type="number"
@@ -3385,12 +3460,13 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
                                     className={`w-20 px-2 py-1 text-xs rounded border ${t.dropdown.bg} ${t.dropdown.text} ${t.dropdown.border}`}
                                 />
                             </div>
-                            <div className="flex items-center gap-1.5 mt-2 justify-end">
+                            <div className={`flex items-center gap-1.5 mt-2 justify-end ${env ? 'hidden' : ''}`}>
                                 <span className={`text-[10px] ${t.subText} font-bold mr-1 uppercase`}>Quick:</span>
                                 {[
-                                    { label: '1 Day', days: 1 },
-                                    { label: '7 Days', days: 7 },
-                                    { label: '30 Days', days: 30 }
+                                    { label: '30 วัน', days: 30 },
+                                    { label: '60 วัน', days: 60 },
+                                    { label: '90 วัน', days: 90 },
+                                    { label: '365 วัน', days: 365 }
                                 ].map((btn) => {
                                     // Calculate if this button is currently active
                                     const d1 = new Date(batchStartDate);
@@ -3452,7 +3528,14 @@ const BatchReportModal = ({ isOpen, onClose, hosts: dashboardHosts, onConfirm, t
 
                 <div className={`p-4 border-t ${t.modalBorder} ${t.modalHeaderBg} flex justify-end gap-3`}>
                     {!inline && <button onClick={onClose} className={`px-4 py-2 rounded font-medium transition-colors text-xs ${t.button}`}>Cancel</button>}
-                    <button onClick={() => { if(batchQueue.length === 0) { Swal.fire('Error', 'Batch Queue is empty', 'error'); return; } onConfirm(batchQueue, batchStartDate, batchEndDate, selectedTemplateId, [], null, false, [], exportThaiDigits, timeoutMinutes); }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
+                    <button onClick={() => {
+                        // With the Setup tab's values, an empty queue means "just the zone picked there".
+                        const queue = batchQueue.length === 0 && envQueueItem ? [envQueueItem] : batchQueue;
+                        if (queue.length === 0) { Swal.fire('Error', env ? 'ยังไม่ได้เลือก Account / Zone ในแท็บ 1' : 'Batch Queue is empty', 'error'); return; }
+                        const startDate = env ? env.startDate : batchStartDate;
+                        const endDate = env ? env.endDate : batchEndDate;
+                        onConfirm(queue, startDate, endDate, selectedTemplateId, [], null, false, [], exportThaiDigits, timeoutMinutes);
+                    }} className={`px-4 py-2 rounded ${t.buttonSecondary || 'bg-purple-600 hover:bg-purple-700 text-white'} font-bold transition-all text-xs flex items-center gap-2`}>
                         <FileText className="w-3 h-3" /> Start Processing Queue
                     </button>
                 </div>
@@ -4546,10 +4629,12 @@ export default function NTBCCFReportPage() {
     const [currentUser, setCurrentUser] = useState(null);
     const [isBackgroundJobsModalOpen, setIsBackgroundJobsModalOpen] = useState(false);
     const [workspaceTab, setWorkspaceTab] = useState('generate');
+    // Account / zone / dates picked in the Setup tab (System Control), reused by Generate Report.
+    const [controlEnv, setControlEnv] = useState(null);
     useEffect(() => {
         try {
             const saved = localStorage.getItem('ntbc:workspace-tab');
-            if (saved && WORKSPACE_TABS.some(tab => tab.id === saved)) setWorkspaceTab(saved);
+            if (saved && (saved === 'console' || WORKSPACE_TABS.some(tab => tab.id === saved))) setWorkspaceTab(saved);
         } catch (e) { /* storage unavailable */ }
     }, []);
     const selectWorkspaceTab = (id) => {
@@ -4664,8 +4749,8 @@ export default function NTBCCFReportPage() {
     const [uploadedBrowserIntegrityImage, setUploadedBrowserIntegrityImage] = useState(null);
     const [uploadedLoadBalancingSpectrumImage, setUploadedLoadBalancingSpectrumImage] = useState(null);
 
-    // Capture preset whose uploaded images fill this report (an 'uploaded' preset), else null.
-    const [reportUploadPresetId, setReportUploadPresetId] = useState(null);
+    // True when the report is built in 'uploaded' mode: every @uploaded_* slot comes from the uploads.
+    const [reportUploadsOnly, setReportUploadsOnly] = useState(false);
 
     // Puts server-side uploaded images (the get-saved `uploaded` map) into the @uploaded_* state.
     // clearMissing: also empty the slots the map has no image for.
@@ -4701,10 +4786,10 @@ export default function NTBCCFReportPage() {
 
     // Load saved screenshots directly from server disk
     useEffect(() => {
-        // With an 'uploaded' preset, every @uploaded_* slot comes from that preset alone —
-        // clear slots it has no image for instead of keeping an older upload.
-        const clearMissing = !!reportUploadPresetId;
-        fetch(`/api/ntbc-capture?action=get-saved${reportUploadPresetId ? `&uploadPreset=${encodeURIComponent(reportUploadPresetId)}` : ''}`)
+        // In 'uploaded' mode every @uploaded_* slot comes from the uploads alone —
+        // clear slots without an image instead of keeping an older one.
+        const clearMissing = reportUploadsOnly;
+        fetch('/api/ntbc-capture?action=get-saved')
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.screenshots) {
@@ -4745,7 +4830,7 @@ export default function NTBCCFReportPage() {
             .catch(e => {
                 console.error('Failed to load saved screenshots from server disk:', e);
             });
-    }, [isReportModalOpen, reportUploadPresetId]);
+    }, [isReportModalOpen, reportUploadsOnly]);
     const [showScreenshotModal, setShowScreenshotModal] = useState(false);
     const [isScreenshotBatchMode, setIsScreenshotBatchMode] = useState(false);
     const [isControlModalOpen, setIsControlModalOpen] = useState(false);
@@ -5708,7 +5793,7 @@ export default function NTBCCFReportPage() {
             // itself later via window.__ntbcHandleBatchReport, in worker mode, where this branch is skipped.
             // Refuse up front when the template has no capture preset, instead of queuing a job
             // that would only fail at its first step.
-            const presetLookup = await resolveTemplateCapturePreset(templateId);
+            const presetLookup = await resolveReportCaptureSetup(templateId);
             if (presetLookup.error) {
                 Swal.fire({
                     title: 'ยังสร้างรายงานไม่ได้',
@@ -5981,10 +6066,10 @@ export default function NTBCCFReportPage() {
 
         // Only capture the screenshots this template actually uses (its @captured_* variables);
         // the rest are marked "unused" and skipped. If the template can't be read, capture all.
-        // The template's capture preset: its crop coordinates, and its type (screenshots, inapp
-        // tables or uploaded images) — see applyPresetKind(). A missing preset fails at step 1 below.
-        const presetLookup = await resolveTemplateCapturePreset(templateId);
-        const presetKind = presetLookup.preset?.kind || 'captured';
+        // Image mode from tab 2 (screenshots, inapp tables or uploaded images) — see applyPresetKind().
+        // Screenshots crop with the template's capture preset; a missing preset fails at step 1 below.
+        const presetLookup = await resolveReportCaptureSetup(templateId);
+        const presetKind = presetLookup.mode;
         const neededSteps = getNeededCaptureSteps(applyPresetKind(await loadStaticTemplate(templateId).catch(() => null), presetKind));
         if (neededSteps) {
             NTBC_REPORT_STEPS.forEach(step => {
@@ -6144,8 +6229,8 @@ export default function NTBCCFReportPage() {
                 errorMap.launch = presetLookup.error;
                 throw new Error(presetLookup.error);
             }
-            const globalCoords = presetLookup.preset.coords || {};
-            console.log(`[capture preset] template ${templateId} → "${presetLookup.preset.name}" (${presetKind})`);
+            const globalCoords = presetLookup.preset?.coords || {};
+            console.log(`[capture mode] ${presetKind}${presetLookup.preset ? ` · template ${templateId} → preset "${presetLookup.preset.name}"` : ''}`);
 
             const getCoordParams = (type) => {
                 if (!globalCoords) return '';
@@ -6717,11 +6802,11 @@ export default function NTBCCFReportPage() {
             setReportTemplate(combinedTmpl);
             setReportModalMode('report');
 
-            // An 'uploaded' preset fills the report with its own uploaded images: load them before
-            // the report opens, and flag (⚠️, shown again at download) every slot still missing one.
+            // 'uploaded' mode fills the report with the uploaded images: load them before the
+            // report opens, and flag (⚠️, shown again at download) every slot still missing one.
             if (presetKind === 'uploaded') {
-                setStepDetail('โหลดรูปที่อัปโหลดไว้ใน Preset');
-                const saved = await fetch(`/api/ntbc-capture?action=get-saved&uploadPreset=${encodeURIComponent(presetLookup.preset.id)}`)
+                setStepDetail('โหลดรูปที่อัปโหลดไว้');
+                const saved = await fetch('/api/ntbc-capture?action=get-saved')
                     .then(r => r.json()).catch(() => ({}));
                 const uploaded = saved?.uploaded || {};
                 applyUploadedImages(uploaded, true);
@@ -6730,12 +6815,12 @@ export default function NTBCCFReportPage() {
                     const missingHere = missing.filter(slot => (step.tags || []).includes(slot.varName.replace('@uploaded_', '@captured_')));
                     if (missingHere.length > 0) {
                         statusMap[step.key] = 'warn';
-                        errorMap[step.key] = `ยังไม่ได้อัปโหลดรูปใน Preset "${presetLookup.preset.name}": ${missingHere.map(slot => slot.label).join(', ')}`;
+                        errorMap[step.key] = `ยังไม่ได้อัปโหลดรูป: ${missingHere.map(slot => slot.label).join(', ')}`;
                     }
                 });
                 updateProgress();
             }
-            setReportUploadPresetId(presetKind === 'uploaded' ? presetLookup.preset.id : null);
+            setReportUploadsOnly(presetKind === 'uploaded');
 
             // Set autoDownloadReport to true and open modal
             setAutoDownloadWord(true);
@@ -7528,6 +7613,18 @@ export default function NTBCCFReportPage() {
                                 )}
                             </button>
                         ))}
+                        <button
+                            type="button"
+                            onClick={() => selectWorkspaceTab('console')}
+                            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 my-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                                workspaceTab === 'console'
+                                    ? 'bg-gray-800 border-gray-600 text-white'
+                                    : 'border-gray-800 text-gray-400 hover:text-gray-200 hover:border-gray-700'
+                            }`}
+                        >
+                            <Terminal className="w-3.5 h-3.5" />
+                            Debug Console
+                        </button>
                     </div>
 
                     {workspaceTab === 'image' && (
@@ -7559,14 +7656,16 @@ export default function NTBCCFReportPage() {
                             accounts={accounts}
                             currentUser={currentUser}
                             loading={loading}
+                            env={controlEnv || {}}
+                            onEditEnv={() => selectWorkspaceTab('setup')}
                         />
                     )}
                     {workspaceTab === 'jobs' && (
                         <BackgroundJobsModal inline isOpen onClose={() => {}} theme={theme} currentUser={currentUser} />
                     )}
                     {/* Kept mounted (only hidden) so the live browser and debug state survive tab switches */}
-                    <div className={workspaceTab === 'control' ? '' : 'hidden'}>
-                        <ControlPage />
+                    <div className={CONTROL_SECTION_BY_TAB[workspaceTab] ? '' : 'hidden'}>
+                        <ControlPage section={CONTROL_SECTION_BY_TAB[workspaceTab] || 'setup'} onEnvChange={setControlEnv} />
                     </div>
                 </div>
             </main>
